@@ -1,0 +1,102 @@
+# Thu Sep  1 15:03:34 2022
+tuningMode=RANGE
+minValue=85.60
+maxValue=85.70
+valUnit=GHZ
+lineValue=115.5
+dsbSelected=false
+dsb=LSB
+loFreq=121.5
+telescope=iram
+bandwidth=0.10
+bandUnit=GHZ
+resolution=0.10
+resolutionUnit=MHZ
+
+jupMin=*
+jupMax=*
+jLowMin=*
+jLowMax=*
+kupMin=*
+kupMax=*
+kLowMin=*
+kLowMax=*
+lupMin=*
+lupMax=*
+lLowMin=*
+lLowMax=*
+mupMin=*
+mupMax=*
+mLowMin=*
+mLowMax=*
+thresEupMin=0.000e+00
+thresEupMax=1.000e+304
+thresAijMin=0.000e+00
+thresAijMax=1.000e+304
+
+telescope=iram
+tmbBox=false
+observing=PSDBS
+tbg=2.73
+tbgUnit=K
+noise=0.000e+00
+noiseUnit=mK
+frequency=REST
+
+# Component parameters 1
+
+Comp1Name=Continuum
+Comp1Enabled=true
+Comp1Interacting=false
+Comp1ContinuumSelected=CONSTANT
+Comp1Continuum=Continuum 0 [K]
+Comp1ContinuumSize=0.000e+00
+
+# Component parameters 2
+
+Comp2Name=Component 1
+Comp2Enabled=true
+Comp2Interacting=false
+Comp2Algo=FULL_LTE_ALGO
+Comp2Density=7.500e+22
+Comp2Geometry=SPHERE_MODE
+Comp2Vlsr=0.000e+00
+Comp2VlsrUnit=km/s
+Comp2NbMol=1
+
+Comp2Mol1Tag=49503
+Comp2Mol1Species=C4H, v=0
+Comp2Mol1Database=CDMS
+Comp2Mol1Collision=-no -
+Comp2Mol1Compute=true
+Comp2Mol1NSp=8.000e+14
+Comp2Mol1Abundance=1.067e-08
+Comp2Mol1Tex=100.00
+Comp2Mol1TKin=10.0
+Comp2Mol1FWHM=5.00
+Comp2Mol1Size=1.000e+05
+
+# Component parameters 3
+
+Comp3Name=Component 2
+Comp3Enabled=true
+Comp3Interacting=false
+Comp3Algo=FULL_LTE_ALGO
+Comp3Density=7.500e+22
+Comp3Geometry=SPHERE_MODE
+Comp3Vlsr=0.000e+00
+Comp3VlsrUnit=km/s
+Comp3NbMol=1
+
+Comp3Mol1Tag=38002
+Comp3Mol1Species=c-C3H2
+Comp3Mol1Database=JPL
+Comp3Mol1Collision=-no -
+Comp3Mol1Compute=true
+Comp3Mol1NSp=3.000e+14
+Comp3Mol1Abundance=4.000e-09
+Comp3Mol1Tex=150.00
+Comp3Mol1TKin=10.0
+Comp3Mol1FWHM=10.00
+Comp3Mol1Size=1.000e+05
+

@@ -1,0 +1,15 @@
+.idea/
+.DS_Store/
+__pycache__
+
+# ignore all directories starting with venv
+venv*/
+
+# ignore all config (.ini) files but not config_defaults.ini
+cassis_lte_python/config*.ini
+!cassis_lte_python/config_defaults.ini
+
+# to ignore personal files and directories :
+# > git config --local core.excludesFile .mygitignore
+# create and edit .mygitignore
+# add .mygitignore to itself and any personal files and directories
