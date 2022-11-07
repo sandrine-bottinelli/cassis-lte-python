@@ -441,7 +441,7 @@ class ModelSpectrum:
                                 continue
                             TEL_DIAM[tel] = float(line)
                             break
-            if check_tel_range :  # check telescope ranges cover all data / all model values:
+            if check_tel_range:  # check telescope ranges cover all data / all model values:
                 x_vals = self.x_file if self.x_file is not None else [min(self.x_mod), max(self.x_mod)]
                 extended = False
                 for x in x_vals:
@@ -554,9 +554,12 @@ class ModelSpectrum:
                     win_list_tag.append(win)
 
                 nt = len(win_list_tag)
-                if verbose:
+                if verbose or verbose == 2:
                     print('{} : {}/{} transitions found with enough data within thresholds'.format(tag, nt,
                                                                                                    len(tr_list)))
+                if verbose == 2:
+                    for w in win_list_tag:
+                        print('  {}'.format(w.transition))
 
                 if self._v_range_user is not None and self._rms_cal_user is not None:
                     v_range = expand_dict(self._v_range_user[tag], nt)
