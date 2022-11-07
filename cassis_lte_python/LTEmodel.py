@@ -393,7 +393,7 @@ class ModelSpectrum:
                 tc.append([np.mean(cont_data) for _ in freqs])
             self.tc = np.concatenate(tc)
         else:
-            raise TypeError("Continuum must be a float, an integer or a dictionary.")
+            raise TypeError("Continuum must be a float, an integer or a 2-column tab-separated file (MHz K).")
         # else:  # HDU
         #     pass
             # tc = cont_info[datafile].data.squeeze()[j, i]
