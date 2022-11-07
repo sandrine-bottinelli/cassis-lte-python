@@ -1030,7 +1030,7 @@ class ModelSpectrum:
                     c_y_mod = c_lte_func(x_mod, **c_best_pars)
 
                     ax2.plot(x_mod, c_y_mod, drawstyle='steps-mid',
-                             color=CPT_COLORS[icpt], linewidth=0.75)
+                             color=CPT_COLORS[icpt % len(CPT_COLORS)], linewidth=0.75)
 
             handles, labels = ax2.get_legend_handles_labels()
             newLabels, newHandles = [], []  # for main lines
