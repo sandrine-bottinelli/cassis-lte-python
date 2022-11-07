@@ -381,7 +381,10 @@ class ModelSpectrum:
 
         if isinstance(cont_info, (float, int)):
             self.tc = cont_info
-        elif isinstance(cont_info, dict):
+        elif os.path.isfile(cont_info):  # cont_info is a CASSIS continuum file : MHz [tab] K
+            f_cont, t_cont = np.loadtxt(cont_info, delimiter='\t', unpack=True)
+            self.tc = np.array([np.interp(x, f_cont, t_cont) for x in self.x_file])
+        elif isinstance(cont_info, dict):  # to compute continuum over ranges given by the user
             tc = []
             for freqs, fluxes, franges in zip(self.x_file, self.y_file, cont_info.values()):
                 cont_data = []
@@ -1728,18 +1731,18 @@ class Species:
     def __init__(self, tag, ntot=7.0e14, tex=100., fwhm=FWHM_DEF, component=None):
         # super().__init__(self)
         self._tag = int(tag)  # make sure tag is stored as an integer
-        if isinstance(ntot, float):
+        if isinstance(ntot, (float, dict)):
             self._ntot = create_parameter('ntot_{}'.format(tag), ntot)  # total column density [cm-2]
         elif isinstance(ntot, Parameter):
             self._ntot = ntot
         else:
-            raise TypeError("ntot must be a float or a Parameter")
-        if isinstance(fwhm, float):
+            raise TypeError("ntot must be a float, a dictionary or a Parameter")
+        if isinstance(fwhm, (float, dict)):
             self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
         elif isinstance(fwhm, Parameter):
             self._fwhm = fwhm
         else:
-            raise TypeError("fwhm must be a float or a Parameter")
+            raise TypeError("fwhm must be a float, a dictionary or a Parameter")
 
         self._tex = tex  # excitation temperature [K]
         self._component = component
