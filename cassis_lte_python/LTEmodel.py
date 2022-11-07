@@ -741,7 +741,7 @@ class ModelSpectrum:
         else:
             lte_model_func = generate_lte_model_func(self.model_info(self.x_mod))
             self.y_mod = lte_model_func(self.x_mod, **self.params2fit)
-        res = lte_model_func  # Model(lte_model_func)
+        res = Model(lte_model_func)
         self.model = res
 
         return res
