@@ -1276,7 +1276,7 @@ class ModelSpectrum:
                 print("Done\n")
 
     def set_filepath(self, filename, dirname=None, ext=None):
-        sub_dir = None
+        sub_dir = self.output_dir
         if '/' in filename:  # filename contains directory
             dirs = os.path.split(filename)
             sub_dir = os.path.join(*dirs[:-1])
@@ -1285,10 +1285,10 @@ class ModelSpectrum:
         if dirname is not None:
             if sub_dir is not None:
                 dirname = os.path.join(dirname, sub_dir)
-            if not os.path.isdir(dirname):
-                os.makedirs(dirname)
         else:
-            dirname = self.output_dir
+            dirname = sub_dir
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
 
         if ext is not None:
             if ext[0] != '.':
