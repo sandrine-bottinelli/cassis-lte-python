@@ -377,16 +377,16 @@ class ModelSpectrum:
             omega = np.concatenate(config['beam_info']['beam_omega'])
             self.jypb = 1.e-26 * const.c.value ** 2 / (f_hz_beam * f_hz_beam) / (2. * const.k_B.value * omega)
 
-        cont_info = config.get('tc', 0.)
+        self.cont_info = config.get('tc', 0.)
 
-        if isinstance(cont_info, (float, int)):
-            self.tc = cont_info
-        elif os.path.isfile(cont_info):  # cont_info is a CASSIS continuum file : MHz [tab] K
-            f_cont, t_cont = np.loadtxt(cont_info, delimiter='\t', unpack=True)
+        if isinstance(self.cont_info, (float, int)):
+            self.tc = self.cont_info
+        elif os.path.isfile(self.cont_info):  # cont_info is a CASSIS continuum file : MHz [tab] K
+            f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', unpack=True)
             self.tc = np.array([np.interp(x, f_cont, t_cont) for x in self.x_file])
-        elif isinstance(cont_info, dict):  # to compute continuum over ranges given by the user
+        elif isinstance(self.cont_info, dict):  # to compute continuum over ranges given by the user
             tc = []
-            for freqs, fluxes, franges in zip(self.x_file, self.y_file, cont_info.values()):
+            for freqs, fluxes, franges in zip(self.x_file, self.y_file, self.cont_info.values()):
                 cont_data = []
                 for frange in franges:
                     cont_data.append(fluxes[(freqs >= min(frange)) & (freqs <= max(frange))])
@@ -610,7 +610,7 @@ class ModelSpectrum:
         config_save = {
             'data_file': os.path.abspath(self.data_file) if self.data_file is not None else None,
             'output_dir': os.path.abspath(self.output_dir) if self.output_dir is not None else None,
-            'tc': self.tc,
+            'tc': self.cont_info,
             'tcmb': self.tcmb,
             'tuning_info': self._tuning_info_user,
             'v_range': self._v_range_user,
