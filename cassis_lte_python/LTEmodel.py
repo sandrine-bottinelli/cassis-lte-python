@@ -74,8 +74,12 @@ else:
 
 db = conn.cursor()
 
-CPT_COLORS = ['blue', 'green', 'mediumorchid']
-PLOT_COLORS = plt.get_cmap('tab20')(np.linspace(0, 1, 20))
+# CPT_COLORS = ['blue', 'green', 'mediumorchid']
+CPT_COLORS = ['orange', 'gold', 'yellow', 'green',
+              'blue', 'dodgerblue', 'deepskyblue',
+              'purple', 'mediumorchid', 'pink']
+TAB20 = plt.get_cmap('tab20')(np.linspace(0, 1, 20))
+PLOT_COLORS = np.concatenate([TAB20[:][::2], TAB20[:][1::2]])
 PLOT_LINESTYLES = ['-', '--', ':']
 
 EUP_MIN_DEF = 0.
@@ -981,11 +985,14 @@ class ModelSpectrum:
         # plot overall model
         ax2.plot(x_mod, y_mod, drawstyle='steps-mid', color='r', linewidth=2)
 
+        # assign colors to tags
+        tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
+
         # write transition number (center, bottom)
         if len(self.win_list_plot) > 1:
             ax2.text(0.5, 0.05, "{}".format(win.plot_nb),
                      transform=ax2.transAxes, horizontalalignment='center',
-                     fontsize='large', color=PLOT_COLORS[0])
+                     fontsize='large', color=tag_colors[tr.tag])
 
         # plot range used for chi2 calculation
         v_range = win.v_range_fit
@@ -993,21 +1000,21 @@ class ModelSpectrum:
             ax.axvspan(v_range[0], v_range[1], facecolor='purple', alpha=0.1)
 
         if not basic:  # plot line position(s) and plot components if more than one
-            y_pos = ymax - (ymax - ymin) * np.array([0., 0.075])
-
-            # plot transitions and components
+            dy = ymax - ymin
             for icpt, cpt in enumerate(self.cpt_list):
                 par_vlsr = best_pars['{}_vlsr'.format(cpt.name)].value
+                # compute vertical positions, shifting down for each component
+                y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy
 
                 # plot line positions w/i user's constraints
                 all_lines_disp_cpt = all_lines_display[all_lines_display['tag'].isin(cpt.tag_list)]
                 other_lines_disp_cpt = other_lines_display[other_lines_display['tag'].isin (cpt.tag_list)]
 
-                line_list = pd.concat([all_lines_disp_cpt, other_lines_disp_cpt])
-                tag_colors = {}
-                for t in line_list['tag']:
-                    if t not in tag_colors:
-                        tag_colors[t] = PLOT_COLORS[(icpt + 2 * len(tag_colors)) % len(PLOT_COLORS)]
+                # line_list = pd.concat([all_lines_disp_cpt, other_lines_disp_cpt])
+                # tag_colors = {}
+                # for t in line_list['tag']:
+                #     if t not in tag_colors:
+                #         tag_colors[t] = PLOT_COLORS[(icpt + 2 * len(tag_colors)) % len(PLOT_COLORS)]
 
                 for row in all_lines_disp_cpt.iterrows():
                     tran = row[1].transition
