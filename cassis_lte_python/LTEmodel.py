@@ -289,6 +289,7 @@ def generate_lte_model_func(config):
 
             sum_tau = 0
             for isp, tag in enumerate(cpt.tag_list):
+                tran_list = []
                 if isinstance(line_list, list):
                     tran_list = line_list
                 else:  # assume it is a DataFrame
@@ -945,8 +946,9 @@ class ModelSpectrum:
         if self.x_file is not None:
             y_mod = self.compute_model(params=best_pars, x_values=x_mod, line_list=all_lines)
 
-        all_lines_display = select_transitions(all_lines, thresholds=self.thresholds)  # for position display
+        all_lines_display = select_transitions(all_lines, xrange=[fmin, fmax], thresholds=self.thresholds)  # for position display
         other_lines_display = pd.concat([all_lines, all_lines_display]).drop_duplicates(subset='db_id', keep=False)
+        other_lines_display = select_transitions(other_lines_display, xrange=[fmin, fmax])
 
         if list_other_species is not None:
             try:
@@ -990,31 +992,33 @@ class ModelSpectrum:
         if v_range is not None:
             ax.axvspan(v_range[0], v_range[1], facecolor='purple', alpha=0.1)
 
-        if not basic :  # plot line position(s) and plot components if more than one
+        if not basic:  # plot line position(s) and plot components if more than one
+            y_pos = ymax - (ymax - ymin) * np.array([0., 0.075])
+
+            # plot transitions and components
             for icpt, cpt in enumerate(self.cpt_list):
                 par_vlsr = best_pars['{}_vlsr'.format(cpt.name)].value
-                y_pos = ymax - (ymax - ymin) * np.array([0., 0.075])
 
                 # plot line positions w/i user's constraints
-                self.plot_line_position(ax2, tr, par_vlsr, y_pos,
-                                        color=PLOT_COLORS[icpt], label=str(tr.tag))
-                tag_colors = {tr.tag: PLOT_COLORS[icpt]}
+                all_lines_disp_cpt = all_lines_display[all_lines_display['tag'].isin(cpt.tag_list)]
+                other_lines_disp_cpt = other_lines_display[other_lines_display['tag'].isin (cpt.tag_list)]
 
-                line_list = pd.concat([all_lines_display, other_lines_display])
+                line_list = pd.concat([all_lines_disp_cpt, other_lines_disp_cpt])
+                tag_colors = {}
                 for t in line_list['tag']:
                     if t not in tag_colors:
                         tag_colors[t] = PLOT_COLORS[(icpt + 2 * len(tag_colors)) % len(PLOT_COLORS)]
 
-                for row in all_lines_display.iterrows():
+                for row in all_lines_disp_cpt.iterrows():
                     tran = row[1].transition
                     lbl = str(tran.tag)
                     lw = 1.5
-                    if tran != tr:
-                        self.plot_line_position(ax2, tran, par_vlsr, y_pos,
-                                                color=tag_colors[tran.tag], label=lbl, linewidth=lw)
+                    # if tran != tr:
+                    self.plot_line_position(ax2, tran, par_vlsr, y_pos,
+                                            color=tag_colors[tran.tag], label=lbl, linewidth=lw)
 
-                if other_lines_display is not None:
-                    for row in other_lines_display.iterrows():
+                if other_lines_disp_cpt is not None:
+                    for row in other_lines_disp_cpt.iterrows():
                         tran = row[1].transition
                         lbl = "s{}".format(tran.tag)
                         lw = 0.75
