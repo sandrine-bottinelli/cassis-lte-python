@@ -75,12 +75,17 @@ else:
 db = conn.cursor()
 
 # CPT_COLORS = ['blue', 'green', 'mediumorchid']
-CPT_COLORS = ['orange', 'gold', 'yellow', 'green',
-              'blue', 'dodgerblue', 'deepskyblue',
-              'purple', 'mediumorchid', 'pink']
+# CPT_COLORS = [
+#     'blue', 'dodgerblue', 'deepskyblue',
+#     'orange',
+#     'gold',
+#     # 'yellow',
+#     'green',
+#     'purple', 'mediumorchid', 'pink']
 TAB20 = plt.get_cmap('tab20')(np.linspace(0, 1, 20))
 PLOT_COLORS = np.concatenate([TAB20[:][::2], TAB20[:][1::2]])
-PLOT_LINESTYLES = ['-', '--', ':']
+# PLOT_LINESTYLES = ['-', '--']
+PLOT_LINESTYLES = ['-', ':']
 
 EUP_MIN_DEF = 0.
 EUP_MAX_DEF = None  # 150.
@@ -883,6 +888,34 @@ class ModelSpectrum:
 
     def plot_window(self, win, list_other_species=None, thresholds_other=None,
                     other_species_selection=None, ax=None, fig=None, basic=False, dpi=None):
+        """
+        Plots a given window : overall model, individual components, line positions.
+        :param win: the Window to plot
+        :param list_other_species: file with list of other species (and their thresholds) to plot
+        :param thresholds_other: TBC
+        :param other_species_selection: deprecated
+        :param ax: the Axis on which to plot the Window
+        :param fig: the figure on which to plot the Window
+        :param basic: plot only the overall model (no components, no line positions)
+        :param dpi: desired dpi
+        :return:
+        """
+
+        def plot_help_lines_cpt(the_axis, index_cpt, cpt_name, vpos):
+            # plot help line on the side to identify component
+            xlims = the_axis.get_xlim()
+            dx_hline = xlims[1] - xlims[0]
+            if index_cpt % 2 == 0:  # plot even components on the LHS ; recall xlim2[0] > xlim2[1]
+                xhline = xlims[0] + [0., 0.05 * dx_hline]
+                hpos = xhline[1] + 0.005 * dx_hline
+                halign = 'left'
+            else:  # plot odd components on the RHS
+                xhline = xlims[1] - [0.05 * dx_hline, 0.]
+                hpos = xhline[0] - 0.005 * dx_hline
+                halign = 'right'
+            the_axis.plot(xhline, [vpos, vpos], color='lightgray')
+            the_axis.text(hpos, vpos, cpt_name, color='lightgray', horizontalalignment=halign)
+
         if fig is None:
             fig = Figure(figsize=(5, 4), dpi=dpi)
         if ax is None:
@@ -954,13 +987,15 @@ class ModelSpectrum:
         other_lines_display = pd.concat([all_lines, all_lines_display]).drop_duplicates(subset='db_id', keep=False)
         other_lines_display = select_transitions(other_lines_display, xrange=[fmin, fmax])
 
+        other_species_display = None
         if list_other_species is not None:
             try:
                 other_lines_thresholds = get_transition_list(db, list_other_species, [[fmin, fmax]],
                                                              **thresholds_other, return_type='df')
                 tmp = pd.concat([all_lines_display, other_lines_display,
                                  other_lines_thresholds]).drop_duplicates(subset='db_id', keep=False)
-                other_lines_display = pd.concat([other_lines_display, tmp])
+                other_species_display = tmp
+                # other_lines_display = pd.concat([other_lines_display, tmp])
             except IndexError:
                 pass  # do nothing
 
@@ -972,7 +1007,7 @@ class ModelSpectrum:
         if self.x_file is not None:
             x_file = self.x_file[(fmin <= self.x_file) & (self.x_file <= fmax)]
             y_file = self.y_file[(fmin <= self.x_file) & (self.x_file <= fmax)]
-            ax2.plot(x_file, y_file, 'k-', drawstyle='steps-mid')
+            ax2.plot(x_file, y_file, 'k-', drawstyle='steps-mid', linewidth=1)
             ymin = min(ymin, min(y_file))
             ymax = max(ymax, max(y_file))
         ymin = ymin - 0.05 * (ymax - ymin)
@@ -983,10 +1018,12 @@ class ModelSpectrum:
         ax.set_ylim(ymin, ymax)
 
         # plot overall model
-        ax2.plot(x_mod, y_mod, drawstyle='steps-mid', color='r', linewidth=2)
+        ax2.plot(x_mod, y_mod, drawstyle='steps-mid', color='r', linewidth=1.5)
 
         # assign colors to tags
         tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
+        if list_other_species is not None:
+            tag_other_sp_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(list_other_species)}
 
         # write transition number (center, bottom)
         if len(self.win_list_plot) > 1:
@@ -1001,20 +1038,17 @@ class ModelSpectrum:
 
         if not basic:  # plot line position(s) and plot components if more than one
             dy = ymax - ymin
+            cpt_cols = plt.get_cmap('hsv')(np.linspace(0.1, 0.8, len(self.cpt_list)))
             for icpt, cpt in enumerate(self.cpt_list):
                 par_vlsr = best_pars['{}_vlsr'.format(cpt.name)].value
-                # compute vertical positions, shifting down for each component
-                y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy
 
-                # plot line positions w/i user's constraints
+                # plot line positions w/i user's constraints at the top
                 all_lines_disp_cpt = all_lines_display[all_lines_display['tag'].isin(cpt.tag_list)]
-                other_lines_disp_cpt = other_lines_display[other_lines_display['tag'].isin (cpt.tag_list)]
 
-                # line_list = pd.concat([all_lines_disp_cpt, other_lines_disp_cpt])
-                # tag_colors = {}
-                # for t in line_list['tag']:
-                #     if t not in tag_colors:
-                #         tag_colors[t] = PLOT_COLORS[(icpt + 2 * len(tag_colors)) % len(PLOT_COLORS)]
+                # compute vertical positions, shifting down for each component
+                y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy - 0.01 * dy
+                if len(self.cpt_list) > 1 and len(all_lines_disp_cpt) > 0:
+                    plot_help_lines_cpt(ax2, icpt, cpt.name, y_pos[0])
 
                 for row in all_lines_disp_cpt.iterrows():
                     tran = row[1].transition
@@ -1022,19 +1056,28 @@ class ModelSpectrum:
                     lw = 1.5
                     # if tran != tr:
                     self.plot_line_position(ax2, tran, par_vlsr, y_pos,
+                                            # linestyle=PLOT_LINESTYLES[icpt % len(PLOT_LINESTYLES)],
                                             color=tag_colors[tran.tag], label=lbl, linewidth=lw)
 
+                # plot line positions outside user's constraints at the bottom
+                other_lines_disp_cpt = other_lines_display[other_lines_display['tag'].isin (cpt.tag_list)]
+                # compute vertical positions, shifting up for each component
+                ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075]) + 0.025 * (icpt + 1) * dy
+
                 if other_lines_disp_cpt is not None:
+                    if len(self.cpt_list) > 1 and len(other_lines_disp_cpt) > 0:
+                        plot_help_lines_cpt(ax2, icpt, cpt.name, ypos_other[0])
+
                     for row in other_lines_disp_cpt.iterrows():
                         tran = row[1].transition
                         lbl = "s{}".format(tran.tag)
                         lw = 0.75
-                        if tran.tag == other_species_selection:  # plot at the bottom
-                            ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075])
-                        else:  # plot at the top
-                            ypos_other = y_pos - 0.025 * (ymax - ymin)
+                        col = tag_colors[tran.tag]
+                        ypos_other = ymin + dy * np.array([0., 0.075]) + 0.025 * dy
+                        ls = ':'
                         self.plot_line_position(ax2, tran, par_vlsr, ypos_other,
-                                                color=tag_colors[tran.tag], label=lbl, linewidth=lw)
+                                                # linestyle=ls,
+                                                color=col, label=lbl, linewidth=lw)
 
                 if len(self.cpt_list) > 1:
                     c_lte_func = generate_lte_model_func(self.model_info(x_mod,
@@ -1047,7 +1090,19 @@ class ModelSpectrum:
                     c_y_mod = c_lte_func(x_mod, **c_best_pars)
 
                     ax2.plot(x_mod, c_y_mod, drawstyle='steps-mid',
-                             color=CPT_COLORS[icpt % len(CPT_COLORS)], linewidth=0.75)
+                             color=cpt_cols[icpt % len(cpt_cols)], linewidth=0.5)
+
+            if other_species_display is not None:
+                for row in other_species_display.iterrows():
+                    tran = row[1].transition
+                    lbl = "s{}".format(tran.tag)
+                    lw = 0.75
+                    col = tag_other_sp_colors[tran.tag]
+                    ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075])
+                    ls = '-'
+                    vlsr0 = best_pars['{}_vlsr'.format(self.cpt_list[0].name)].value
+                    self.plot_line_position(ax2, tran, vlsr0, ypos_other, linestyle=ls,
+                                            color=col, label=lbl, linewidth=lw)
 
             handles, labels = ax2.get_legend_handles_labels()
             newLabels, newHandles = [], []  # for main lines
@@ -1060,14 +1115,16 @@ class ModelSpectrum:
                     satLabels.append(label[1:])
                     satHandles.append(handle)
             leg = ax.legend(newHandles, newLabels, labelcolor='linecolor', frameon=False,
-                             bbox_to_anchor=(xmin1 - padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
+                             bbox_to_anchor=(xmin1 - padding * dx1, y_pos[1] - 0.01 * (ymax - ymin)),
                              bbox_transform=ax.transData, loc='upper left',
                              fontsize='small',
                              handlelength=0, handletextpad=0, fancybox=True)
 
             sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
-                                 bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
-                                 bbox_transform=ax.transData, loc='upper right',
+                                 # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
+                                 # bbox_transform=ax.transData, loc='upper right',
+                                 bbox_to_anchor=(xmax1 + padding * dx1, ypos_other[1] + 0.01 * (ymax - ymin)),
+                                 bbox_transform=ax.transData, loc='lower right',
                                  fontsize='small',
                                  handlelength=0, handletextpad=0, fancybox=True)
             for text in sat_leg.get_texts():
