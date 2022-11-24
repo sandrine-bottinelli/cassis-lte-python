@@ -1,8 +1,7 @@
 import numpy as np
 import sqlite3
 import astropy.constants.codata2014 as const  # h,k_B,c # SI units
-# from astropy.modeling import Fittable1DModel, Parameter
-# from astropy import units as u
+from astropy import units as u
 from lmfit import Model, Parameters, Parameter
 from scipy import stats, signal
 import matplotlib.pyplot as plt
@@ -2199,8 +2198,13 @@ def open_data_file(filepath):
                 vlsr = hdu[1].header['VLSR']  # km/s
             except KeyError:
                 vlsr = 0.
-            freq = data['wave'].byteswap().newbyteorder()  # to be able to use in a DataFrame
-            flux = data['flux'].byteswap().newbyteorder()
+            if isinstance(hdu[1], fits.BinTableHDU):
+                xunit = hdu[1].columns.columns[0].unit
+                freq = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()  # to be able to use in a DataFrame
+                flux = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
+                freq = (freq * u.Unit(xunit)).to('MHz').value
+            else:
+                raise TypeError("Cannot open this fits file.")
     elif ext in ['.fus', '.lis']:
         with open(filepath) as f:
             nskip = 0
