@@ -247,7 +247,7 @@ def select_transitions(tran_df_or_dict, thresholds=None, xrange=None, return_typ
 
     if xrange is not None:
         for tag in tag_list:
-            if tag in thresholds:
+            if tag in thresholds.keys() or str(tag) in thresholds.keys():
                 thresholds[str(tag)]['f_trans_mhz_min'] = min(xrange)
                 thresholds[str(tag)]['f_trans_mhz_max'] = max(xrange)
             else:
@@ -994,7 +994,7 @@ class ModelSpectrum:
                                                              **thresholds_other, return_type='df')
                 tmp = pd.concat([all_lines_display, other_lines_display,
                                  other_lines_thresholds]).drop_duplicates(subset='db_id', keep=False)
-                other_species_display = tmp
+                other_species_display = other_lines_thresholds
                 # other_lines_display = pd.concat([other_lines_display, tmp])
             except IndexError:
                 pass  # do nothing
@@ -1023,7 +1023,8 @@ class ModelSpectrum:
         # assign colors to tags
         tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
         if list_other_species is not None:
-            tag_other_sp_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(list_other_species)}
+            tag_other_sp_colors = {t: PLOT_COLORS[(itag + len(tag_colors)) % len(PLOT_COLORS)]
+                                   for itag, t in enumerate(list_other_species)}
 
         # write transition number (center, bottom)
         if len(self.win_list_plot) > 1:
@@ -1060,7 +1061,7 @@ class ModelSpectrum:
                                             color=tag_colors[tran.tag], label=lbl, linewidth=lw)
 
                 # plot line positions outside user's constraints at the bottom
-                other_lines_disp_cpt = other_lines_display[other_lines_display['tag'].isin (cpt.tag_list)]
+                other_lines_disp_cpt = other_lines_display[other_lines_display['tag'].isin(cpt.tag_list)]
                 # compute vertical positions, shifting up for each component
                 ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075]) + 0.025 * (icpt + 1) * dy
 
