@@ -1802,18 +1802,8 @@ class Species:
     def __init__(self, tag, ntot=7.0e14, tex=100., fwhm=FWHM_DEF, component=None):
         # super().__init__(self)
         self._tag = int(tag)  # make sure tag is stored as an integer
-        if isinstance(ntot, (float, dict)):
-            self._ntot = create_parameter('ntot_{}'.format(tag), ntot)  # total column density [cm-2]
-        elif isinstance(ntot, Parameter):
-            self._ntot = ntot
-        else:
-            raise TypeError("ntot must be a float, a dictionary or a Parameter")
-        if isinstance(fwhm, (float, dict)):
-            self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
-        elif isinstance(fwhm, Parameter):
-            self._fwhm = fwhm
-        else:
-            raise TypeError("fwhm must be a float, a dictionary or a Parameter")
+        self._ntot = create_parameter('ntot_{}'.format(tag), ntot)  # total column density [cm-2]
+        self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
 
         self._tex = tex  # excitation temperature [K]
         self._component = component
@@ -1947,8 +1937,11 @@ def create_parameter(name, param):
                          # value=param['value'], min=param.get('min', None), max=param.get('max', None),
                          # expr=param.get('expr', None))
 
+    elif isinstance(param, Parameter):
+        return param
+
     else:
-        raise TypeError("Param must be a float or a dictionary.")
+        raise TypeError(f"{name} must be a float, an integer, a dictionary or an instance of the Parameter class.")
 
 
 def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
