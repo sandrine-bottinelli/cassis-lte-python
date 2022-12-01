@@ -544,6 +544,11 @@ class ModelSpectrum:
             if str(self.tag_list[0]) not in self._rms_cal_user:
                 self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
 
+        if '*' in self._rms_cal_user:
+            self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
+        if '*' in self._v_range_user:
+            self._v_range_user = {str(tag): {'*': self._v_range_user['*']} for tag in self.tag_list}
+
         if self.bandwidth is None:
             self.win_list = [Window(tr_list_by_tag[str(self.tag_list[0])][0], 1)]
         else:
