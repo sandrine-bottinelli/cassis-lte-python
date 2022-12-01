@@ -552,8 +552,8 @@ class ModelSpectrum:
                 win_list_tag = []  # first find all windows with enough data
                 for i, tr in enumerate(tr_list):
                     f_range_plot = [velocity_to_frequency(v, tr.f_trans_mhz, vref_kms=self.vlsr_file)
-                                    for v in [-1.1 * self.bandwidth / 2 + self.vlsr_file,
-                                              1.1 * self.bandwidth / 2 + self.vlsr_file]]
+                                    for v in [-1. * self.bandwidth / 2 + self.vlsr_file,
+                                              1. * self.bandwidth / 2 + self.vlsr_file]]
                     f_range_plot.sort()
                     if self.x_file is not None:
                         x_win, y_win = select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
@@ -567,8 +567,8 @@ class ModelSpectrum:
                     print('{} : {}/{} transitions found with enough data within thresholds'.format(tag, nt,
                                                                                                    len(tr_list)))
                 if verbose == 2:
-                    for w in win_list_tag:
-                        print('  {}'.format(w.transition))
+                    for iw, w in enumerate(win_list_tag):
+                        print('  {}. {}'.format(iw + 1, w.transition))
 
                 if self._v_range_user is not None and self._rms_cal_user is not None:
                     v_range = expand_dict(self._v_range_user[tag], nt)
