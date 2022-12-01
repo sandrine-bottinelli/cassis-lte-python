@@ -522,10 +522,9 @@ class ModelSpectrum:
 
         self.thresholds = {}
         if 'thresholds' in config:
-            for tag in self.tag_list:
-                user_dict = config['thresholds'].get(str(tag), THRESHOLDS_DEF)
-                self.thresholds[str(tag)] = {label: user_dict.get(label, value)
-                                             for label, value in THRESHOLDS_DEF.items()}
+            self.thresholds = get_species_thresholds(config['thresholds'],
+                                                     select_species=self.tag_list,
+                                                     return_list_sp=False)
         else:
             for tag in self.tag_list:
                 self.thresholds[str(tag)] = THRESHOLDS_DEF
@@ -1182,7 +1181,7 @@ class ModelSpectrum:
         if not display_all:
             win_list_plot = [w for w in win_list_plot if w.in_fit]
 
-        list_other_species, thresholds_other = get_other_species(other_species)
+        list_other_species, thresholds_other = get_species_thresholds(other_species)
 
         best_pars = self.best_params if self.best_params is not None else self.params2fit
         self.update_parameters(params=best_pars)
@@ -1988,14 +1987,12 @@ def expand_dict(dic: dict, n_items):
     return new_dic
 
 
-def get_other_species(other_species):
-    thresholds_other = {}
-    if other_species is None:
-        return None, thresholds_other
+def get_species_thresholds(sp_threshold_infos, select_species=None, return_list_sp=True):
+    sp_thresholds = {}
+    list_species = []
 
-    list_other_species = []
-    if other_species is type(list):
-        for other_sp in other_species:
+    if sp_threshold_infos is type(list):
+        for other_sp in sp_threshold_infos:
             if isinstance(other_sp, list):
                 new_sp = other_sp[0]
                 new_th = {
@@ -2006,20 +2003,38 @@ def get_other_species(other_species):
             else:
                 new_sp = other_sp
                 new_th = THRESHOLDS_DEF
-            list_other_species.append(new_sp)
-            thresholds_other[str(new_sp)] = new_th
+            list_species.append(new_sp)
+            sp_thresholds[str(new_sp)] = new_th
 
-    elif os.path.isfile(other_species):
-        df = pd.read_csv(other_species, delimiter='\t', comment='#')
+    elif isinstance(sp_threshold_infos, dict):
+        sp_thresholds = sp_threshold_infos
+        list_species = list(sp_threshold_infos.keys())
+
+    elif os.path.isfile(sp_threshold_infos):
+        df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#')
         col_names = df.columns[1:]
-        list_other_species = list(df.tag)
+        list_species = list(df.tag)
         for index, row in df.iterrows():
-            thresholds_other[str(int(row.tag))] = {c: row[c] for c in col_names if '*' not in str(row[c])}
+            sp_thresholds[str(int(row.tag))] = {c: row[c] for c in col_names if '*' not in str(row[c])}
 
     else:
-        raise TypeError("other_species should be a list or a path to a file.")
+        raise TypeError("other_species should be a list, a dictionary or a path to a file.")
 
-    return list_other_species, thresholds_other
+    if len(sp_thresholds) > 0:  # if not empty, make sure add default thresholds if necessary
+        for sp in sp_thresholds.keys():
+            sp_thresholds[sp] = {label: sp_thresholds[sp].get(label, value)
+                                 for label, value in THRESHOLDS_DEF.items()}
+
+    if select_species is not None:
+        if not isinstance(select_species, list):
+            select_species = list(select_species)
+        sp_thresholds = {str(sp): sp_thresholds[str(sp)] for sp in select_species}
+        list_species = select_species
+
+    if return_list_sp:
+        return list_species, sp_thresholds
+    else:
+        return sp_thresholds
 
 
 def frange(start, stop, step):
