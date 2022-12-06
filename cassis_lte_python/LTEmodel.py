@@ -537,16 +537,38 @@ class ModelSpectrum:
 
         self._v_range_user = config.get('v_range', None)
         self._rms_cal_user = config.get('chi2_info', None)
-        if len(self.tag_list) == 1 and self._v_range_user is not None and self._rms_cal_user is not None:
-            if str(self.tag_list[0]) not in self._v_range_user:
+
+        # extract v_range info
+        if isinstance(self._v_range_user, dict):
+            if '*' in self._v_range_user:  # same velocity range for all species/lines
+                self._v_range_user = {str(tag): {'*': self._v_range_user['*']} for tag in self.tag_list}
+
+            if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._v_range_user:
+                # only one species and tag not given => "reformat" dictionary to contain tag
                 self._v_range_user = {str(self.tag_list[0]): self._v_range_user}
-            if str(self.tag_list[0]) not in self._rms_cal_user:
+                if str(self.tag_list[0]) not in self._rms_cal_user:
+                    self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
+
+        elif isinstance(self._v_range_user, str):
+            self._v_range_user = read_noise_info(self._v_range_user)
+
+        else:
+            raise TypeError("v_range must be a dictionary or a path to an appropriate file.")
+
+        # extract rms/cal info
+        if isinstance(self._rms_cal_user, dict):
+            if '*' in self._rms_cal_user:
+                self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
+
+            if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._rms_cal_user:
+                # only one species and tag not given => "reformat" dictionary to contain tag
                 self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
 
-        if '*' in self._rms_cal_user:
-            self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
-        if '*' in self._v_range_user:
-            self._v_range_user = {str(tag): {'*': self._v_range_user['*']} for tag in self.tag_list}
+        elif isinstance(self._rms_cal_user, str):
+            self._rms_cal_user = read_noise_info(self._rms_cal_user)
+
+        else:
+            raise TypeError("chi2_info must be a dictionary or a path to an appropriate file.")
 
         if self.bandwidth is None:
             self.win_list = [Window(tr_list_by_tag[str(self.tag_list[0])][0], 1)]
@@ -2035,6 +2057,24 @@ def get_species_thresholds(sp_threshold_infos, select_species=None, return_list_
         return list_species, sp_thresholds
     else:
         return sp_thresholds
+
+
+def read_noise_info(noise_file):
+    noise_info = {}
+    with open(noise_file) as f:
+        all_lines = f.readlines()
+        for line in all_lines:
+            if line.startswith('#') or len(line.strip()) == 0:
+                continue
+            elts = line.split()
+            if len(elts) == 1:  # line only has one element -> tag
+                tag = elts[0]
+                noise_info[tag] = {}
+            else:
+                # noise info : vmin vmax line numbers or rms cal line numbers
+                noise_info[tag][''.join(elts[2:])] = [float(elts[0]), float(elts[1])]
+
+    return noise_info
 
 
 def frange(start, stop, step):
