@@ -229,7 +229,7 @@ def get_transition_list(database, species, fmhz_ranges, return_type='dict', **th
         return tr_list
 
 
-def select_transitions(tran_df_or_dict, thresholds=None, xrange=None, return_type=None):
+def select_transitions(tran_df, thresholds=None, xrange=None, return_type=None):
     def is_selected(tran, sp_thresholds):
         constraints = []
         for key, val in sp_thresholds.items():
@@ -240,44 +240,31 @@ def select_transitions(tran_df_or_dict, thresholds=None, xrange=None, return_typ
                 constraints.append(val >= getattr(tran, attr if key != 'err_max' else 'f_err_mhz'))
         return True if all(constraints) else False
 
+    if not isinstance(tran_df, pd.DataFrame):
+        raise TypeError("First argument must be a DataFrame.")
+
     if thresholds is None:
         thresholds = {}
 
-    tag_list = []
-    for tag in tran_df_or_dict.tag:
-        if tag not in tag_list:
-            tag_list.append(tag)
-
-    if xrange is not None:
-        for tag in tag_list:
-            if tag in thresholds.keys() or str(tag) in thresholds.keys():
-                thresholds[str(tag)]['f_trans_mhz_min'] = min(xrange)
-                thresholds[str(tag)]['f_trans_mhz_max'] = max(xrange)
-            else:
-                thresholds[str(tag)] = {'f_trans_mhz_min': min(xrange),
-                                        'f_trans_mhz_max': max(xrange)}
-
-    if isinstance(tran_df_or_dict, pd.DataFrame):
-        if len(thresholds) == 0:
-            selected = tran_df_or_dict
-        else:
-            indices = []
-            for tag, thres in thresholds.items():
-                for row in tran_df_or_dict[tran_df_or_dict.tag == int(tag)].iterrows():
-                    tr = row[1].transition
-                    if is_selected(tr, thres):
-                        indices.append(row[0])
-            selected = tran_df_or_dict.loc[indices]
-
-        if return_type is None or return_type == 'df':
-            return selected
-        elif return_type == 'dict':
-            return {str(tag): list(selected[selected.tag == int(tag)].transition) for tag in tag_list}
-    # elif isinstance(tran_df_or_dict, dict):
-    #     pass
+    if len(thresholds) == 0:
+        selected = tran_df
     else:
-        raise TypeError("First argument must be a DataFrame.")
-        # raise TypeError("First argument must be a DataFrame or a dictionary.")
+        indices = []
+        for tag, thres in thresholds.items():
+            if xrange is not None:
+                thres['f_trans_mhz_min'] = min(xrange)
+                thres['f_trans_mhz_max'] = max(xrange)
+
+            for row in tran_df[tran_df.tag == tag].iterrows():
+                tr = row[1].transition
+                if is_selected(tr, thres):
+                    indices.append(row[0])
+        selected = tran_df.loc[indices]
+
+    if return_type is not None or return_type != 'df':
+        print("Not implemented, returning dataframe.")
+        # return {str(tag): list(selected[selected.tag == tag].transition) for tag in tag_list}
+    return selected
 
 
 def generate_lte_model_func(config):
@@ -533,9 +520,9 @@ class ModelSpectrum:
             for tag in self.tag_list:
                 self.thresholds[str(tag)] = THRESHOLDS_DEF
 
-        self.line_list_all = get_transition_list(db, self.tag_list, self.tuning_info['fmhz_range'],
-                                                 return_type='df')
-        tr_list_by_tag = select_transitions(self.line_list_all, self.thresholds, return_type='dict')
+        self.line_list_all = get_transition_list(db, self.tag_list, self.tuning_info['fmhz_range'], return_type='df')
+        tr_list_tresh = select_transitions(self.line_list_all, self.thresholds)
+        tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
         if all([len(t_list) == 0 for t_list in tr_list_by_tag.values()]):
             raise LookupError("No transition found within the thresholds.")
 
