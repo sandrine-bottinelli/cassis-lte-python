@@ -2037,11 +2037,11 @@ def get_species_thresholds(sp_threshold_infos, select_species=None, return_list_
         list_species = list(sp_threshold_infos.keys())
 
     elif os.path.isfile(sp_threshold_infos):
-        df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#')
+        df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#', index_col=False)
         col_names = df.columns[1:]
         list_species = list(df.tag)
         for index, row in df.iterrows():
-            sp_thresholds[str(int(row.tag))] = {c: row[c] for c in col_names if '*' not in str(row[c])}
+            sp_thresholds[str(int(row.tag))] = {c: float(row[c]) for c in col_names if '*' not in str(row[c])}
 
     else:
         raise TypeError("other_species should be a list, a dictionary or a path to a file.")
