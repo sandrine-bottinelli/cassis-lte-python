@@ -139,7 +139,7 @@ def print_settings():
 
 
 def get_species_info(database, species):
-    tag = species.tag if isinstance(species, Species) else int(species)
+    tag = species.tag if isinstance(species, Species) else str(species)
     # retrieve infos from catdir :
     res_catdir = database.execute("SELECT * FROM catdir WHERE speciesid = {}".format(tag))
     cols_sp_info = [t[0] for t in res_catdir.description]
@@ -158,15 +158,19 @@ def get_species_info(database, species):
 
 def get_transition_list(database, species, fmhz_ranges, return_type='dict', **thresholds):
     species_list = [species] if type(species) is not list else species  # make sure it is a list
-    tag_list = [sp.tag for sp in species_list] if isinstance(species_list[0], Species) else species_list
+    if isinstance(species_list[0], Species):
+        tag_list = [sp.tag for sp in species_list]
+    else:
+        tag_list = [str(sp) for sp in species_list]
+
     transition_dict = {}
-    for tag in tag_list:
+    for tag in tag_list:  # NB: tag should be a string
         if thresholds:
-            eup_min = thresholds[str(tag)].get('eup_min', EUP_MIN_DEF)
-            eup_max = thresholds[str(tag)].get('eup_max', EUP_MAX_DEF)
-            aij_min = thresholds[str(tag)].get('aij_min', AIJ_MIN_DEF)
-            aij_max = thresholds[str(tag)].get('aij_max', AIJ_MAX_DEF)
-            err_max = thresholds[str(tag)].get('err_max', ERR_MAX_DEF)
+            eup_min = thresholds[tag].get('eup_min', EUP_MIN_DEF)
+            eup_max = thresholds[tag].get('eup_max', EUP_MAX_DEF)
+            aij_min = thresholds[tag].get('aij_min', AIJ_MIN_DEF)
+            aij_max = thresholds[tag].get('aij_max', AIJ_MAX_DEF)
+            err_max = thresholds[tag].get('err_max', ERR_MAX_DEF)
         else:
             eup_min = 0.
             eup_max = None
@@ -204,7 +208,7 @@ def get_transition_list(database, species, fmhz_ranges, return_type='dict', **th
                 transition_list.append(trans)
         if len(transition_list) > 0:
             transition_list.sort(key=lambda x: x.f_trans_mhz)
-            transition_dict[str(tag)] = transition_list
+            transition_dict[tag] = transition_list
 
     if len(transition_dict) == 0:
         raise IndexError('No transitions found. Please check your thresholds.')
@@ -1827,7 +1831,7 @@ class Component:
 class Species:
     def __init__(self, tag, ntot=7.0e14, tex=100., fwhm=FWHM_DEF, component=None):
         # super().__init__(self)
-        self._tag = int(tag)  # make sure tag is stored as an integer
+        self._tag = str(tag)  # make sure tag is stored as a string
         self._ntot = create_parameter('ntot_{}'.format(tag), ntot)  # total column density [cm-2]
         self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
 
@@ -1836,9 +1840,9 @@ class Species:
         if component is not None:
             self.set_component(component.name)
 
-        sp_dic = get_species_info(db, tag)
+        sp_dic = get_species_info(db, self._tag)
         if sp_dic is None:
-            raise IndexError("Tag {} not found in the database.".format(tag))
+            raise IndexError("Tag {} not found in the database.".format(self._tag))
         self._id = sp_dic['id']
         self._name = sp_dic['name']
         self._database = sp_dic['database_name']
@@ -1923,7 +1927,7 @@ class Transition:
         self.gup = gup
         # self.eup = (elo_cm + self.f_trans_mhz * 1.e6 / (const.c.value * 100)) * 1.4389  # [K]
         self.eup = self.eup_J / const.k_B.value  # k_B in J/K
-        self.tag = tag
+        self.tag = str(tag)  # make sure tag is stored as a string
         self.name = name
         self.db_id = db_id
         self.qn = qn
@@ -2015,8 +2019,8 @@ def get_species_thresholds(sp_threshold_infos, select_species=None, return_list_
 
     if sp_threshold_infos is type(list):
         for other_sp in sp_threshold_infos:
-            if isinstance(other_sp, list):
-                new_sp = other_sp[0]
+            if isinstance(other_sp, list):  # if list, assume it is : [tag, eup_max, aij_min, err_max]
+                new_sp = str(other_sp[0])  # make sure the tag is a string
                 new_th = {
                     'eup_max': other_sp[1] if other_sp[1] != '*' else EUP_MAX_DEF,
                     'aij_min': other_sp[2] if other_sp[2] != '*' else AIJ_MIN_DEF,
@@ -2029,7 +2033,7 @@ def get_species_thresholds(sp_threshold_infos, select_species=None, return_list_
             sp_thresholds[str(new_sp)] = new_th
 
     elif isinstance(sp_threshold_infos, dict):
-        sp_thresholds = sp_threshold_infos
+        sp_thresholds = {str(key): val for key, val in sp_threshold_infos.items()}  # make sure tag is a string
         list_species = list(sp_threshold_infos.keys())
 
     elif os.path.isfile(sp_threshold_infos):
