@@ -917,21 +917,6 @@ class ModelSpectrum:
         :return:
         """
 
-        def plot_help_lines_cpt(the_axis, index_cpt, cpt_name, vpos):
-            # plot help line on the side to identify component
-            xlims = the_axis.get_xlim()
-            dx_hline = xlims[1] - xlims[0]
-            if index_cpt % 2 == 0:  # plot even components on the LHS ; recall xlim2[0] > xlim2[1]
-                xhline = xlims[0] + [0., 0.05 * dx_hline]
-                hpos = xhline[1] + 0.005 * dx_hline
-                halign = 'left'
-            else:  # plot odd components on the RHS
-                xhline = xlims[1] - [0.05 * dx_hline, 0.]
-                hpos = xhline[0] - 0.005 * dx_hline
-                halign = 'right'
-            the_axis.plot(xhline, [vpos, vpos], color='lightgray')
-            the_axis.text(hpos, vpos, cpt_name, color='lightgray', horizontalalignment=halign)
-
         if fig is None:
             fig = Figure(figsize=(5, 4), dpi=dpi)
         if ax is None:
@@ -1064,8 +1049,6 @@ class ModelSpectrum:
 
                 # compute vertical positions, shifting down for each component
                 y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy - 0.01 * dy
-                if len(self.cpt_list) > 1 and len(all_lines_disp_cpt) > 0:
-                    plot_help_lines_cpt(ax2, icpt, cpt.name, y_pos[0])
 
                 for row in all_lines_disp_cpt.iterrows():
                     tran = row[1].transition
@@ -1082,9 +1065,6 @@ class ModelSpectrum:
                 ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075]) + 0.025 * (icpt + 1) * dy
 
                 if other_lines_disp_cpt is not None:
-                    if len(self.cpt_list) > 1 and len(other_lines_disp_cpt) > 0:
-                        plot_help_lines_cpt(ax2, icpt, cpt.name, ypos_other[0])
-
                     for row in other_lines_disp_cpt.iterrows():
                         tran = row[1].transition
                         lbl = "s{}".format(tran.tag)
@@ -1163,7 +1143,8 @@ class ModelSpectrum:
                            color=err_color, linewidth=0.75)
 
     def make_plot(self, tag=None, filename=None, dirname=None, gui=False, verbose=True, basic=False,
-                  other_species=None, display_all=True, other_species_selection=None, dpi=None):
+                  other_species=None, display_all=True, other_species_selection=None, dpi=None,
+                  pdf_multi=False):
         """
         Produces a plot of the fit results.
         :param tag: specify a tag to plot ; if None, all tags are plotted.
