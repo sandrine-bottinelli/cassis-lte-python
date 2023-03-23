@@ -276,6 +276,7 @@ def generate_lte_model_func(config):
         vlsr_file = config['vlsr_file']
         fmhz_mod = fmhz  # config['x_mod']
         beam_sizes = config['beam_sizes']
+        tmb2ta = config['tmb2ta']
         line_list = config['line_list']
         tau_max = config['tau_max']
         file_rejected = config['file_rejected']
@@ -336,6 +337,7 @@ def generate_lte_model_func(config):
 
         intensity = intensity + intensity_before - jnu(fmhz_mod, tcmb)
         intensity += np.random.normal(0., config['noise'], len(intensity))  # add gaussian noise
+        intensity *= tmb2ta  # convert to Ta
 
         # return np.interp(fmhz, fmhz_mod, intensity)
         return intensity
@@ -429,18 +431,29 @@ class ModelSpectrum:
         else:
             self.x_mod = None
 
+        self.t_a_star = config.get('t_a*', False)
         self._tuning_info_user = config.get('tuning_info', None)
         self.tuning_info = None
+        self.telescope_data = {}
         if 'tuning_info' in config:
             # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
             for tel in config['tuning_info'].keys():
-                if tel not in TEL_DIAM.keys():
-                    with open(os.path.join(TELESCOPE_DIR, tel), 'r') as f:
-                        for line in f.readlines():
-                            if 'Diameter' in line:
-                                continue
-                            TEL_DIAM[tel] = float(line)
+                # if tel not in TEL_DIAM.keys():
+                with open(os.path.join(TELESCOPE_DIR, tel), 'r') as f:
+                    col_names = ['Frequency (MHz)', 'Beff/Feff']
+                    tel_data = f.readlines()
+                    for line in tel_data:
+                        if 'Diameter' in line:
+                            continue
+                        TEL_DIAM[tel] = float(line)
+                        break
+                    for line in tel_data:
+                        if 'Frequency' in line:
+                            col_names = line.replace('.', ',').lstrip('//').split(',')
+                            col_names = [c.strip() for c in col_names]
                             break
+                self.telescope_data[tel] = pd.read_csv(os.path.join(TELESCOPE_DIR, tel), sep='\t', skiprows=3,
+                                                       names=col_names, usecols=list(range(len(col_names))))
             if check_tel_range:  # check telescope ranges cover all data / all model values:
                 x_vals = self.x_file if self.x_file is not None else [min(self.x_mod), max(self.x_mod)]
                 extended = False
@@ -693,6 +706,8 @@ class ModelSpectrum:
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
             'beam_sizes': [get_beam_size(f_i, get_telescope(f_i, self.tuning_info)) for f_i in x_mod],
+            'tmb2ta': [get_tmb2ta_factor(f_i, self.telescope_data[get_telescope(f_i, self.tuning_info)])
+                       for f_i in x_mod] if self.t_a_star else [1. for _ in x_mod],
             'line_list': self.line_list_all if line_list is None else line_list,
             'cpt_list': self.cpt_list if cpt_list is None else cpt_list,
             'noise': self.noise,
@@ -2163,6 +2178,15 @@ def get_telescope(fmhz, tuning_info: pd.DataFrame):
             return row.telescope
     if tel is None:
         raise LookupError("No telescope found at {} Mhz.".format(fmhz))
+
+
+def get_tmb2ta_factor(fmhz, tel_data):
+    if isinstance(tel_data, pd.DataFrame):
+        f_tel = tel_data[tel_data.columns[0]]
+        beff_tel = tel_data[tel_data.columns[1]]
+        return np.interp(fmhz, f_tel, beff_tel)
+    else:
+        raise TypeError("Not implemented yet.")
 
 
 def get_beam_size(freq_mhz, tel_info):
