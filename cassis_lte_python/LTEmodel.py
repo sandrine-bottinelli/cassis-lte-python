@@ -842,7 +842,8 @@ class ModelSpectrum:
 
         return '\n'.join(lines[:9] + [pvalue] + lines[9:])
 
-    def compute_model(self, params=None, x_values=None, line_list=None, line_center_only=False):
+    def compute_model_intensities(self, params=None, x_values=None, line_list=None, line_center_only=False,
+                                  cpt=None):
         if self.model is None:
             self.generate_lte_model()
         if params is None:
@@ -851,10 +852,32 @@ class ModelSpectrum:
             x_values = self.x_mod
         elif type(x_values) is list:
             x_values = np.array(x_values)
-        lte_func = generate_lte_model_func(self.model_info(x_values, line_list=line_list,
-                                                           line_center_only=line_center_only))
+
+        if cpt is not None:
+            c_best_pars = {}
+            for pname, par in params.items():
+                if cpt.name in pname:
+                    c_best_pars[pname] = par.value
+            params = c_best_pars
+            lte_func = generate_lte_model_func(self.model_info(x_values, line_list=line_list,
+                                                               cpt_list=[cpt]))
+        else:
+            lte_func = generate_lte_model_func(self.model_info(x_values, line_list=line_list,
+                                                               line_center_only=line_center_only))
 
         return lte_func(x_values, **params)
+
+    def compute_model(self, params=None, x_values=None, line_list=None, line_center_only=False):
+        """
+        For backward compatibility.
+        :param params:
+        :param x_values:
+        :param line_list:
+        :param line_center_only:
+        :return:
+        """
+        return self.compute_model_intensities(params=params, x_values=x_values, line_list=line_list,
+                                              line_center_only=line_center_only)
 
     # def get_best_pars(self):
     #     for parname in self.params2fit:
@@ -904,7 +927,7 @@ class ModelSpectrum:
                 #                     num=self.oversampling * len(x_file_win))
                 npts = 100
                 x_mod = np.linspace(fmin_mod, fmax_mod, num=npts)
-                y_mod = self.compute_model(params=best_pars, x_values=x_mod, line_list=[win.transition])
+                y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=[win.transition])
 
                 dv = 2. * fwhm / (npts - 1)
                 K_kms = 0.
@@ -997,7 +1020,8 @@ class ModelSpectrum:
         # compute model for all transitions (no thresholds)
         all_lines = select_transitions(self.line_list_all, xrange=[fmin - 2 * fwhm, fmax + 2 * fwhm])  # for model calculation
         if self.x_file is not None:
-            y_mod = self.compute_model(params=best_pars, x_values=x_mod, line_list=all_lines)
+            y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=all_lines)
+            self.y_mod = y_mod
 
         all_lines_display = select_transitions(all_lines, xrange=[fmin, fmax], thresholds=self.thresholds)  # for position display
         other_lines_display = pd.concat([all_lines, all_lines_display]).drop_duplicates(subset='db_id', keep=False)
@@ -1092,14 +1116,8 @@ class ModelSpectrum:
                                                 color=col, label=lbl, linewidth=lw)
 
                 if len(self.cpt_list) > 1:
-                    c_lte_func = generate_lte_model_func(self.model_info(x_mod,
-                                                                         line_list=all_lines,
-                                                                         cpt_list=[self.cpt_list[icpt]]))
-                    c_best_pars = {}
-                    for pname, par in best_pars.items():
-                        if cpt.name in pname:
-                            c_best_pars[pname] = par.value
-                    c_y_mod = c_lte_func(x_mod, **c_best_pars)
+                    c_y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=all_lines,
+                                                             cpt=self.cpt_list[icpt])
 
                     ax2.plot(x_mod, c_y_mod, drawstyle='steps-mid',
                              color=cpt_cols[icpt % len(cpt_cols)], linewidth=0.5)
