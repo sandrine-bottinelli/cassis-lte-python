@@ -445,10 +445,10 @@ class ModelSpectrum:
                 x_vals = self.x_file if self.x_file is not None else [min(self.x_mod), max(self.x_mod)]
                 extended = False
                 for x in x_vals:
-                    is_in_range = [val[0] <= x <= val[1] for val in config['tuning_info'].values()]
+                    # is_in_range = [val[0] <= x <= val[1] for val in config['tuning_info'].values()]
                     limits = list(config['tuning_info'].values())
                     limits = [item for sublist in limits for item in sublist]
-                    if not any(is_in_range):
+                    if not is_in_range(x, config['tuning_info'].values):
                         # raise LookupError("Telescope ranges do not cover some of the data, e.g. at {} MHz.". format(x))
                         extended = True
                         nearest = find_nearest(np.array(limits), x)
@@ -2073,6 +2073,14 @@ def find_nearest_trans(trans_list, value):
         f_trans_list.append(tr.f_trans_mhz)
     idx = (np.abs(np.array(f_trans_list) - value)).argmin()
     return trans_list[idx]
+
+
+def is_in_range(fmhz, list_ranges):
+    res = False
+    for rg in list_ranges:
+        if rg[0] <= fmhz <= rg[1]:
+            res = True
+    return res
 
 
 def get_partition_function(db, tag, temp=None):
