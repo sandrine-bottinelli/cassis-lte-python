@@ -641,6 +641,7 @@ class ModelSpectrum:
         if self.x_file is not None:
             self.model = self.generate_lte_model()
         self.best_params = None
+        self.best_model = None
         self.model_fit = None
         self.normalize = False
         self.figure = None
@@ -819,6 +820,7 @@ class ModelSpectrum:
                                         method=method,
                                         max_nfev=max_nfev, fit_kws=fit_kws)
 
+        self.best_model = self.model_fit.model
         self.best_pars()
         self.update_parameters()
 
@@ -1014,6 +1016,7 @@ class ModelSpectrum:
             x_file_win = self.x_file[(fmin_mod <= self.x_file) & (self.x_file <= fmax_mod)]
             x_mod = np.linspace(min(x_file_win), max(x_file_win),
                                 num=self.oversampling * len(x_file_win))
+            self.x_mod = x_mod
         else:
             x_mod = self.x_mod[(self.x_mod <= fmax) & (self.x_mod >= fmin)]
             y_mod = self.y_mod[(self.x_mod <= fmax) & (self.x_mod >= fmin)]
@@ -1401,6 +1404,71 @@ class ModelSpectrum:
 
         return os.path.join(dirname, filename)
 
+    def save_model(self, filename, dirname=None, ext='txt', full_spectrum=True):
+        """
+        Save the model spectrum from self.best_model if it exists, else from self.model.
+        :param filename: the name of the file
+        :param dirname: the directory where to save the file
+        :param ext: extension of the file : txt (default) or fits
+        :param full_spectrum: save the model for the entire observed spectrum ;
+        if false, only save the model spectrum for the windows in self.win_list
+        :return: None
+        """
+        params = self.best_params if self.best_params is not None else self.params2fit
+        if self.x_file is None:  # model only -> full spectrum
+            full_spectrum = True
+            x_values = self.x_mod
+        else:
+            x_values = [self.x_file[0]]
+            for x in self.x_file[1:]:
+                x_temp = np.linspace(x_values[-1], x, num=self.oversampling+1)
+                x_values.extend(list(x_temp[1:]))
+            x_values = np.array([x for x in x_values if is_in_range(x, list(self.tuning_info['fmhz_range']))])
+
+        if not full_spectrum:
+            x_values = []
+            y_values = []
+            for win in self.win_list:
+                if win.x_mod is None:
+                    win.x_mod = np.linspace(min(win.x_file), max(win.x_file),
+                                num=self.oversampling * (len(win.x_file) - 1) + 1)
+                    mdl_info = self.model_info(win.x_mod)
+                    model = Model(generate_lte_model_func(mdl_info))
+                    y_mod = model.eval(params, fmhz=win.x_mod)
+                    if len(self.cpt_list) > 1:
+                        y_mod = y_mod.reshape(len(y_mod), 1)
+                        for cpt in self.cpt_list:
+                            mdl_info['cpt_list'] = [cpt]
+                            c_best_pars = {}
+                            for pname, par in params.items():
+                                if cpt.name in pname:
+                                    c_best_pars[pname] = par.value
+                            c_lte_func = generate_lte_model_func(mdl_info)
+                            y_cpt = c_lte_func(win.x_mod, **c_best_pars)
+                            y_mod = np.hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
+                    win.y_mod = y_mod
+                x_values.extend(win.x_mod)
+                y_values.extend(win.y_mod)
+        else:
+            # y_values = self.compute_model_intensities(params=params, x_values=x_values)
+            mdl_info = self.model_info(x_values)
+            model = Model(generate_lte_model_func(mdl_info))
+            y_values = model.eval(params, fmhz=x_values)
+            if len(self.cpt_list) > 1:
+                y_values = y_values.reshape(len(y_values), 1)
+                for cpt in self.cpt_list:
+                    mdl_info['cpt_list'] = [cpt]
+                    c_best_pars = {}
+                    for pname, par in params.items():
+                        if cpt.name in pname:
+                            c_best_pars[pname] = par.value
+                    c_lte_func = generate_lte_model_func(mdl_info)
+                    y_cpt = c_lte_func(x_values, **c_best_pars)
+                    y_values = np.hstack((y_values, y_cpt.reshape(len(y_cpt), 1)))
+
+        spec = x_values, y_values
+        self.save_spectrum(filename, dirname=dirname, ext=ext, spec=spec)
+
     def save_spectrum(self, filename, dirname=None, ext='txt', spec=None, continuum=False):
         file_path = self.set_filepath(filename, dirname=dirname, ext=ext)
 
@@ -1451,7 +1519,11 @@ class ModelSpectrum:
                                   '#xLabel: frequency [MHz]\n',
                                   '#yLabel: [Kelvin] Mean\n'])
                 for x, y in zip(x_values, y_values):
-                    f.write('{}\t{}\n'.format(format_float(x), format_float(y)))
+                    if len(np.shape(y_values)) == 1:
+                        f.write('{}\t{}\n'.format(format_float(x), format_float(y)))
+                    else:
+                        line = '{}\t'.format(format_float(x)) + '\t'.join([format_float(yy) for yy in y])
+                        f.write(line + '\n')
 
         return os.path.abspath(file_path)
 
