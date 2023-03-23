@@ -229,11 +229,15 @@ def get_transition_list(database, species, fmhz_ranges, return_type='dict', **th
         return tr_list
 
 
-def select_transitions(tran_df, thresholds=None, xrange=None, return_type=None):
+def select_transitions(tran_df, thresholds=None, xrange=None, return_type=None, bright_lines_only=False):
     def is_selected(tran, sp_thresholds):
         constraints = []
         for key, val in sp_thresholds.items():
             attr = key.rsplit('_', maxsplit=1)[0]
+            if bright_lines_only and key == 'eup_min':
+                val = 0
+            if bright_lines_only and key == 'aij_max':
+                val = None
             if 'min' in key:
                 constraints.append(val <= getattr(tran, attr))
             if 'max' in key and val is not None:
@@ -1028,18 +1032,19 @@ class ModelSpectrum:
             self.y_mod = y_mod
 
         all_lines_display = select_transitions(all_lines, xrange=[fmin, fmax], thresholds=self.thresholds)  # for position display
-        other_lines_display = pd.concat([all_lines, all_lines_display]).drop_duplicates(subset='db_id', keep=False)
-        other_lines_display = select_transitions(other_lines_display, xrange=[fmin, fmax])
+        bright_lines = select_transitions(all_lines, xrange=[fmin, fmax], thresholds=self.thresholds,
+                                          bright_lines_only=True)
+        other_lines_display = pd.concat([all_lines_display,
+                                         bright_lines]).drop_duplicates(subset='db_id', keep=False)
+        # other_lines_display = select_transitions(other_lines_display, xrange=[fmin, fmax])
 
         other_species_display = None
         if list_other_species is not None:
             try:
                 other_lines_thresholds = get_transition_list(db, list_other_species, [[fmin, fmax]],
                                                              **thresholds_other, return_type='df')
-                tmp = pd.concat([all_lines_display, other_lines_display,
-                                 other_lines_thresholds]).drop_duplicates(subset='db_id', keep=False)
-                other_species_display = other_lines_thresholds
-                # other_lines_display = pd.concat([other_lines_display, tmp])
+                other_species_display = pd.concat([all_lines_display, bright_lines,
+                                                   other_lines_thresholds]).drop_duplicates(subset='db_id', keep=False)
             except IndexError:
                 pass  # do nothing
 
@@ -1091,7 +1096,7 @@ class ModelSpectrum:
                 all_lines_disp_cpt = all_lines_display[all_lines_display['tag'].isin(cpt.tag_list)]
 
                 # compute vertical positions, shifting down for each component
-                y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy - 0.01 * dy
+                y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy
 
                 for row in all_lines_disp_cpt.iterrows():
                     tran = row[1].transition
@@ -1113,7 +1118,7 @@ class ModelSpectrum:
                         lbl = "s{}".format(tran.tag)
                         lw = 0.75
                         col = tag_colors[tran.tag]
-                        ypos_other = ymin + dy * np.array([0., 0.075]) + 0.025 * dy
+                        ypos_other = ymin + dy * np.array([0., 0.075]) #+ 0.025 * dy
                         ls = ':'
                         self.plot_line_position(ax2, tran, par_vlsr, ypos_other,
                                                 # linestyle=ls,
@@ -1126,12 +1131,12 @@ class ModelSpectrum:
                     ax2.plot(x_mod, c_y_mod, drawstyle='steps-mid',
                              color=cpt_cols[icpt % len(cpt_cols)], linewidth=0.5)
 
-            if other_species_display is not None:
+            if other_species_display is not None and len(other_species_display) >= 1:
                 for row in other_species_display.iterrows():
                     tran = row[1].transition
                     lbl = "s{}".format(tran.tag)
                     lw = 0.75
-                    col = tag_other_sp_colors[tran.tag]
+                    col = tag_colors[tran.tag] if tran.tag in tag_colors.keys() else tag_other_sp_colors[tran.tag]
                     ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075])
                     ls = '-'
                     vlsr0 = best_pars['{}_vlsr'.format(self.cpt_list[0].name)].value
@@ -1212,7 +1217,10 @@ class ModelSpectrum:
         if not display_all:
             win_list_plot = [w for w in win_list_plot if w.in_fit]
 
-        list_other_species, thresholds_other = get_species_thresholds(other_species)
+        if other_species is not None:
+            list_other_species, thresholds_other = get_species_thresholds(other_species)
+        else:
+            list_other_species, thresholds_other = None, None
 
         best_pars = self.best_params if self.best_params is not None else self.params2fit
         self.update_parameters(params=best_pars)
