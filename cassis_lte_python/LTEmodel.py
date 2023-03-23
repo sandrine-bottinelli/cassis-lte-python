@@ -606,7 +606,9 @@ class ModelSpectrum:
                     for iw, w in enumerate(win_list_tag):
                         print('  {}. {}'.format(iw + 1, w.transition))
 
-                if self._v_range_user is not None and self._rms_cal_user is not None:
+                # if self._v_range_user is not None and self._rms_cal_user is not None:
+                if all([self._v_range_user is not None, self._rms_cal_user is not None,
+                        tag in self._v_range_user, tag in self._rms_cal_user]):
                     v_range = expand_dict(self._v_range_user[tag], nt)
                     rms_cal = expand_dict(self._rms_cal_user[tag], nt)
                     for win in win_list_tag:
