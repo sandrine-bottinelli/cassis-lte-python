@@ -67,6 +67,7 @@ if not os.path.isfile(SQLITE_FILE):
         raise FileNotFoundError(f'{SQLITE_FILE} not found.')
 
 if os.path.isfile(SQLITE_FILE):
+    print(f"Using database : {SQLITE_FILE}")
     conn = sqlite3.connect(SQLITE_FILE)
 else:
     raise FileNotFoundError(f'{SQLITE_FILE} not found.')
@@ -1029,7 +1030,8 @@ class ModelSpectrum:
             y_mod = self.y_mod[(self.x_mod <= fmax) & (self.x_mod >= fmin)]
 
         # compute model for all transitions (no thresholds)
-        all_lines = select_transitions(self.line_list_all, xrange=[fmin - 2 * fwhm, fmax + 2 * fwhm])  # for model calculation
+        fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
+        all_lines = select_transitions(self.line_list_all, xrange=[fmin - 2 * fwhm_mhz, fmax + 2 * fwhm_mhz])
         if self.x_file is not None:
             y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=all_lines)
             self.y_mod = y_mod
@@ -1726,6 +1728,13 @@ class ModelSpectrum:
         self.write_cassis_file(filename, dirname=dirname)
 
     def write_lam(self, filename, dirname=None, save_fit=True):
+        """
+        Writes a line analysis configuration file for CASSIS
+        :param filename: the name of the file
+        :param dirname: the directory where to save the file
+        :param save_fit: whether to save the results of the fit
+        :return:
+        """
         if save_fit:
             self.save_fit_results(filename + '_fit_res', dirname=dirname)
         self.write_cassis_file(filename, dirname=dirname)
