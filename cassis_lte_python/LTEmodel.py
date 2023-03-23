@@ -590,6 +590,7 @@ class ModelSpectrum:
                         if len(x_win) == 0 or len(set(y_win)) == 1:
                             continue
                     win = Window(tr, len(win_list_tag) + 1)
+                    win.x_file, win.y_file = x_win, y_win
                     win_list_tag.append(win)
 
                 nt = len(win_list_tag)
@@ -1659,6 +1660,10 @@ class Window:
         self._x_fit = None
         self._y_fit = None
         self._in_fit = False
+        self._x_mod = None
+        self._y_mod = None
+        self._x_file = None
+        self._y_file = None
         self.other_species_selection = None
 
     @property
@@ -1718,6 +1723,38 @@ class Window:
     @property
     def in_fit(self):
         return self._in_fit
+
+    @property
+    def x_mod(self):
+        return self._x_mod
+
+    @x_mod.setter
+    def x_mod(self, value):
+        self._x_mod = value
+
+    @property
+    def y_mod(self):
+        return self._y_mod
+
+    @y_mod.setter
+    def y_mod(self, value):
+        self._y_mod = value
+
+    @property
+    def x_file(self):
+        return self._x_file
+
+    @x_file.setter
+    def x_file(self, value):
+        self._x_file = value
+
+    @property
+    def y_file(self):
+        return self._y_file
+
+    @y_file.setter
+    def y_file(self, value):
+        self._y_file = value
 
 
 class Component:
