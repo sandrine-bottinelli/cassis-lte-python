@@ -145,8 +145,9 @@ def get_species_info(database, species):
     cols_sp_info = [t[0] for t in res_catdir.description]
     all_rows = database.fetchall()
     if len(all_rows) == 0:
+        print(f"{tag} not found in the database.")
         return None
-    sp_info = all_rows[0]
+    sp_info = all_rows[-1]
     sp_info_dic = dict(zip(cols_sp_info, sp_info))
 
     # retrieve database name :
@@ -265,7 +266,7 @@ def select_transitions(tran_df, thresholds=None, xrange=None, return_type=None, 
                     indices.append(row[0])
         selected = tran_df.loc[indices]
 
-    if return_type is not None or return_type != 'df':
+    if return_type is not None and return_type != 'df':
         print("Not implemented, returning dataframe.")
         # return {str(tag): list(selected[selected.tag == tag].transition) for tag in tag_list}
     return selected
