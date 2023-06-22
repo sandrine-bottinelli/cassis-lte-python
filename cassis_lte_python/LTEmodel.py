@@ -1,276 +1,23 @@
-import numpy as np
-import sqlite3
-import astropy.constants.codata2014 as const  # h,k_B,c # SI units
-from astropy import units as u
-from lmfit import Model, Parameters, Parameter
+from cassis_lte_python.utils.utils import get_telescope, get_beam_size, get_tmb2ta_factor, dilution_factor, jnu
+from cassis_lte_python.utils.utils import get_valid_pixels, reduce_wcs_dim
+from cassis_lte_python.utils.utils import format_float, is_in_range, select_from_ranges, find_nearest_id
+from cassis_lte_python.utils.utils import velocity_to_frequency, fwhm_to_sigma, delta_v_to_delta_f
+from cassis_lte_python.utils.plots import make_plot
+from cassis_lte_python.model_setup import ModelConfiguration, SQLITE_FILE
+from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, TEL_DIAM
+from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log
+from numpy.random import normal
+from lmfit import Model, Parameters
 from scipy import stats, signal
-import matplotlib.pyplot as plt
-from matplotlib import ticker
 import astropy.io.fits as fits
+import astropy.units as u
 import os
 import pandas as pd
 import datetime
 import json
-import configparser
-import tkinter
-from tkinter import ttk
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
-# Implement the default Matplotlib key bindings.
-from matplotlib.backend_bases import key_press_handler
-from matplotlib.figure import Figure
-import matplotlib
-matplotlib.use('agg')
-
-module_dir = os.path.dirname(__file__)
-user_config = os.path.join(module_dir, 'config.ini')
-default_config = os.path.join(module_dir, 'config_defaults.ini')
-config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation(),
-                                   inline_comment_prefixes=('#',))
-if os.path.isfile(user_config):
-    config.read(user_config)
-else:
-    if os.path.isfile(default_config):
-        print(f'{user_config} not found, using {default_config}\n')
-        config.read(default_config)
-    else:
-        raise FileNotFoundError('No configuration file found.')
-
-CASSIS_DIR = config.get('GENERAL', 'CASSIS_DIR')
-SQLITE_FILE = config.get('DATABASE', 'SQLITE_FILE')
-PARTITION_FUNCTION_DIR = config.get('DATABASE', 'PARTITION_FUNCTION_DIR')
-TELESCOPE_DIR = config.get('MODEL', 'TELESCOPE_DIR')
-SIZE_DEF = config.getfloat('MODEL', 'SIZE')
-VLSR_DEF = config.getfloat('MODEL', 'VLSR')
-FWHM_DEF = config.getfloat('MODEL', 'FWHM')
-DPI_DEF = config.getint('PLOT', 'DPI')
-
-if not os.path.isfile(SQLITE_FILE):
-    parent_dir = os.path.dirname(SQLITE_FILE)
-    # try to find a cassisYYYYMMDD.db file in the parent directory :
-    if os.path.isdir(parent_dir):
-        try:
-            db_list = [f for f in os.listdir(parent_dir)
-                       if (f.endswith('.db') and f.startswith('cassis'))]
-            db_list.sort()
-            SQLITE_FILE_NEW = os.path.join(parent_dir, db_list[-1])
-            if 'YYYYMMDD' in SQLITE_FILE:
-                print(f'Using sqlite file {SQLITE_FILE_NEW}.\n')
-            else:
-                print(f'{SQLITE_FILE} not found, using {SQLITE_FILE_NEW} instead.\n')
-            SQLITE_FILE = SQLITE_FILE_NEW
-            # update config :
-            config['DATABASE']['SQLITE_FILE'] = SQLITE_FILE
-        except IndexError:
-            raise FileNotFoundError(f'No cassisYYYYMMDD.db found in {parent_dir}.')
-    else:
-        raise FileNotFoundError(f'{SQLITE_FILE} not found.')
-
-if os.path.isfile(SQLITE_FILE):
-    print(f"Using database : {SQLITE_FILE}")
-    conn = sqlite3.connect(SQLITE_FILE)
-else:
-    raise FileNotFoundError(f'{SQLITE_FILE} not found.')
-
-db = conn.cursor()
-
-# CPT_COLORS = ['blue', 'green', 'mediumorchid']
-# CPT_COLORS = [
-#     'blue', 'dodgerblue', 'deepskyblue',
-#     'orange',
-#     'gold',
-#     # 'yellow',
-#     'green',
-#     'purple', 'mediumorchid', 'pink']
-TAB20 = plt.get_cmap('tab20')(np.linspace(0, 1, 20))
-PLOT_COLORS = np.concatenate([TAB20[:][::2], TAB20[:][1::2]])
-# PLOT_LINESTYLES = ['-', '--']
-PLOT_LINESTYLES = ['-', ':']
-
-EUP_MIN_DEF = 0.
-EUP_MAX_DEF = None  # 150.
-AIJ_MIN_DEF = 0.
-AIJ_MAX_DEF = None
-ERR_MAX_DEF = None
-THRESHOLDS_DEF = {'eup_min': EUP_MIN_DEF,
-                  'eup_max': EUP_MAX_DEF,
-                  'aij_min': AIJ_MIN_DEF,
-                  'aij_max': AIJ_MAX_DEF,
-                  'err_max': ERR_MAX_DEF}
-
-TEL_DIAM = {'iram': 30.,
-            'apex': 12.,
-            'jcmt': 15.,
-            'gbt': 100.,
-            'alma_400m': 400.,
-            'alma_170m': 170.}
-
-# Matplotlib global parameters
-matplotlib.rcParams['xtick.direction'] = 'in'  # Ticks inside
-matplotlib.rcParams['ytick.direction'] = 'in'  # Ticks inside
-matplotlib.rcParams['ytick.right'] = True  # draw ticks on the right side
-# axes.formatter.limits: -5, 6  # use scientific notation if log10
-                               # of the axis range is smaller than the
-                               # first or larger than the second
-# axes.formatter.use_mathtext: False  # When True, use mathtext for scientific notation.
-# axes.formatter.min_exponent: 0  # minimum exponent to format in scientific notation
-matplotlib.rcParams['axes.formatter.useoffset'] = False  # No offset for tick labels
-# axes.formatter.useoffset: True  # If True, the tick label formatter
-                                 # will default to labeling ticks relative
-                                 # to an offset when the data range is
-                                 # small compared to the minimum absolute
-                                 # value of the data.
-# axes.formatter.offset_threshold: 4  # When useoffset is True, the offset
-                                     # will be used when it can remove
-                                     # at least this number of significant
-                                     # digits from tick labels.
-
-
-def print_settings():
-    print("Settings are :")
-    for section in config.sections():
-        for key, val in dict(config.items(section)).items():
-            unit = ""
-            if "size" in key:
-                unit = "arcsec"
-            elif "vlsr" in key or "fwhm" in key:
-                unit = "km/s"
-            print(f"    {key.upper()} = {val} {unit}")
-    print("")
-
-
-def get_species_info(database, species):
-    tag = species.tag if isinstance(species, Species) else str(species)
-    # retrieve infos from catdir :
-    res_catdir = database.execute("SELECT * FROM catdir WHERE speciesid = {}".format(tag))
-    cols_sp_info = [t[0] for t in res_catdir.description]
-    all_rows = database.fetchall()
-    if len(all_rows) == 0:
-        print(f"{tag} not found in the database.")
-        return None
-    sp_info = all_rows[-1]
-    sp_info_dic = dict(zip(cols_sp_info, sp_info))
-
-    # retrieve database name :
-    database.execute("SELECT name FROM cassis_databases WHERE id = {}".format(sp_info_dic["id_database"]))
-    sp_info_dic["database_name"] = database.fetchall()[0][0]
-
-    return sp_info_dic
-
-
-def get_transition_list(database, species, fmhz_ranges, return_type='dict', **thresholds):
-    species_list = [species] if type(species) is not list else species  # make sure it is a list
-    if isinstance(species_list[0], Species):
-        tag_list = [sp.tag for sp in species_list]
-    else:
-        tag_list = [str(sp) for sp in species_list]
-
-    transition_dict = {}
-    for tag in tag_list:  # NB: tag should be a string
-        if thresholds:
-            eup_min = thresholds[tag].get('eup_min', EUP_MIN_DEF)
-            eup_max = thresholds[tag].get('eup_max', EUP_MAX_DEF)
-            aij_min = thresholds[tag].get('aij_min', AIJ_MIN_DEF)
-            aij_max = thresholds[tag].get('aij_max', AIJ_MAX_DEF)
-            err_max = thresholds[tag].get('err_max', ERR_MAX_DEF)
-        else:
-            eup_min = 0.
-            eup_max = None
-            aij_min = 0.
-            aij_max = None
-            err_max = None
-
-        transition_list = []
-        # retrieve catdir_id :
-        sp_dic = get_species_info(database, tag)
-        if sp_dic is None:
-            continue
-        sp_id = sp_dic['id']
-        sp_name = sp_dic['name']
-        for frange in fmhz_ranges:
-            fmhz_min, fmhz_max = frange
-            cmd = "SELECT * FROM transitions WHERE catdir_id = {} and fMhz < {} and fMhz > {}" \
-                  " and eup > {} and aint > {}".format(sp_id, fmhz_max, fmhz_min, eup_min, aij_min)
-            if eup_max is not None:
-                cmd += " and eup < {}".format(eup_max)
-            if aij_max is not None:
-                cmd += " and aint < {}".format(aij_max)
-            if err_max is not None:
-                cmd += " and err < {}".format(err_max)
-            res = database.execute(cmd)
-            col_names = [t[0] for t in res.description]
-            all_rows = database.fetchall()
-            if len(all_rows) == 0:
-                continue
-            for row in all_rows:
-                row_dic = dict(zip(col_names, row))
-                trans = Transition(tag, row_dic['fMHz'], row_dic['aint'], row_dic['elow'], row_dic['igu'],
-                                   f_err_mhz=row_dic['err'], name=sp_name, db_id=row_dic['id_transitions'],
-                                   qn=row_dic['qn'])
-                transition_list.append(trans)
-        if len(transition_list) > 0:
-            transition_list.sort(key=lambda x: x.f_trans_mhz)
-            transition_dict[tag] = transition_list
-
-    if len(transition_dict) == 0:
-        raise IndexError('No transitions found. Please check your thresholds.')
-
-    if return_type == 'dict':  # return dictionary {tag: transition list}
-        return transition_dict
-    elif return_type == 'df':  # return dataframe
-        tmp = {'transition': [], 'tag': [], 'db_id': []}
-        for tag, tran_list in transition_dict.items():
-            for tr in tran_list:
-                tmp['transition'].append(tr)
-                tmp['tag'].append(tr.tag)
-                tmp['db_id'].append(tr.db_id)
-        return pd.DataFrame(tmp)
-    else:  # return list
-        tr_list = [item for sublist in list(transition_dict.values()) for item in sublist]
-        tr_list.sort(key=lambda x: x.f_trans_mhz)
-        return tr_list
-
-
-def select_transitions(tran_df, thresholds=None, xrange=None, return_type=None, bright_lines_only=False):
-    def is_selected(tran, sp_thresholds):
-        constraints = []
-        for key, val in sp_thresholds.items():
-            attr = key.rsplit('_', maxsplit=1)[0]
-            if bright_lines_only and key == 'eup_min':
-                val = 0
-            if bright_lines_only and key == 'aij_max':
-                val = None
-            if 'min' in key:
-                constraints.append(val <= getattr(tran, attr))
-            if 'max' in key and val is not None:
-                constraints.append(val >= getattr(tran, attr if key != 'err_max' else 'f_err_mhz'))
-        return True if all(constraints) else False
-
-    if not isinstance(tran_df, pd.DataFrame):
-        raise TypeError("First argument must be a DataFrame.")
-
-    if thresholds is None:
-        thresholds = {}
-
-    if len(thresholds) == 0:
-        selected = tran_df
-    else:
-        indices = []
-        for tag, thres in thresholds.items():
-            if xrange is not None:
-                thres['f_trans_mhz_min'] = min(xrange)
-                thres['f_trans_mhz_max'] = max(xrange)
-
-            for row in tran_df[tran_df.tag == tag].iterrows():
-                tr = row[1].transition
-                if is_selected(tr, thres):
-                    indices.append(row[0])
-        selected = tran_df.loc[indices]
-
-    if return_type is not None and return_type != 'df':
-        print("Not implemented, returning dataframe.")
-        # return {str(tag): list(selected[selected.tag == tag].transition) for tag in tag_list}
-    return selected
+from spectral_cube import SpectralCube
+from astropy.wcs import WCS
+from time import process_time
 
 
 def generate_lte_model_func(config):
@@ -283,6 +30,7 @@ def generate_lte_model_func(config):
         fmhz_mod = fmhz  # config['x_mod']
         beam_sizes = config['beam_sizes']
         tmb2ta = config['tmb2ta']
+        jypb2k = config['jypb2k']
         line_list = config['line_list']
         tau_max = config['tau_max']
         file_rejected = config['file_rejected']
@@ -305,10 +53,10 @@ def generate_lte_model_func(config):
                 qtex = cpt.species_list[isp].get_partition_function(tex)
                 for tran in tran_list:
                     # nup = ntot * tran.gup / qtex / np.exp(tran.eup_J / const.k_B.value / tex)  # [cm-2]
-                    nup = ntot * tran.gup / qtex / np.exp(tran.eup / tex)  # [cm-2]
-                    tau0 = const.c.value ** 3 * tran.aij * nup * 1.e4 \
-                           * (np.exp(const.h.value * tran.f_trans_mhz * 1.e6 / const.k_B.value / tex) - 1.) \
-                           / (4. * np.pi * (tran.f_trans_mhz * 1.e6) ** 3 * fwhm * 1.e3 * np.sqrt(np.pi / np.log(2.)))
+                    nup = ntot * tran.gup / qtex / exp(tran.eup / tex)  # [cm-2]
+                    tau0 = C_LIGHT ** 3 * tran.aij * nup * 1.e4 \
+                           * (exp(H * tran.f_trans_mhz * 1.e6 / K_B / tex) - 1.) \
+                           / (4. * pi * (tran.f_trans_mhz * 1.e6) ** 3 * fwhm * 1.e3 * sqrt(pi / log(2.)))
                     if isinstance(tau_max, (float, int)) and tau0 >= tau_max:
                         with open(file_rejected, 'a') as f:
                             f.write('\n')
@@ -328,22 +76,23 @@ def generate_lte_model_func(config):
                         pulse = signal.unit_impulse(len(fmhz_mod), offset)
                         sum_tau += tau0 * pulse
                     else:
-                        sum_tau += tau0 * np.exp(-0.5 * (num / den) ** 2)
+                        sum_tau += tau0 * exp(-0.5 * (num / den) ** 2)
 
-            ff = np.array([dilution_factor(size, bs) for bs in beam_sizes])
+            ff = array([dilution_factor(size, bs) for bs in beam_sizes])
             if not cpt.isInteracting:
-                intensity_cpt = jnu(fmhz_mod, tex) * (1. - np.exp(-sum_tau)) - \
-                                intensity_before * (1. - np.exp(-sum_tau))
+                intensity_cpt = jnu(fmhz_mod, tex) * (1. - exp(-sum_tau)) - \
+                                intensity_before * (1. - exp(-sum_tau))
                 intensity += ff * intensity_cpt
             else:
                 intensity_before += intensity
-                intensity_cpt = jnu(fmhz_mod, tex) * (1. - np.exp(-sum_tau)) - \
-                                intensity_before * (1. - np.exp(-sum_tau))
+                intensity_cpt = jnu(fmhz_mod, tex) * (1. - exp(-sum_tau)) - \
+                                intensity_before * (1. - exp(-sum_tau))
                 intensity = ff * intensity_cpt
 
         intensity = intensity + intensity_before - jnu(fmhz_mod, tcmb)
-        intensity += np.random.normal(0., config['noise'], len(intensity))  # add gaussian noise
+        intensity += normal(0., config['noise'], len(intensity))  # add gaussian noise
         intensity *= tmb2ta  # convert to Ta
+        intensity /= jypb2k  # convert to Jy/beam
 
         # return np.interp(fmhz, fmhz_mod, intensity)
         return intensity
@@ -360,288 +109,70 @@ class SimpleSpectrum:
 
 
 class ModelSpectrum:
-    def __init__(self, configuration, verbose=True, check_tel_range=False):
-        config = configuration
-        if not isinstance(configuration, dict):
-            try:  # assume config is a path to a file
-                config = self.load_config(configuration)
-            except TypeError:
-                print("Configuration must be a dictionary or a path to a configuration file.")
+    def __init__(self, configuration: (dict, str, ModelConfiguration),
+                 verbose=True, check_tel_range=False):
+        if not isinstance(configuration, ModelConfiguration):
+            config = configuration  # assume it is a dictionary
+            if not isinstance(configuration, dict):
+                try:  # assume config is a path to a file
+                    config = self.load_config(configuration)
+                except TypeError:
+                    print("Configuration must be a dictionary or a path to a configuration file "
+                          "or of type ModelConfiguration.")
+            model_config = ModelConfiguration(config, verbose=verbose, check_tel_range=check_tel_range)
 
-        self.output_dir = config.get('output_dir', os.path.curdir)
-        if not os.path.isdir(self.output_dir):
-            os.mkdir(self.output_dir)
+            if 'data_file' in model_config._configuration_dict or 'x_obs' in model_config._configuration_dict:
+                model_config.get_data()
 
-        self.data_file = config.get('data_file', None)
-        self.x_file = config.get('x_obs', None)
-        self.y_file = config.get('y_obs', None)
-        self.vlsr_file = config.get('vlsr_obs', 0.)
-        if self.data_file is not None:
-            self.x_file, self.y_file, self.vlsr_file = open_data_file(self.data_file)
+            if 'tc' in model_config._configuration_dict:
+                model_config.get_continuum()
 
-        self.jypb = None
-        if 'beam_info' in config:
-            f_hz_beam = np.concatenate(config['beam_info']['f_mhz']) * 1.e6
-            omega = np.concatenate(config['beam_info']['beam_omega'])
-            self.jypb = 1.e-26 * const.c.value ** 2 / (f_hz_beam * f_hz_beam) / (2. * const.k_B.value * omega)
+            model_config.get_linelist()
+            model_config.get_windows()
 
-        self.cont_info = config.get('tc', 0.)
+        else:  # configuration is of type ModelConfiguration
+            model_config = configuration
 
-        if isinstance(self.cont_info, (float, int)):
-            self.tc = self.cont_info
-        elif os.path.isfile(self.cont_info):  # cont_info is a CASSIS continuum file : MHz [tab] K
-            f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', unpack=True)
-            self.tc = np.array([np.interp(x, f_cont, t_cont) for x in self.x_file])
-        elif isinstance(self.cont_info, dict):  # to compute continuum over ranges given by the user
-            tc = []
-            for freqs, fluxes, franges in zip(self.x_file, self.y_file, self.cont_info.values()):
-                cont_data = []
-                for frange in franges:
-                    cont_data.append(fluxes[(freqs >= min(frange)) & (freqs <= max(frange))])
-                tc.append([np.mean(cont_data) for _ in freqs])
-            self.tc = np.concatenate(tc)
-        else:
-            raise TypeError("Continuum must be a float, an integer or a 2-column tab-separated file (MHz K).")
-        # else:  # HDU
-        #     pass
-            # tc = cont_info[datafile].data.squeeze()[j, i]
+        self.output_dir = model_config.output_dir
 
-        if self.x_file is not None and isinstance(self.x_file[0], np.ndarray):
-            self.x_file = np.concatenate(self.x_file)
-        if self.y_file is not None and isinstance(self.y_file[0], np.ndarray):
-            self.y_file = np.concatenate(self.y_file)
+        self.tag_list = model_config.tag_list
+        self.cpt_list = model_config.cpt_list
+        self.line_list_all = model_config.line_list_all
 
-        if self.jypb is not None:
-            self.y_file *= self.jypb
-            self.tc *= self.jypb
-        if not isinstance(self.tc, (float, int)):
-            self.tc = np.array([(f, t) for f, t in zip(self.x_file, self.tc)],
-                               dtype=[('f_mhz', np.float32), ('tc', np.float32)])
+        self.cont_info = model_config.cont_info
+        self.tc = model_config.tc
+        self.tcmb = model_config.tcmb
+        self._tuning_info_user = model_config._tuning_info_user
+        self.tuning_info = model_config.tuning_info
+        self._rms_cal_user = model_config._rms_cal_user
+        self._v_range_user = model_config._v_range_user
+        self.bandwidth = model_config.bandwidth
+        self.oversampling = model_config.oversampling
+        self.fmin_mhz = model_config.fmin_mhz
+        self.fmax_mhz = model_config.fmax_mhz
+        self.dfmhz = model_config.dfmhz
+        self.noise = model_config.noise
+        self.tau_max = model_config.tau_max
+        self.file_rejected = model_config.file_rejected
+        self.thresholds = model_config.thresholds
 
-        fmin_ghz = 115.
-        fmax_ghz = 116.
-        dfmhz = 0.1
-        if 'fmin_ghz' in config and config['fmin_ghz'] is not None:
-            fmin_ghz = config['fmin_ghz']
-        if 'fmax_ghz' in config and config['fmax_ghz'] is not None:
-            fmax_ghz = config['fmax_ghz']
-        self.fmin_mhz = fmin_ghz * 1.e3
-        self.fmax_mhz = fmax_ghz * 1.e3
-        if 'df_mhz' in config and config['df_mhz'] is not None:
-            dfmhz = config['df_mhz']
-        self.dfmhz = dfmhz
-        self.noise = 1.e-3 * config.get('noise_mk', 0.)
-        if self.data_file is None:
-            self.x_mod = np.linspace(self.fmin_mhz, self.fmax_mhz,
-                                     num=int((self.fmax_mhz - self.fmin_mhz) / self.dfmhz) + 1)
-        else:
-            self.x_mod = None
+        self.data_file = model_config.data_file
+        self.x_file = model_config.x_file
+        self.y_file = model_config.y_file
+        self.vlsr_file = model_config.vlsr_file
+        self.vlsr_plot = model_config.vlsr_plot
+        self._telescope_data = model_config._telescope_data
+        self.t_a_star = model_config.t_a_star
+        self.jypb = model_config.jypb
 
-        self.t_a_star = config.get('t_a*', False)
-        self._tuning_info_user = config.get('tuning_info', None)
-        self.tuning_info = None
-        self.telescope_data = {}
-        if 'tuning_info' in config:
-            # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
-            for tel in config['tuning_info'].keys():
-                # if tel not in TEL_DIAM.keys():
-                with open(os.path.join(TELESCOPE_DIR, tel), 'r') as f:
-                    col_names = ['Frequency (MHz)', 'Beff/Feff']
-                    tel_data = f.readlines()
-                    for line in tel_data:
-                        if 'Diameter' in line:
-                            continue
-                        TEL_DIAM[tel] = float(line)
-                        break
-                    for line in tel_data:
-                        if 'Frequency' in line:
-                            col_names = line.replace('.', ',').lstrip('//').split(',')
-                            col_names = [c.strip() for c in col_names]
-                            break
-                self.telescope_data[tel] = pd.read_csv(os.path.join(TELESCOPE_DIR, tel), sep='\t', skiprows=3,
-                                                       names=col_names, usecols=list(range(len(col_names))))
-            if check_tel_range:  # check telescope ranges cover all data / all model values:
-                x_vals = self.x_file if self.x_file is not None else [min(self.x_mod), max(self.x_mod)]
-                extended = False
-                for x in x_vals:
-                    # is_in_range = [val[0] <= x <= val[1] for val in config['tuning_info'].values()]
-                    limits = list(config['tuning_info'].values())
-                    limits = [item for sublist in limits for item in sublist]
-                    if not is_in_range(x, config['tuning_info'].values):
-                        # raise LookupError("Telescope ranges do not cover some of the data, e.g. at {} MHz.". format(x))
-                        extended = True
-                        nearest = find_nearest(np.array(limits), x)
-                        for key, val in config['tuning_info'].items():
-                            # new_lo = 5. * np.floor(x / 5.) if val[0] == nearest else val[0]
-                            # new_hi = 5. * np.ceil(x / 5.) if val[1] == nearest else val[1]
-                            new_lo = np.floor(x) if val[0] == nearest else val[0]
-                            new_hi = np.ceil(x) if val[1] == nearest else val[1]
-                            config['tuning_info'][key] = [new_lo, new_hi]
-                if extended:
-                    print("Some telescope ranges did not cover some of the data ; ranges were extended to :")
-                    print(config['tuning_info'])
+        self.x_fit = model_config.x_fit
+        self.y_fit = model_config.y_fit
+        self.x_mod = model_config.x_mod
+        self.y_mod = model_config.y_mod
 
-            tuning_info = {'fmhz_range': [], 'telescope': []}
-            for key, val in config['tuning_info'].items():
-                arr = np.array(val)
-                if len(arr.shape) == 1:
-                    arr = np.array([val])
-                for r in arr:
-                    r_min, r_max = min(r), max(r)
-                    if self.x_file is not None:
-                        x_sub = self.x_file[(self.x_file >= r_min) & (self.x_file <= r_max)]
-                        r_min = max(r_min, min(x_sub))
-                        r_max = min(r_max, max(x_sub))
-                        if len(self.x_file[(self.x_file >= r_min) & (self.x_file <= r_max)]) == 0:
-                            continue
-                    # if self.fmax_mhz is not None and self.fmin_mhz is not None:
-                    else:
-                        r_min = max(r_min, self.fmin_mhz)
-                        r_max = min(r_max, self.fmax_mhz)
-                    tuning_info['fmhz_range'].append([r_min, r_max])
-                    tuning_info['telescope'].append(key)
-            self.tuning_info = pd.DataFrame(tuning_info)
-
-        self.bandwidth = config.get('bandwidth', None)  # km/s ; None for 1 window with entire spectrum
-
-        self.oversampling = int(config.get('oversampling', 3))
-
-        self.tcmb = config.get('tcmb', 2.73)
-
-        self.tau_max = config.get('tau_max', None)
-        self.file_rejected = None
-        if self.tau_max is not None:
-            self.file_rejected = config.get('file_rejected', 'rejected_lines.txt')
-        if self.file_rejected is not None:
-            self.file_rejected = os.path.join(self.output_dir, self.file_rejected)
-            with open(self.file_rejected, 'w') as f:
-                f.writelines(['# Rejected lines with tau >= {}\n'.format(self.tau_max),
-                              '\t'.join(['# Tag ', 'Ntot', 'Tex', 'FWHM', 'f_mhz', 'Eup', 'Aij', 'gup', 'tau'])
-                              ])
-
-        self.tag_list = []
-        self.cpt_list = []
-        for key, cpt_dic in config.get('components').items():
-            sp_list = cpt_dic['species']
-            cpt = Component(key, sp_list, isInteracting=cpt_dic.get('interacting', False),
-                            vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
-            self.cpt_list.append(cpt)
-            for sp in cpt.species_list:
-                if sp.tag not in self.tag_list:
-                    self.tag_list.append(sp.tag)
-
-        self.thresholds = {}
-        if 'thresholds' in config:
-            self.thresholds = get_species_thresholds(config['thresholds'],
-                                                     select_species=self.tag_list,
-                                                     return_list_sp=False)
-        else:
-            for tag in self.tag_list:
-                self.thresholds[str(tag)] = THRESHOLDS_DEF
-
-        self.line_list_all = get_transition_list(db, self.tag_list, self.tuning_info['fmhz_range'], return_type='df')
-        tr_list_tresh = select_transitions(self.line_list_all, self.thresholds)
-        tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
-        if all([len(t_list) == 0 for t_list in tr_list_by_tag.values()]):
-            raise LookupError("No transition found within the thresholds.")
-
-        self._v_range_user = config.get('v_range', None)
-        self._rms_cal_user = config.get('chi2_info', None)
-
-        # extract v_range info
-        if isinstance(self._v_range_user, dict):
-            if '*' in self._v_range_user:  # same velocity range for all species/lines
-                self._v_range_user = {str(tag): {'*': self._v_range_user['*']} for tag in self.tag_list}
-
-            if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._v_range_user:
-                # only one species and tag not given => "reformat" dictionary to contain tag
-                self._v_range_user = {str(self.tag_list[0]): self._v_range_user}
-                if str(self.tag_list[0]) not in self._rms_cal_user:
-                    self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
-
-        elif isinstance(self._v_range_user, str):
-            self._v_range_user = read_noise_info(self._v_range_user)
-
-        else:
-            raise TypeError("v_range must be a dictionary or a path to an appropriate file.")
-
-        # extract rms/cal info
-        if isinstance(self._rms_cal_user, dict):
-            if '*' in self._rms_cal_user:
-                self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
-
-            if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._rms_cal_user:
-                # only one species and tag not given => "reformat" dictionary to contain tag
-                self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
-
-        elif isinstance(self._rms_cal_user, str):
-            self._rms_cal_user = read_noise_info(self._rms_cal_user)
-
-        else:
-            raise TypeError("chi2_info must be a dictionary or a path to an appropriate file.")
-
-        if self.bandwidth is None:
-            self.win_list = [Window(tr_list_by_tag[str(self.tag_list[0])][0], 1)]
-        else:
-            self.win_list = []
-            for tag, tr_list in tr_list_by_tag.items():
-                win_list_tag = []  # first find all windows with enough data
-                for i, tr in enumerate(tr_list):
-                    f_range_plot = [velocity_to_frequency(v, tr.f_trans_mhz, vref_kms=self.vlsr_file)
-                                    for v in [-1. * self.bandwidth / 2 + self.vlsr_file,
-                                              1. * self.bandwidth / 2 + self.vlsr_file]]
-                    f_range_plot.sort()
-                    if self.x_file is not None:
-                        x_win, y_win = select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
-                        if len(x_win) == 0 or len(set(y_win)) == 1:
-                            continue
-                    win = Window(tr, len(win_list_tag) + 1)
-                    win.x_file, win.y_file = x_win, y_win
-                    win_list_tag.append(win)
-
-                nt = len(win_list_tag)
-                if verbose or verbose == 2:
-                    print('{} : {}/{} transitions found with enough data within thresholds'.format(tag, nt,
-                                                                                                   len(tr_list)))
-                if verbose == 2:
-                    for iw, w in enumerate(win_list_tag):
-                        print('  {}. {}'.format(iw + 1, w.transition))
-
-                # if self._v_range_user is not None and self._rms_cal_user is not None:
-                if all([self._v_range_user is not None, self._rms_cal_user is not None,
-                        tag in self._v_range_user, tag in self._rms_cal_user]):
-                    v_range = expand_dict(self._v_range_user[tag], nt)
-                    rms_cal = expand_dict(self._rms_cal_user[tag], nt)
-                    for win in win_list_tag:
-                        win_num = win.plot_nb
-                        if win_num in v_range and win_num in rms_cal:
-                            win.v_range_fit = v_range[win_num]
-                            win.rms_mk = rms_cal[win_num][0]
-                            if self.jypb is not None:
-                                win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
-                            win.cal = rms_cal[win_num][1]
-                            f_range = [velocity_to_frequency(v, win.transition.f_trans_mhz, vref_kms=self.vlsr_file)
-                                       for v in v_range[win_num]]
-                            f_range.sort()
-                            win.f_range_fit = f_range
-                            if self.x_file is not None:
-                                win.x_fit, win.y_fit = select_from_ranges(self.x_file, f_range, y_values=self.y_file)
-
-                        self.win_list.append(win)
-                else:
-                    self.win_list.extend(win_list_tag)
-
-        self.win_list_fit = [w for w in self.win_list if w.in_fit]
-        self.win_list_plot = []
-
-        if self.x_file is not None:
-            self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
-            self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
-            # x_mod = select_from_ranges(self.x_file, self.line_list['fmhz_range_plot'], oversampling=self.oversampling)
-            # self.x_mod = x_mod[0]  # TODO: why do I have to do this?
-        else:
-            self.x_fit = None
-        self.y_mod = None  # np.zeros_like(self.frequencies)
+        self.win_list = model_config.win_list
+        self.win_list_fit = model_config.win_list_fit
+        self.win_list_plot = model_config.win_list_plot
 
         self.params2fit = None
         self.norm_factors = None
@@ -672,7 +203,7 @@ class ModelSpectrum:
             'fghz_min': self.fmin_mhz / 1.e3,
             'fghz_max': self.fmax_mhz / 1.e3,
             'df_mhz': self.dfmhz,
-            'noise_mk': self.noise * 1.e3,
+            'noise': self.noise,
             'tau_max': self.tau_max,
             'thresholds': self.thresholds,
             'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list}
@@ -700,7 +231,7 @@ class ModelSpectrum:
                         self.params2fit[f"{cname}_ntot_{sp.tag}"].value = sp.ntot
                         self.params2fit[f"{cname}_fwhm_{sp.tag}"].value = sp.fwhm
 
-        self.y_mod = self.model(self.x_mod, **self.params2fit)
+        self.y_mod = self.compute_model_intensities(params=self.params2fit, x_values=self.x_mod)
 
     def update_parameters(self, params=None):
         if params is None:
@@ -710,14 +241,17 @@ class ModelSpectrum:
             cpt.update_parameters(pars)
 
     def model_info(self, x_mod, line_list=None, cpt_list=None, line_center_only=False):
+        tel = get_telescope(x_mod, self.tuning_info)
+        tel_diam = array([TEL_DIAM[t] for t in tel])
         return {
             'tc': self.get_tc(x_mod),
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
-            'beam_sizes': [get_beam_size(f_i, get_telescope(f_i, self.tuning_info)) for f_i in x_mod],
-            'tmb2ta': [get_tmb2ta_factor(f_i, self.telescope_data[get_telescope(f_i, self.tuning_info)])
-                       for f_i in x_mod] if self.t_a_star else [1. for _ in x_mod],
+            'beam_sizes': get_beam_size(x_mod, tel_diam),
+            'tmb2ta': [get_tmb2ta_factor(f_i, self._telescope_data[tel])
+                       for f_i, t in zip(x_mod, tel)] if self.t_a_star else ones(len(x_mod)),
+            'jypb2k': interp(x_mod, self.x_file, self.jypb) if self.jypb is not None else ones(len(x_mod)),
             'line_list': self.line_list_all if line_list is None else line_list,
             'cpt_list': self.cpt_list if cpt_list is None else cpt_list,
             'noise': self.noise,
@@ -736,7 +270,7 @@ class ModelSpectrum:
             for x in x_mod:
                 id = find_nearest_id(self.tc[names[0]], x)
                 tc.append(self.tc[names[1]][id])
-            tc = np.array(tc)
+            tc = array(tc)
         return tc
 
     def get_rms(self, fmhz):
@@ -747,7 +281,7 @@ class ModelSpectrum:
         for freq in fmhz:
             for win in self.win_list_fit:
                 if min(win.f_range_fit) <= freq <= max(win.f_range_fit):
-                    rms.append(win.rms_mk / 1000.)
+                    rms.append(win.rms)
 
         return rms if len(rms) > 1 else rms[0]
 
@@ -761,11 +295,11 @@ class ModelSpectrum:
         """
         for win in self.win_list_fit:
             if min(win.f_range_fit) <= fmhz <= max(win.f_range_fit):
-                rms = win.rms_mk / 1000.
+                rms = win.rms
                 cal = win.cal / 100.
-                return 1. / np.sqrt(rms**2 + (cal * intensity)**2)
+                return 1. / sqrt(rms**2 + (cal * intensity)**2)
 
-    def generate_lte_model(self, normalize=False):
+    def get_params2fit(self, normalize=False):
         params2fit = Parameters()
 
         for icpt, cpt in enumerate(self.cpt_list):
@@ -784,18 +318,25 @@ class ModelSpectrum:
 
         self.params2fit = params2fit
 
-        norm_factors = {}
-        for parname in self.params2fit:
-            param = self.params2fit[parname]
-            nf = np.abs(param.value) if (normalize and param.value != 0.) else 1.
-            norm_factors[param.name] = nf
-            if normalize and param.expr is None:
-                param.set(min=param.min/nf, max=param.max/nf, value=param.value/nf)
+        norm_factors = {self.params2fit[parname].name: 1. for parname in self.params2fit}
+        if normalize:
+            for parname in self.params2fit:
+                param = self.params2fit[parname]
+                nf = abs(param.value) if param.value != 0. else 1.
+                norm_factors[param.name] = nf
+                if param.expr is None:
+                    param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
         self.norm_factors = norm_factors
+
+    def generate_lte_model(self, normalize=False):
+        if self.params2fit is None:
+            self.get_params2fit(normalize=normalize)
 
         if self.x_fit is not None:
             lte_model_func = generate_lte_model_func(self.model_info(self.x_fit))
         else:
+            self.x_mod = linspace(self.fmin_mhz, self.fmax_mhz,
+                                  num=int((self.fmax_mhz - self.fmin_mhz) / self.dfmhz) + 1)
             lte_model_func = generate_lte_model_func(self.model_info(self.x_mod))
             self.y_mod = lte_model_func(self.x_mod, **self.params2fit)
         res = Model(lte_model_func)
@@ -820,8 +361,8 @@ class ModelSpectrum:
         if self.model is None:
             self.generate_lte_model(normalize=normalize)
 
-        wt = np.array([self.get_weight(x, intensity=y)
-                       for x, y in zip(self.x_fit, self.y_fit - self.get_tc(self.x_fit))])
+        wt = array([self.get_weight(x, intensity=y)
+                    for x, y in zip(self.x_fit, self.y_fit - self.get_tc(self.x_fit))])
         # wt = None
         self.model_fit = self.model.fit(self.y_fit, params=self.params2fit, fmhz=self.x_fit,
                                         weights=wt,
@@ -862,7 +403,7 @@ class ModelSpectrum:
         if x_values is None:
             x_values = self.x_mod
         elif type(x_values) is list:
-            x_values = np.array(x_values)
+            x_values = array(x_values)
 
         if cpt is not None:
             c_best_pars = {}
@@ -937,13 +478,13 @@ class ModelSpectrum:
                 # x_mod = np.linspace(min(x_file_win), max(x_file_win),
                 #                     num=self.oversampling * len(x_file_win))
                 npts = 100
-                x_mod = np.linspace(fmin_mod, fmax_mod, num=npts)
+                x_mod = linspace(fmin_mod, fmax_mod, num=npts)
                 y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=[win.transition])
 
                 dv = 2. * fwhm / (npts - 1)
                 K_kms = 0.
                 for i in range(len(y_mod) - 1):
-                    K_kms += np.mean([y_mod[i], y_mod[i+1]]) * dv
+                    K_kms += mean([y_mod[i], y_mod[i+1]]) * dv
 
                 fluxes.append([win.transition.tag, win.plot_nb, f_ref, K_kms])
 
@@ -951,448 +492,12 @@ class ModelSpectrum:
 
         return res
 
-    def plot_window(self, win, list_other_species=None, thresholds_other=None,
-                    other_species_selection=None, ax=None, fig=None, basic=False, dpi=None):
-        """
-        Plots a given window : overall model, individual components, line positions.
-        :param win: the Window to plot
-        :param list_other_species: file with list of other species (and their thresholds) to plot
-        :param thresholds_other: TBC
-        :param other_species_selection: deprecated
-        :param ax: the Axis on which to plot the Window
-        :param fig: the figure on which to plot the Window
-        :param basic: plot only the overall model (no components, no line positions)
-        :param dpi: desired dpi
-        :return:
-        """
-
-        if fig is None:
-            fig = Figure(figsize=(5, 4), dpi=dpi)
-        if ax is None:
-            ax = fig.add_subplot()
-        if dpi is None:
-            dpi = DPI_DEF
-
-        vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
-        best_pars = self.best_params if self.best_params is not None else self.params2fit
-        fwhm = max([best_pars[par].value for par in best_pars if 'fwhm' in par])
-
-        tr = win.transition
-        f_ref = tr.f_trans_mhz
-
-        ax2 = ax.twiny()  # instantiate a second axes that shares the same y-axis
-        padding = 0.05
-
-        if self.bandwidth is not None:  # velocity at bottom (1), freq at top (2)
-            vmin, vmax = -self.bandwidth / 2 + vlsr, self.bandwidth / 2 + vlsr
-            fmin, fmax = [velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
-                          for v in [vmax, vmin]]
-            xmin1, xmax1 = vmin, vmax
-            xmin2, xmax2 = fmin, fmax
-            dx2 = xmax2 - xmin2
-            dx1 = xmax1 - xmin1
-            xlim1 = (xmin1 - padding * dx1, xmax1 + padding * dx1)
-            xlim2 = (xmax2 + padding * dx2, xmin2 - padding * dx2)
-
-            # Number of ticks
-            ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
-
-        else:  # frequency at top and bottom
-            fmin, fmax = self.fmin_mhz, self.fmax_mhz
-            xmin1, xmax1 = fmin, fmax
-            xmin2, xmax2 = fmin, fmax
-            dx2 = xmax2 - xmin2
-            dx1 = xmax1 - xmin1
-            xlim1 = (xmin1 - padding * dx1, xmax1 + padding * dx1)
-            xlim2 = xlim1
-
-            # Number of ticks
-            ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
-            ax.xaxis.set_major_locator(plt.MaxNLocator(4))
-
-        ax2.set_xlim(xlim2)
-        ax.set_xlim(xlim1)
-
-        # Minor ticks
-        ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-
-        if self.x_file is not None:
-            fmin_mod = fmin
-            fmax_mod = fmax
-            x_file_win = self.x_file[(fmin_mod <= self.x_file) & (self.x_file <= fmax_mod)]
-            x_mod = np.linspace(min(x_file_win), max(x_file_win),
-                                num=self.oversampling * len(x_file_win))
-            self.x_mod = x_mod
-        else:
-            x_mod = self.x_mod[(self.x_mod <= fmax) & (self.x_mod >= fmin)]
-            y_mod = self.y_mod[(self.x_mod <= fmax) & (self.x_mod >= fmin)]
-
-        # compute model for all transitions (no thresholds)
-        fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
-        all_lines = select_transitions(self.line_list_all, xrange=[fmin - 2 * fwhm_mhz, fmax + 2 * fwhm_mhz])
-        if self.x_file is not None:
-            y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=all_lines)
-            self.y_mod = y_mod
-
-        all_lines_display = select_transitions(all_lines, xrange=[fmin, fmax], thresholds=self.thresholds)  # for position display
-        bright_lines = select_transitions(all_lines, xrange=[fmin, fmax], thresholds=self.thresholds,
-                                          bright_lines_only=True)
-        other_lines_display = pd.concat([all_lines_display,
-                                         bright_lines]).drop_duplicates(subset='db_id', keep=False)
-        # other_lines_display = select_transitions(other_lines_display, xrange=[fmin, fmax])
-
-        other_species_display = None
-        if list_other_species is not None:
-            try:
-                other_lines_thresholds = get_transition_list(db, list_other_species, [[fmin, fmax]],
-                                                             **thresholds_other, return_type='df')
-                other_species_display = pd.concat([all_lines_display, bright_lines,
-                                                   other_lines_thresholds]).drop_duplicates(subset='db_id', keep=False)
-            except IndexError:
-                pass  # do nothing
-
-        if self.bandwidth is None:
-            other_lines_display = None
-
-        ymin = min(y_mod)
-        ymax = max(y_mod)
-        if self.x_file is not None:
-            x_file = self.x_file[(fmin <= self.x_file) & (self.x_file <= fmax)]
-            y_file = self.y_file[(fmin <= self.x_file) & (self.x_file <= fmax)]
-            ax2.plot(x_file, y_file, 'k-', drawstyle='steps-mid', linewidth=1)
-            ymin = min(ymin, min(y_file))
-            ymax = max(ymax, max(y_file))
-        ymin = ymin - 0.05 * (ymax - ymin)
-        ymax = ymax + 0.1 * (ymax - ymin)
-        if ymin == ymax:
-            ymin -= 0.001  # arbitrary
-            ymax += 0.001  # arbitrary
-        ax.set_ylim(ymin, ymax)
-
-        # plot overall model
-        ax2.plot(x_mod, y_mod, drawstyle='steps-mid', color='r', linewidth=1.5)
-
-        # assign colors to tags
-        tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
-        if list_other_species is not None:
-            tag_other_sp_colors = {t: PLOT_COLORS[(itag + len(tag_colors)) % len(PLOT_COLORS)]
-                                   for itag, t in enumerate(list_other_species)}
-
-        # write transition number (center, bottom)
-        if len(self.win_list_plot) > 1:
-            ax2.text(0.5, 0.05, "{}".format(win.plot_nb),
-                     transform=ax2.transAxes, horizontalalignment='center',
-                     fontsize='large', color=tag_colors[tr.tag])
-
-        # plot range used for chi2 calculation
-        v_range = win.v_range_fit
-        if v_range is not None:
-            ax.axvspan(v_range[0], v_range[1], facecolor='purple', alpha=0.1)
-
-        if not basic:  # plot line position(s) and plot components if more than one
-            dy = ymax - ymin
-            cpt_cols = plt.get_cmap('hsv')(np.linspace(0.1, 0.8, len(self.cpt_list)))
-            for icpt, cpt in enumerate(self.cpt_list):
-                par_vlsr = best_pars['{}_vlsr'.format(cpt.name)].value
-
-                # plot line positions w/i user's constraints at the top
-                all_lines_disp_cpt = all_lines_display[all_lines_display['tag'].isin(cpt.tag_list)]
-
-                # compute vertical positions, shifting down for each component
-                y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy
-
-                for row in all_lines_disp_cpt.iterrows():
-                    tran = row[1].transition
-                    lbl = str(tran.tag)
-                    lw = 1.5
-                    # if tran != tr:
-                    self.plot_line_position(ax2, tran, par_vlsr, y_pos,
-                                            # linestyle=PLOT_LINESTYLES[icpt % len(PLOT_LINESTYLES)],
-                                            color=tag_colors[tran.tag], label=lbl, linewidth=lw)
-
-                # plot line positions outside user's constraints at the bottom
-                other_lines_disp_cpt = other_lines_display[other_lines_display['tag'].isin(cpt.tag_list)]
-                # compute vertical positions, shifting up for each component
-                ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075]) + 0.025 * (icpt + 1) * dy
-
-                if other_lines_disp_cpt is not None:
-                    for row in other_lines_disp_cpt.iterrows():
-                        tran = row[1].transition
-                        lbl = "s{}".format(tran.tag)
-                        lw = 0.75
-                        col = tag_colors[tran.tag]
-                        ypos_other = ymin + dy * np.array([0., 0.075]) #+ 0.025 * dy
-                        ls = ':'
-                        self.plot_line_position(ax2, tran, par_vlsr, ypos_other,
-                                                # linestyle=ls,
-                                                color=col, label=lbl, linewidth=lw)
-
-                if len(self.cpt_list) > 1:
-                    c_y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=all_lines,
-                                                             cpt=self.cpt_list[icpt])
-
-                    ax2.plot(x_mod, c_y_mod, drawstyle='steps-mid',
-                             color=cpt_cols[icpt % len(cpt_cols)], linewidth=0.5)
-
-            if other_species_display is not None and len(other_species_display) >= 1:
-                for row in other_species_display.iterrows():
-                    tran = row[1].transition
-                    lbl = "s{}".format(tran.tag)
-                    lw = 0.75
-                    col = tag_colors[tran.tag] if tran.tag in tag_colors.keys() else tag_other_sp_colors[tran.tag]
-                    ypos_other = ymin + (ymax - ymin) * np.array([0., 0.075])
-                    ls = '-'
-                    vlsr0 = best_pars['{}_vlsr'.format(self.cpt_list[0].name)].value
-                    self.plot_line_position(ax2, tran, vlsr0, ypos_other, linestyle=ls,
-                                            color=col, label=lbl, linewidth=lw)
-
-            handles, labels = ax2.get_legend_handles_labels()
-            newLabels, newHandles = [], []  # for main lines
-            satLabels, satHandles = [], []  # for satellites lines
-            for handle, label in zip(handles, labels):
-                if label not in newLabels and label[0] != 's':
-                    newLabels.append(label)
-                    newHandles.append(handle)
-                elif label[1:] not in satLabels and label[0] == 's':
-                    satLabels.append(label[1:])
-                    satHandles.append(handle)
-            leg = ax.legend(newHandles, newLabels, labelcolor='linecolor', frameon=False,
-                             bbox_to_anchor=(xmin1 - padding * dx1, y_pos[1] - 0.01 * (ymax - ymin)),
-                             bbox_transform=ax.transData, loc='upper left',
-                             fontsize='small',
-                             handlelength=0, handletextpad=0, fancybox=True)
-
-            sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
-                                 # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
-                                 # bbox_transform=ax.transData, loc='upper right',
-                                 bbox_to_anchor=(xmax1 + padding * dx1, ypos_other[1] + 0.01 * (ymax - ymin)),
-                                 bbox_transform=ax.transData, loc='lower right',
-                                 fontsize='small',
-                                 handlelength=0, handletextpad=0, fancybox=True)
-            for text in sat_leg.get_texts():
-                text.set_fontstyle("italic")
-
-            # Manually add the first legend back
-            ax.add_artist(leg)
-
-        return fig
-
-    def plot_line_position(self, freq_axis, transition, vel, y_range, err_color=None, **kwargs):
-        x_pos = velocity_to_frequency(vel, transition.f_trans_mhz, vref_kms=self.vlsr_file)
-        freq_axis.plot([x_pos, x_pos], y_range, **kwargs)
-        # plot error on line frequency
-        if transition.f_err_mhz is not None:
-            if err_color is None:
-                err_color = kwargs['color']
-            freq_axis.plot([x_pos - transition.f_err_mhz, x_pos + transition.f_err_mhz], 2 * [np.average(y_range)],
-                           color=err_color, linewidth=0.75)
-
     def make_plot(self, tag=None, filename=None, dirname=None, gui=False, verbose=True, basic=False,
                   other_species=None, display_all=True, other_species_selection=None, dpi=None,
                   pdf_multi=False):
-        """
-        Produces a plot of the fit results.
-        :param tag: specify a tag to plot ; if None, all tags are plotted.
-        :param filename: name of output file.
-        :param dirname: path to an output directory.
-        :param gui: if True, plot on screen, one window at a time.
-        :param verbose: if True, prints some information in the terminal, such as png file location
-        :param basic: if True, does not plot line position and individual components (time consuming)
-        :param other_species: dictionary with key = tag, value = thresholds for other species
-        for which to plot line position
-        :param display_all: if False, display only lines with velocity selection.
-        :param other_species_selection: (int) select only windows with other lines from this tag.
-        :param dpi: the dpi value
-        :return: None
-        """
-
-        plt.close()
-        plt.ticklabel_format(style='plain')
-
-        if dpi is None:
-            dpi = DPI_DEF
-
-        if tag is not None:
-            win_list_plot = [w for w in self.win_list if w.transition.tag == tag]
-        else:
-            win_list_plot = self.win_list
-
-        if not display_all:
-            win_list_plot = [w for w in win_list_plot if w.in_fit]
-
-        if other_species is not None:
-            list_other_species, thresholds_other = get_species_thresholds(other_species)
-        else:
-            list_other_species, thresholds_other = None, None
-
-        best_pars = self.best_params if self.best_params is not None else self.params2fit
-        self.update_parameters(params=best_pars)
-
-        if other_species_selection is None:
-            self.win_list_plot = win_list_plot
-        else:
-            fwhm_all_cpt = [best_pars[par].value for par in best_pars if 'fwhm' in par]
-            fwhm = max(fwhm_all_cpt)
-            for win in win_list_plot:
-                f_ref = win.transition.f_trans_mhz
-                # t_ref = win.transition.tag
-                # fwhm_all_cpt = [best_pars[par].value for par in best_pars if 'fwhm_{}'.format(t_ref) in par]
-                # fwhm = max(fwhm_all_cpt)
-                delta_f = 3. * delta_v_to_delta_f(fwhm, fref_mhz=f_ref)
-                try:
-                    res = get_transition_list(db, int(other_species_selection),
-                                              [[f_ref - delta_f, f_ref + delta_f]],
-                                              **thresholds_other, return_type='df')
-                    win.other_species_selection = res
-                    self.win_list_plot.append(win)
-                except IndexError:
-                    pass
-
-        nplots = len(self.win_list_plot)
-        if nplots == 0:
-            raise LookupError("No lines found for the plot. Please check your tag selection.")
-
-        # if verbose:
-        #     print("Tag {}, plot number {} :".format(tr.tag, line_list_plot.plot_nb.iloc[i]))
-        #     print("Main transitions :")
-        #     for t in all_lines_display['transition']:
-        #         print(t)
-        #     print("Satellite transitions :")
-        #     for t in other_lines_display['transition']:
-        #         print(t)
-        #     print(" ")
-
-        if gui:
-            root = tkinter.Tk()
-            root.wm_title("LTEmodel - Results")
-            root.geometry("700x500")
-            # root.columnconfigure(0, weight=1)
-            # root.columnconfigure(1, weight=3)
-            # root.rowconfigure(0, weight=3)
-            # root.rowconfigure(1, weight=1)
-
-            fig = self.plot_window(self.win_list_plot[0], list_other_species, thresholds_other,
-                                   other_species_selection)
-            canvas = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
-            canvas.draw()
-
-            # pack_toolbar=False will make it easier to use a layout manager later on.
-            toolbar = NavigationToolbar2Tk(canvas, root, pack_toolbar=False)
-            # navigation toolbar
-            # toolbarFrame = tkinter.Frame(master=root)
-            # toolbarFrame.grid(row=1, column=1)
-            # toolbar = NavigationToolbar2Tk(canvas, toolbarFrame)
-
-            toolbar.update()
-            # toolbar.grid(row=1, column=1, sticky='ew')
-
-            # canvas.mpl_connect(
-            #     "key_press_event", lambda event: print(f"you pressed {event.key}"))
-            # canvas.mpl_connect("key_press_event", key_press_handler)
-
-            # Create a frame for the listbox+scrollbar, attached to the root window
-            win_frame = tkinter.Frame(root)
-            win_names = [win.name for win in self.win_list_plot] if nplots > 1 else [self.win_list_plot[0].name[:-4]]
-            # Create a Listbox and attaching it to its frame
-            win_list = tkinter.Listbox(win_frame, width=10, selectmode='single', activestyle='none',
-                                       listvariable=tkinter.StringVar(value=win_names))
-            win_list.select_set(0)
-            win_list.activate(0)
-            win_list.focus_set()
-            # Insert elements into the listbox
-            # for values in range(100):
-            #     win_list.insert(tkinter.END, values)
-
-            # handle event
-            def win_selected(event):
-                """
-                Handle item selected event for the windows' listbox
-                """
-                # get selected indices
-                iwin = event.widget.curselection()[0]
-                # update fig
-                fig.clear()
-                self.plot_window(self.win_list_plot[iwin], list_other_species, thresholds_other,
-                                 other_species_selection, fig=fig)
-                canvas.draw_idle()
-                # canvas.flush_events()
-                toolbar.update()
-
-            def OnEntryUpDown(event):
-                selection = event.widget.curselection()[0]
-
-                if event.keysym == 'Up':
-                    selection = selection - 1 if selection > 0 else (event.widget.size() - 1)
-
-                if event.keysym == 'Down':
-                    selection = selection + 1 if selection < (event.widget.size() - 1) else 0
-
-                event.widget.selection_clear(0, tkinter.END)
-                event.widget.select_set(selection)
-                event.widget.activate(selection)
-                event.widget.selection_anchor(selection)
-                event.widget.see(selection)
-                win_selected(event)
-
-            win_list.bind('<<ListboxSelect>>', win_selected)
-            win_list.bind("<Down>", OnEntryUpDown)
-            win_list.bind("<Up>", OnEntryUpDown)
-
-            # Create a Scrollbar attached to the listbox's frame
-            win_scroll = tkinter.Scrollbar(win_frame, orient='vertical')
-            # setting scrollbar command parameter to have a vertical view
-            win_scroll.config(command=win_list.yview)
-            # Attaching Listbox to Scrollbar
-            # Since we need to have a vertical scroll we use yscrollcommand
-            win_list.config(yscrollcommand=win_scroll.set)
-
-            # button_quit = tkinter.Button(master=root, text="Quit", command=root.quit)
-            # Packing order is important. Widgets are processed sequentially and if there
-            # is no space left, because the window is too small, they are not displayed.
-            # The canvas is rather flexible in its size, so we pack it last which makes
-            # sure the UI controls are displayed as long as possible.
-
-            # Add Listbox to the left side of its frame
-            win_list.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
-            # Add Scrollbar to the right side
-            win_scroll.pack(side=tkinter.RIGHT, fill='y')
-            # Add list frame to root
-            win_frame.pack(side="left", fill='y')
-            # win_frame.grid(rowspan=2, column=0, sticky='ns')
-
-            # button_quit.pack(side=tkinter.BOTTOM)
-            toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-            canvas.get_tk_widget().pack(side=tkinter.RIGHT, fill=tkinter.BOTH, expand=1)
-            # canvas.get_tk_widget().grid(row=0, column=1)
-
-            tkinter.mainloop()
-
-        if filename is not None:  # save to file
-            file_path = self.set_filepath(filename, dirname=dirname, ext='png')
-
-            if verbose:
-                print("\nSaving plot to {} \n...".format(file_path))
-
-            nx = int(np.ceil(np.sqrt(nplots)))
-            ny = int(np.ceil(nplots / nx))
-            scale = 4
-            fig, axes = plt.subplots(nx, ny, figsize=(nx * scale, ny * scale))
-            for i, ax in enumerate(fig.axes):
-                if i >= nplots:
-                    ax.set_frame_on(False)
-                    ax.set_xticks([])
-                    ax.set_yticks([])
-                    continue
-
-                self.plot_window(self.win_list_plot[i], list_other_species, thresholds_other, other_species_selection,
-                                 ax=ax, fig=fig, basic=basic, dpi=dpi)
-
-            fig.savefig(file_path, bbox_inches='tight', dpi=dpi)
-
-            if verbose:
-                print("Done\n")
+        make_plot(self, tag=tag, filename=filename, dirname=dirname, gui=gui, verbose=verbose, basic=basic,
+                  other_species=other_species, display_all=display_all, other_species_selection=other_species_selection,
+                  dpi=dpi, pdf_multi=pdf_multi)
 
     def set_filepath(self, filename, dirname=None, ext=None):
         sub_dir = self.output_dir
@@ -1434,16 +539,16 @@ class ModelSpectrum:
         else:
             x_values = [self.x_file[0]]
             for x in self.x_file[1:]:
-                x_temp = np.linspace(x_values[-1], x, num=self.oversampling+1)
+                x_temp = linspace(x_values[-1], x, num=self.oversampling+1)
                 x_values.extend(list(x_temp[1:]))
-            x_values = np.array([x for x in x_values if is_in_range(x, list(self.tuning_info['fmhz_range']))])
+            x_values = array([x for x in x_values if is_in_range(x, list(self.tuning_info['fmhz_range']))])
 
         if not full_spectrum:
             x_values = []
             y_values = []
             for win in self.win_list:
                 if win.x_mod is None:
-                    win.x_mod = np.linspace(min(win.x_file), max(win.x_file),
+                    win.x_mod = linspace(min(win.x_file), max(win.x_file),
                                 num=self.oversampling * (len(win.x_file) - 1) + 1)
                     mdl_info = self.model_info(win.x_mod)
                     model = Model(generate_lte_model_func(mdl_info))
@@ -1458,7 +563,7 @@ class ModelSpectrum:
                                     c_best_pars[pname] = par.value
                             c_lte_func = generate_lte_model_func(mdl_info)
                             y_cpt = c_lte_func(win.x_mod, **c_best_pars)
-                            y_mod = np.hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
+                            y_mod = hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
                     win.y_mod = y_mod
                 x_values.extend(win.x_mod)
                 y_values.extend(win.y_mod)
@@ -1477,7 +582,7 @@ class ModelSpectrum:
                             c_best_pars[pname] = par.value
                     c_lte_func = generate_lte_model_func(mdl_info)
                     y_cpt = c_lte_func(x_values, **c_best_pars)
-                    y_values = np.hstack((y_values, y_cpt.reshape(len(y_cpt), 1)))
+                    y_values = hstack((y_values, y_cpt.reshape(len(y_cpt), 1)))
 
         spec = x_values, y_values
         self.save_spectrum(filename, dirname=dirname, ext=ext, spec=spec)
@@ -1532,7 +637,7 @@ class ModelSpectrum:
                                   '#xLabel: frequency [MHz]\n',
                                   '#yLabel: [Kelvin] Mean\n'])
                 for x, y in zip(x_values, y_values):
-                    if len(np.shape(y_values)) == 1:
+                    if len(shape(y_values)) == 1:
                         f.write('{}\t{}\n'.format(format_float(x), format_float(y)))
                     else:
                         line = '{}\t'.format(format_float(x)) + '\t'.join([format_float(yy) for yy in y])
@@ -1579,7 +684,7 @@ class ModelSpectrum:
             }
         else:
             tuning = {
-                'nameData': os.path.abspath(self.data_file) if self.data_file is not None else '',
+                'nameData': os.path.abspath(self.data_file) if isinstance(self.data_file, str) else '',
                 'telescopeData': '',  # TBD when writing the lam file
                 'typeFrequency': 'SKY' if self.vlsr_file == 0. else 'REST',
                 'minValue': min(self.x_file) / 1000.,
@@ -1740,712 +845,225 @@ class ModelSpectrum:
         self.write_cassis_file(filename, dirname=dirname)
 
 
-class Window:
-    def __init__(self, transition, plot_nb, v_range_fit=None, f_range_fit=None, rms_mk=None, cal=None):
-        self.transition = transition
-        self.plot_nb = plot_nb
-        self._name = "{} - {}".format(transition.tag, plot_nb)
-        self._v_range_fit = v_range_fit
-        self._f_range_fit = f_range_fit
-        self._rms_mk = rms_mk
-        self._cal = cal
-        self._x_fit = None
-        self._y_fit = None
-        self._in_fit = False
-        self._x_mod = None
-        self._y_mod = None
-        self._x_file = None
-        self._y_file = None
-        self.other_species_selection = None
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def v_range_fit(self):
-        return self._v_range_fit
-
-    @v_range_fit.setter
-    def v_range_fit(self, value):
-        self._v_range_fit = value
-
-    @property
-    def f_range_fit(self):
-        return self._f_range_fit
-
-    @f_range_fit.setter
-    def f_range_fit(self, value):
-        self._f_range_fit = value
-
-    @property
-    def rms_mk(self):
-        return self._rms_mk
-
-    @rms_mk.setter
-    def rms_mk(self, value):
-        self._rms_mk = value
-
-    @property
-    def cal(self):
-        return self._cal
-
-    @cal.setter
-    def cal(self, value):
-        self._cal = value
-
-    @property
-    def x_fit(self):
-        return self._x_fit
-
-    @x_fit.setter
-    def x_fit(self, value):
-        self._x_fit = value
-
-    @property
-    def y_fit(self):
-        return self._y_fit
-
-    @y_fit.setter
-    def y_fit(self, value):
-        self._y_fit = value
-        if len(self._y_fit) > 3:
-            self._in_fit = True
-
-    @property
-    def in_fit(self):
-        return self._in_fit
-
-    @property
-    def x_mod(self):
-        return self._x_mod
-
-    @x_mod.setter
-    def x_mod(self, value):
-        self._x_mod = value
-
-    @property
-    def y_mod(self):
-        return self._y_mod
-
-    @y_mod.setter
-    def y_mod(self, value):
-        self._y_mod = value
-
-    @property
-    def x_file(self):
-        return self._x_file
-
-    @x_file.setter
-    def x_file(self, value):
-        self._x_file = value
-
-    @property
-    def y_file(self):
-        return self._y_file
-
-    @y_file.setter
-    def y_file(self, value):
-        self._y_file = value
-
-
-class Component:
-    def __init__(self, name, species_list, isInteracting=False, vlsr=None, size=None, tex=100., config=None):
-        # super().__init__()
-        self.name = name
-        self.species_list = []
-        for sp in species_list:
-            if isinstance(sp, Species):
-                sp2add = sp
-            elif isinstance(sp, dict):
-                sp2add = Species(sp['tag'], ntot=sp['ntot'], fwhm=sp['fwhm'], component=self)
-            elif isinstance(sp, int):
-                sp2add = Species(sp)
-            else:
-                try:
-                    sp2add = Species(int(sp))
-                except TypeError:
-                    print("Elements of species_list must be a Species, a dictionary, "
-                          "or the tag as an integer or a string")
-            if sp2add._component is None:
-                sp2add.set_component(self.name)
-            self.species_list.append(sp2add)
-
-        self.tag_list = [sp.tag for sp in self.species_list]
-        self.isInteracting = isInteracting
-        if vlsr is None:
-            vlsr = VLSR_DEF  # TODO: find out why VLSR_DEF inside __init__ does not work
-        self._vlsr = create_parameter('{}_vlsr'.format(self.name), vlsr)  # km/s
-        if size is None:
-            size = SIZE_DEF
-        self._size = create_parameter('{}_size'.format(self.name), size)  # arcsec
-        self._tex = create_parameter('{}_tex'.format(self.name), tex)  # K
-        for sp in self.species_list:
-            sp.tex = self.tex
-        self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
-        self.transition_list = None
-        self.parameters = [self._vlsr, self._size, self._tex]
-
-    def as_json(self):
-        return {
-            'vlsr': round(self.vlsr, 3),
-            'size': round(self.size, 3),
-            'tex': round(self.tex, 3),
-            'isInteracting': self.isInteracting,
-            'species': [sp.as_json() for sp in self.species_list]
-        }
-
-    def update_parameters(self, new_pars):
-        self.vlsr = new_pars['{}_vlsr'.format(self.name)].value
-        self.size = new_pars['{}_size'.format(self.name)].value
-        self.tex = new_pars['{}_tex'.format(self.name)].value
-        for sp in self.species_list:
-            sp.ntot = new_pars['{}_ntot_{}'.format(self.name, sp.tag)].value
-            sp.fwhm = new_pars['{}_fwhm_{}'.format(self.name, sp.tag)].value
-            # sp.tex = new_pars['{}_tex'.format(self.name, sp.tag)].value
-
-    @property
-    def vlsr(self):
-        return self._vlsr.value
-
-    @vlsr.setter
-    def vlsr(self, value):
-        if self._vlsr.value != value:
-            self._vlsr.value = value
-
-    @property
-    def size(self):
-        return self._size.value
-
-    @size.setter
-    def size(self, value):
-        if self._size.value != value:
-            self._size.value = value
-
-    @property
-    def tex(self):
-        return self._tex.value
-
-    @tex.setter
-    def tex(self, value):
-        if self._tex.value != value:
-            self._tex.value = value
-            for sp in self.species_list:
-                sp.tex = value
-
-    @property
-    def tmax(self):
-        self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
-        return self._tmax
-
-    def get_transitions(self, fmhz_ranges, **thresholds):
-        self.transition_list = get_transition_list(db, self.species_list, fmhz_ranges, **thresholds)
-        return self.transition_list
-
-    def get_fwhm(self, transition):
-        tag = transition.tag
-        return next(sp for sp in self.species_list if sp.tag == tag).fwhm
-
-    def get_tex(self, transition):
-        tag = transition.tag
-        return next(sp for sp in self.species_list if sp.tag == tag).tex
-
-    def get_ntot(self, transition):
-        tag = transition.tag
-        return next(sp for sp in self.species_list if sp.tag == tag).ntot
-
-    def assign_spectrum(self, spec: SimpleSpectrum):
-        self.model_spec = spec
-
-
-class Species:
-    def __init__(self, tag, ntot=7.0e14, tex=100., fwhm=FWHM_DEF, component=None):
-        # super().__init__(self)
-        self._tag = str(tag)  # make sure tag is stored as a string
-        self._ntot = create_parameter('ntot_{}'.format(tag), ntot)  # total column density [cm-2]
-        self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
-
-        self._tex = tex  # excitation temperature [K]
-        self._component = component
-        if component is not None:
-            self.set_component(component.name)
-
-        sp_dic = get_species_info(db, self._tag)
-        if sp_dic is None:
-            raise IndexError("Tag {} not found in the database.".format(self._tag))
-        self._id = sp_dic['id']
-        self._name = sp_dic['name']
-        self._database = sp_dic['database_name']
-
-        self.pf = get_partition_function(db, self._tag)  # (tref, qlog)
-
-    def as_json(self):
-        return {
-            'tag': self.tag,
-            'ntot': round(self.ntot, 3),
-            'fwhm': round(self.fwhm, 3)
-        }
-
-    @property
-    def id(self):
-        return self._id
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def database(self):
-        return self._database
-
-    @property
-    def tag(self):
-        return self._tag
-
-    @property
-    def ntot(self):
-        return self._ntot.value
-
-    @ntot.setter
-    def ntot(self, value):
-        if self._ntot.value != value:
-            self._ntot.value = value
-
-    @property
-    def tex(self):
-        return self._tex
-
-    @tex.setter
-    def tex(self, value):
-        if self._tex != value:
-            self._tex = value
-
-    @property
-    def fwhm(self):
-        return self._fwhm.value
-
-    @fwhm.setter
-    def fwhm(self, value):
-        if self._fwhm.value != value:
-            self._fwhm.value = value
-
-    @property
-    def parameters(self):
-        return [self._ntot, self._fwhm]
-
-    def set_component(self, comp_name):
-        self._component = comp_name
-        self._ntot.name = '{}_ntot_{}'.format(comp_name, self.tag)
-        self._fwhm.name = '{}_fwhm_{}'.format(comp_name, self.tag)
-
-    def get_partition_function(self, tex):
-        tmp = np.interp(np.log10(tex), np.log10(self.pf[0]), self.pf[1])
-        # tmp = find_nearest_id(self.pf[0], tex)
-        # tmp = self.pf[1][tmp]
-        qex = np.power(10., tmp)
-        return get_partition_function_tex(self.pf[0], self.pf[1], tex)
-
-
-class Transition:
-    def __init__(self, tag, f_trans_mhz, aij, elo_cm, gup, name='', f_err_mhz=None, db_id=None, qn=None):
-        self.f_trans_mhz = f_trans_mhz
-        self.f_err_mhz = f_err_mhz
-        self.aij = aij
-        self.elo_cm = elo_cm
-        self.elo_J = self.elo_cm * const.h.value * const.c.value * 100
-        self.eup_J = self.elo_J + self.f_trans_mhz * 1.e6 * const.h.value
-        self.gup = gup
-        # self.eup = (elo_cm + self.f_trans_mhz * 1.e6 / (const.c.value * 100)) * 1.4389  # [K]
-        self.eup = self.eup_J / const.k_B.value  # k_B in J/K
-        self.tag = str(tag)  # make sure tag is stored as a string
-        self.name = name
-        self.db_id = db_id
-        self.qn = qn
-
-    def __str__(self):
-        infos = ["{} ({})".format(self.name, self.qn),
-                 "Tag = {}".format(self.tag),
-                 "f = {} MHz (+/-{})".format(self.f_trans_mhz, self.f_err_mhz),
-                 "Eup = {:.2f} K".format(self.eup),
-                 "Aij = {:.2e} s-1".format(self.aij),
-                 "gup = {}".format(self.gup)]
-        return " ; ".join(infos)
-
-    def __eq__(self, other):
-        return True if self.db_id == other.db_id else False
-
-
-def parameter_infos(value=None, min=None, max=None, expr=None, vary=True,
-                    factor=False, difference=False):
-    if factor and difference:
-        raise KeyError("Can only have factor=True OR difference=True")
-    if factor and value is not None and min is not None:
-        min *= value
-        max *= value
-    if difference and value is not None and max is not None:
-        min += value
-        max += value
-    return {'value': value, 'min': min, 'max': max, 'expr': expr, 'vary': vary}
-
-
-def create_parameter(name, param):
-    if isinstance(param, (float, int)):
-        return Parameter(name, value=param)
-
-    elif isinstance(param, dict):
-        return Parameter(name, **param)
-                         # value=param['value'], min=param.get('min', None), max=param.get('max', None),
-                         # expr=param.get('expr', None))
-
-    elif isinstance(param, Parameter):
-        return param
-
-    else:
-        raise TypeError(f"{name} must be a float, an integer, a dictionary or an instance of the Parameter class.")
-
-
-def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
-    if type(ranges[0]) is not list:
-        ranges = [ranges]
-    x_new = []
-    if y_values is not None:
-        y_new = []
-        df = pd.DataFrame({"x": x_values, "y": y_values})
-    for x_range in ranges:
-        x_sub = x_values[(x_values >= min(x_range)) & (x_values <= max(x_range))]
-        if len(x_sub) == 0:
-            continue
-        xmin, xmax = min(x_sub), max(x_sub)
-        if oversampling is not None:
-            x_sub = np.linspace(xmin, xmax, num=len(x_sub)*oversampling, endpoint=True)
-        x_new = np.append(x_new, x_sub)
-        if y_values is not None:
-            y_sub = y_values[(x_values >= xmin) & (x_values <= xmax)]
-            y_new = np.append(y_new, y_sub)
-
-    return x_new, y_new if y_values is not None else x_new
-
-
-def expand_dict(dic: dict, n_items):
-    if '*' in dic:
-        new_dic = {i + 1: dic['*'] for i in range(n_items)}
-    else:
-        new_dic = {}
-        for k, v in dic.items():
-            for e in k.split(','):
-                if '-' in e:
-                    nmin, nmax = e.split('-')
-                    for i in range(int(nmin), int(nmax) + 1):
-                        new_dic[i] = v
-                else:
-                    new_dic[int(e)] = v
-
-    return new_dic
-
-
-def get_species_thresholds(sp_threshold_infos, select_species=None, return_list_sp=True):
-    sp_thresholds = {}
-    list_species = []
-
-    if sp_threshold_infos is type(list):
-        for other_sp in sp_threshold_infos:
-            if isinstance(other_sp, list):  # if list, assume it is : [tag, eup_max, aij_min, err_max]
-                new_sp = str(other_sp[0])  # make sure the tag is a string
-                new_th = {
-                    'eup_max': other_sp[1] if other_sp[1] != '*' else EUP_MAX_DEF,
-                    'aij_min': other_sp[2] if other_sp[2] != '*' else AIJ_MIN_DEF,
-                    'err_max': other_sp[3] if other_sp[3] != '*' else ERR_MAX_DEF
-                }
-            else:
-                new_sp = other_sp
-                new_th = THRESHOLDS_DEF
-            list_species.append(new_sp)
-            sp_thresholds[str(new_sp)] = new_th
-
-    elif isinstance(sp_threshold_infos, dict):
-        sp_thresholds = {str(key): val for key, val in sp_threshold_infos.items()}  # make sure tag is a string
-        list_species = list(sp_threshold_infos.keys())
-
-    elif os.path.isfile(sp_threshold_infos):
-        df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#', index_col=False, dtype=str)
-        col_names = df.columns[1:]
-        list_species = [t.strip() for t in df.tag]
-        for index, row in df.iterrows():
-            sp_thresholds[str(int(row.tag))] = {c: float(row[c]) for c in col_names if '*' not in row[c]}
-
-    else:
-        raise TypeError("other_species should be a list, a dictionary or a path to a file.")
-
-    if len(sp_thresholds) > 0:  # if not empty, make sure add default thresholds if necessary
-        for sp in sp_thresholds.keys():
-            sp_thresholds[sp] = {label: sp_thresholds[sp].get(label, value)
-                                 for label, value in THRESHOLDS_DEF.items()}
-
-    if select_species is not None:
-        if not isinstance(select_species, list):
-            select_species = list(select_species)
-        sp_thresholds = {str(sp): sp_thresholds[str(sp)] for sp in select_species}
-        list_species = select_species
-
-    if return_list_sp:
-        return list_species, sp_thresholds
-    else:
-        return sp_thresholds
-
-
-def read_noise_info(noise_file):
-    noise_info = {}
-    with open(noise_file) as f:
-        all_lines = f.readlines()
-        for line in all_lines:
-            if line.startswith('#') or len(line.strip()) == 0:
-                continue
-            elts = line.split()
-            if len(elts) == 1:  # line only has one element -> tag
-                tag = elts[0]
-                noise_info[tag] = {}
-            else:
-                # noise info : vmin vmax line numbers or rms cal line numbers
-                noise_info[tag][''.join(elts[2:])] = [float(elts[0]), float(elts[1])]
-
-    return noise_info
-
-
-def frange(start, stop, step):
-    i = start
-    while i < stop:
-        yield i
-        i += step
-
-
-def find_nearest(array, value):
-    idx = (np.abs(array - value)).argmin()
-    return array[idx]
-
-
-def find_nearest_id(array, value):
-    if isinstance(array, list):
-        array = np.array(array)
-    return (np.abs(array - value)).argmin()
-
-
-def find_nearest_trans(trans_list, value):
-    f_trans_list = []
-    for tr in trans_list:
-        f_trans_list.append(tr.f_trans_mhz)
-    idx = (np.abs(np.array(f_trans_list) - value)).argmin()
-    return trans_list[idx]
-
-
-def is_in_range(fmhz, list_ranges):
-    res = False
-    for rg in list_ranges:
-        if rg[0] <= fmhz <= rg[1]:
-            res = True
-    return res
-
-
-def get_partition_function(db, tag, temp=None):
-    tref = []
-    qlog = []
-    pf_file = os.path.join(PARTITION_FUNCTION_DIR, '{}.txt'.format(tag))
-    if os.path.isfile(pf_file):
-        tref, qlog = np.genfromtxt(pf_file, comments='//', unpack=True)
-    else:
-        # retrieve catdir_id :
-        db.execute("SELECT id FROM catdir WHERE speciesid = {}".format(tag))
-        sp_id = db.fetchall()[0][0]
-        for row in db.execute("SELECT * FROM cassis_parti_funct WHERE catdir_id = " + str(sp_id)):
-            tref.append(row[1])
-            qlog.append(row[2])
-
-    # qlin = [np.power(10., q) for q in qlog]
-    # qlin.sort()
-    tref, qlog = zip(*sorted(zip(tref, qlog)))
-    if temp is None:
-        return tref, qlog
-    else:
-        return get_partition_function_tex(tref, qlog, temp)
-
-
-def get_partition_function_tex(tref, qlog, temp):
-    if temp <= tref[0]:
-        print(f'{temp} is below the lowest temperature of the partition function ({tref[0]}) : '
-              f'setting Q({temp}K)=Q({tref[0]}K)')
-        return np.power(10., qlog[0])
-    if temp >= tref[-1]:
-        print(f'{temp} is above the highest temperature of the partition function ({tref[-1]}) : '
-              f'setting Q({temp}K)=Q({tref[-1]}K)')
-        return np.power(10., qlog[-1])
-    for i, t in enumerate(tref[:-1]):
-        if tref[i+1] >= temp >= t:
-            tmp = np.interp(np.log10(temp), np.log10(tref[i:i+2]), qlog[i:i+2])
-            qex = np.power(10., tmp)
-            # qex = np.interp(temp, tref, qlin)
-            return qex
-            # return np.power(10., qlog[find_nearest_id(np.array(tref),temp)])
-
-
-def fwhm_to_sigma(value, reverse=False):
-    if reverse:
-        return value * (2. * np.sqrt(2. * np.log(2.)))
-    else:
-        return value / (2. * np.sqrt(2. * np.log(2.)))
-
-
-def delta_v_to_delta_f(value, fref_mhz, reverse=False):
-    if reverse:
-        return (value / fref_mhz) * const.c.value * 1.e-3
-    else:
-        return value * 1.e3 * fref_mhz / const.c.value
-
-
-def velocity_to_frequency(value, fref_mhz, reverse=False, vref_kms=0.):
-    if reverse:
-        return const.c.value * (1. - value / fref_mhz) * 1.e-3 + vref_kms
-    else:
-        return fref_mhz * (1. - (value - vref_kms) * 1.e3 / const.c.value)
-
-
-def Teq(fmhz):
-    return const.h.value * fmhz * 1.e6 / const.k_B.value
-
-
-def jnu(fmhz, temp: float):
-    fmhz_arr = np.array(fmhz) if type(fmhz) == list else fmhz
-    res = (const.h.value * fmhz_arr * 1.e6 / const.k_B.value) / \
-          (np.exp(const.h.value * fmhz_arr * 1.e6 / (const.k_B.value * temp)) - 1.)
-    return list(res) if type(fmhz) == list else res
-
-
-def get_telescope(fmhz, tuning_info: pd.DataFrame):
-    tel = None
-    for row in tuning_info.itertuples(index=False):
-        if row.fmhz_range[0] <= fmhz <= row.fmhz_range[1]:
-            return row.telescope
-    if tel is None:
-        raise LookupError("No telescope found at {} Mhz.".format(fmhz))
-
-
-def get_tmb2ta_factor(fmhz, tel_data):
-    if isinstance(tel_data, pd.DataFrame):
-        f_tel = tel_data[tel_data.columns[0]]
-        beff_tel = tel_data[tel_data.columns[1]]
-        return np.interp(fmhz, f_tel, beff_tel)
-    else:
-        raise TypeError("Not implemented yet.")
-
-
-def get_beam_size(freq_mhz, tel_info):
-    """
-    Computes the beam size at the given frequency
-    :param freq_mhz: frequency in MHz
-    :param tel_info: telescope name or dataframe containing "tuning" information
-    :return: the beam size in arcsec
-    """
-    tel = tel_info
-    if isinstance(tel_info, pd.DataFrame):
-        tel = get_telescope(freq_mhz, tel_info)
-    return (1.22 * const.c.value / (freq_mhz * 1.e6)) / TEL_DIAM[tel] * 3600. * 180. / np.pi
-
-
-def dilution_factor(source_size, beam_size, geometry='gaussian'):
-    # dilution_factor = tr.mol_size ** 2 / (tr.mol_size**2 + get_beam_size(model.telescope,freq)**2)
-    # dilution_factor = (1. - np.cos(cpt.size/3600./180.*np.pi)) / ( (1. - np.cos(cpt.size/3600./180.*np.pi))
-    #                    + (1. - np.cos(get_beam_size(self.telescope,self.frequencies)/3600./180.*np.pi)) )
-    if geometry == 'disc':
-        return 1. - np.exp(-np.log(2.) * (source_size / beam_size) ** 2)
-    else:
-        return source_size ** 2 / (source_size ** 2 + beam_size ** 2)
-
-    # hdr = cube.hdu.header
-    # if hdr['BUNIT'] == 'Jy/beam':  # calculate conversion factor Jy/beam to K
-    #     try:
-    #         bmaj = hdr['BMAJ'] * np.pi / 180.  # major axis in radians, assuming unit = degrees
-    #         bmin = hdr['BMIN'] * np.pi / 180.  # major axis in radians, assuming unit = degrees
-    #     except KeyError:
-    #         for hdu in cube.hdulist[1:]:
-    #             try:
-    #                 unit = hdu.columns['BMAJ'].unit  # assume bmaj and bmin have the same unit
-    #                 fact = u.Quantity("1. {}".format(unit)).to(u.rad).value
-    #                 bmaj = np.mean(hdu.data['BMAJ']) * fact
-    #                 bmin = np.mean(hdu.data['BMIN']) * fact
-    #             except KeyError:
-    #                 raise KeyError("Beam information not found in file {}.".format(file_list[h]))
-    #     omega = np.pi * bmaj * bmin / (4. * np.log(2.))
-
-def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=3):
-    """
-
-    :param value:
-    :param fmt: the format to use, e.g., "{:.3e}"
-    :param nb_digits:
-    :param nb_signif_digits:
-    :return:
-    """
-    if fmt:
-        return fmt.format(value)
-
-    power = np.log10(np.abs(value)) if value != 0 else 0.
-    rpst = "e" if (power < -2 or power > nb_digits) else "f"
-    f = "{:." + str(nb_signif_digits) + rpst + "}"
-    return f.format(value)
-
-
-def open_data_file(filepath):
-    vlsr = 0.
-    ext = os.path.splitext(filepath)[-1]
-    if ext == '.fits':
-        with fits.open(filepath) as hdu:
-            data = hdu[1].data
+class ModelCube:
+    def __init__(self, configuration):
+        self._data_path = configuration.get('data_path', './')
+        self._data_file = configuration.get('data_file', None)
+        if not isinstance(self._data_file, list):
+            self._data_file = [self._data_file]
+
+        self._source = configuration.get('source', None)
+        self.win_list = None
+
+        cont_info = configuration.get('cont_info', 0.)
+        # retrieving the continuum
+        if isinstance(cont_info, dict):
+            for key, val in cont_info.items():
+                if isinstance(val, str):
+                    cont_file = os.path.join(self._data_path, val)
+                    if os.path.isfile(cont_file):  # assume it is a fits file
+                        cont_info[key] = fits.open(cont_file)[0]
+        self._cont_info = cont_info
+
+        # retrieving the source data and information
+        hduls = [fits.open(os.path.join(self._data_path, f)) for f in self._data_file]
+        self._cubes = [SpectralCube.read(h) for h in hduls]
+        # datfile = fits.open(os.path.join(myPath, file_list[0]))
+        # dat = SpectralCube.read(datfile)
+        self._wcs = WCS(hduls[0][0].header)  # RA and DEC info from WCS in header
+        # hdr = datfile[0].header
+
+        # check that cubes have the same number of pixels in RA and Dec:
+        nx_list = [dat.shape[1] for dat in self._cubes]
+        ny_list = [dat.shape[2] for dat in self._cubes]
+        if len(set(nx_list)) > 1 or len(set(ny_list)) > 1:
+            raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
+
+        self._nx = next(iter(set(nx_list)))
+        self._ny = next(iter(set(ny_list)))
+
+        # conversion factors : T = (conv_fact / nu^2) * I , with :
+        # conv_fact = c^2 / (2*k_B*omega) * 1.e-26 (to convert Jy to mks)
+        # omega = pi*bmaj*min/(4*ln2)
+        beams = {'f_mhz': [], 'beam_omega': []}  # np.ones(len(file_list))
+        for h, cube in enumerate(self._cubes):
             try:
-                vlsr = hdu[1].header['VLSR']  # km/s
-            except KeyError:
-                vlsr = 0.
-            if isinstance(hdu[1], fits.BinTableHDU):
-                xunit = hdu[1].columns.columns[0].unit
-                freq = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()  # to be able to use in a DataFrame
-                flux = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
-                freq = (freq * u.Unit(xunit)).to('MHz').value
+                hdr = cube.hdu.header
+            except ValueError:
+                hdr = cube.hdulist[0].header
+            if hdr['BUNIT'] in ['Jy/beam', 'beam-1 Jy']:  # calculate conversion factor Jy/beam to K
+                try:
+                    bmaj = hdr['BMAJ'] * pi / 180.  # major axis in radians, assuming unit = degrees
+                    bmin = hdr['BMIN'] * pi / 180.  # major axis in radians, assuming unit = degrees
+                except KeyError:
+                    for hdu in cube.hdulist[1:]:
+                        try:
+                            unit = hdu.columns['BMAJ'].unit  # assume bmaj and bmin have the same unit
+                            fact = u.Quantity("1. {}".format(unit)).to(u.rad).value
+                            bmaj = mean(hdu.data['BMAJ']) * fact
+                            bmin = mean(hdu.data['BMIN']) * fact
+                        except KeyError:
+                            raise KeyError("Beam information not found in file {}.".format(self._data_file[h]))
+                omega = pi * bmaj * bmin / (4. * log(2.))
+                sp = (cube.spectral_axis.to(u.MHz)).value
+                beams['f_mhz'].append(sp)
+                beams['beam_omega'].append([omega for _ in sp])
+                # 'jypb_MHz2': 1.e-26 * const.c.value ** 2 / 1.e12 / (2. * const.k_B.value * omega)})
+
+        configuration['beam_info'] = beams
+
+        # Mask:
+        masks = configuration.get('masks', None)
+        if masks is None:
+            self._masked_pix_list = None
+        else:
+            file1 = os.path.join(self._data_path, masks[0])
+            file2 = None
+            if len(masks) > 1:
+                file2 = os.path.join(self._data_path, masks[1])
+            self._masked_pix_list = get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
+
+        self._model_configuration = ModelConfiguration(configuration)
+
+        params = ['redchi']
+        for cpt in self._model_configuration.cpt_list:
+            params.extend([par.name for par in cpt.parameters])
+            params.extend([par.name for sp in cpt.species_list for par in sp.parameters])
+
+        # create arrays of zeros for the output parameters
+        self._param_arrays = dict()
+        for param in params:
+            self._param_arrays['{}_arr'.format(param)] = zeros((self._nx, self._ny))
+
+    def do_minimization(self, pix_nb=None, single_pix=True, size=None):
+        if size is None:
+            size = max(self._nx, self._ny)
+            imin, imax = 0, self._nx
+            jmin, jmax = 0, self._ny
+        else:
+            size2 = int(size / 2)
+            pix0 = (0, 0) if pix_nb is None else pix_nb
+            imin, imax = pix0[0] - size2, pix0[0] + size2 + 1
+            jmin, jmax = pix0[1] - size2, pix0[1] + size2 + 1
+
+        if pix_nb is not None:
+            if single_pix:  # for one pixel
+                pix_list = [pix_nb]
+            else:  # spiral loop, starting from pix_nb
+                ip, jp = 0, 0
+                di, dj = 0, -1
+                pix_list = []
+                for _ in range(size ** 2):
+                    if (imin <= ip + pix_nb[0] < imax) and (jmin <= jp + pix_nb[1] < jmax):
+                        pix_list.append((ip + pix_nb[0], jp + pix_nb[1]))
+                    if (ip == jp) or ((ip == -jp) and (ip < 0)) or ((ip == 1 - jp) and (ip > 0)):
+                        # end of current segment, rotate direction
+                        di, dj = -dj, di
+                    ip, jp = ip + di, jp + dj
+
+        else:  # all pixels, starting from (0, 0)
+            pix_list = [(i, j) for i in range(self._nx) for j in range(self._ny)]
+
+        # loop over all pixels and fit lines
+        for (i, j) in pix_list:
+            if self._masked_pix_list is not None and (j, i) in self._masked_pix_list:
+                for par in self._param_arrays.keys():
+                    self._param_arrays[par][j, i] = 0.
+                continue
+
+            t1_start = process_time()
+
+            data = []
+            spec = []
+            # concatenate data from all files
+            for dat in self._cubes:
+                data.append(dat[:, j, i].array)
+                spec.append((dat.spectral_axis.to(u.MHz)).value)
+
+            self._model_configuration.get_data({'x_obs': spec, 'y_obs': data})
+            self._model_configuration.get_continuum({'tc': self._cont_info})
+
+            if self._model_configuration.win_list is None:
+                self._model_configuration.get_linelist()
+                self._model_configuration.get_windows()
             else:
-                raise TypeError("Cannot open this fits file.")
-    elif ext in ['.fus', '.lis']:
-        with open(filepath) as f:
-            nskip = 0
-            line = f.readline()
-            while '//' in line:
-                nskip += 1
-                if 'vlsr' in line:
-                    vlsr = float(line.split()[-1])
-                line = f.readline()
+                for win in self._model_configuration.win_list:
+                    _, ywin = select_from_ranges(spec, [min(win.x_file), max(win.x_file)], y_values=data)
+                    win.y_file = ywin
 
-        data = np.genfromtxt(filepath, skip_header=nskip, names=True)
-        freq = data['FreqLsb']
-        try:
-            flux = data['Intensity']
-        except ValueError:
-            flux = data['Int']
+            # Create the model ; set verbose to False to prevent printing of number of transitions
+            model = ModelSpectrum(self._model_configuration, verbose=False)
 
-    else:
-        # print('Unknown extension.')
-        # return None
-        freq, flux = [], []
-        with open(filepath) as f:
-            lines = f.readlines()
-            for line in lines:
-                if len(line.strip()) == 0:
+            # Perform the fit ; NB :
+            # max_nfev = maximum number of function evaluations
+            # xtol = Relative error in the approximate solution
+            # ftol = Relative error in the desired sum-of-squares
+            model.fit_model(max_nfev=5000, fit_kws={'xtol': 1.e-8, 'ftol': 1.e-7},
+                            print_report=False if pix_nb is None else True,
+                            report_kws={'show_correl': False})
+
+            # read out params into arrays, ensure to have for all components necessary
+            for par in model.best_params:
+                param = model.best_params[par]
+                self._param_arrays['{}_arr'.format(param.name)][j, i] = param.value
+            self._param_arrays['redchi_arr'][j, i] = model.model_fit.redchi
+
+            t1_stop = process_time()
+            if t1_stop - t1_start > 1.:
+                print("Execution time : {:.2f} seconds".format(t1_stop - t1_start))
+
+            if single_pix:
+                file = self._model_configuration.base_name + "_{}_{}".format(i, j)
+                model.save_model(file + "_spec", ext='txt')
+                model.write_lam(file + "_lam")
+                model.make_plot(filename=file + ".png", gui=False)
+            # model.save_config('test-config.txt', dirname=myPath)
+
+            # res = model.integrated_intensities()
+
+            t2_start = process_time()
+            model.make_plot(filename=self._model_configuration.base_name+"_plots_{}_{}".format(i,j)+".png", gui=False)
+            t2_stop = process_time()
+            print("Execution time : {:.2f} seconds".format(t2_stop - t2_start))
+
+    def make_maps(self):
+        # read out parameter arrays into fits files
+        units = {'tex': 'K', 'vlsr': 'km/s', 'fwhm': 'km/s', 'ntot': 'cm^-2', 'size': 'arcsec'}
+        hdr = reduce_wcs_dim(self._wcs).to_header()
+
+        for param in self._param_arrays.keys():
+            unit = 'dimensionless'
+            vary = True
+            vals = param.split('_')
+            if len(vals) >= 2:
+                comp = vals[0]
+                par = vals[1]
+                unit = units[par]
+                if len(vals) == 3:
+                    tag = vals[2]
+                    for sp in self._configuration['components'][comp]['species']:
+                        if sp['tag'] == tag:
+                            vary = sp[par].get('vary', True)
+                else:
+                    vary = self._configuration['components'][comp][par].get('vary', True)
+
+            if not vary:
+                continue
+            for key, val in units.items():
+                if key in param:
+                    hdr['BUNIT'] = val
                     continue
-                if line[0] == '#':
-                    continue
-                elts = line.split()
-                if elts[1] not in ['NaN', 'nan']:
-                    freq.append(float(elts[0]))
-                    flux.append(float(elts[1]))
-        freq = np.array(freq) * 1000.
-        flux = np.array(flux)
+            hdu = fits.PrimaryHDU(self._param_arrays['{}_arr'.format(param)], header=hdr)
+            hdul = fits.HDUList([hdu])
+            hdul.writeto(os.path.join(self._data_path, self._source + '_' + self._tag + '_' + param + '.fits'), overwrite=True)
 
-    inds = freq.argsort()
-    flux = flux[inds]
-    freq = freq[inds]
+    @property
+    def param_arrays(self):
+        return self._param_arrays
 
-    return freq, flux, vlsr
+
+# def frange(start, stop, step):
+#     i = start
+#     while i < stop:
+#         yield i
+#         i += step
