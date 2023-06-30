@@ -249,7 +249,7 @@ class ModelSpectrum:
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
             'beam_sizes': get_beam_size(x_mod, tel_diam),
-            'tmb2ta': [get_tmb2ta_factor(f_i, self._telescope_data[tel])
+            'tmb2ta': [get_tmb2ta_factor(f_i, self._telescope_data[t])
                        for f_i, t in zip(x_mod, tel)] if self.t_a_star else ones(len(x_mod)),
             'jypb2k': interp(x_mod, self.x_file, self.jypb) if self.jypb is not None else ones(len(x_mod)),
             'line_list': self.line_list_all if line_list is None else line_list,
