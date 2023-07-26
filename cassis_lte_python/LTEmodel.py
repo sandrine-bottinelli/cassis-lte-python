@@ -1,10 +1,15 @@
 from cassis_lte_python.utils.utils import get_telescope, get_beam_size, get_tmb2ta_factor, dilution_factor, jnu
 from cassis_lte_python.utils.utils import get_valid_pixels, reduce_wcs_dim
 from cassis_lte_python.utils.utils import format_float, is_in_range, select_from_ranges, find_nearest_id
-from cassis_lte_python.utils.utils import velocity_to_frequency, fwhm_to_sigma, delta_v_to_delta_f
-from cassis_lte_python.utils.plots import make_plot
-from cassis_lte_python.model_setup import ModelConfiguration, SQLITE_FILE
+from cassis_lte_python.utils.utils import velocity_to_frequency, frequency_to_velocity, \
+    fwhm_to_sigma, delta_v_to_delta_f
+from cassis_lte_python.gui.plots import file_plot, gui_plot
+from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
+from cassis_lte_python.utils.settings import SQLITE_FILE
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, TEL_DIAM
+from cassis_lte_python.utils.constants import PLOT_COLORS
+from cassis_lte_python.database.species import get_species_thresholds
+from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log
 from numpy.random import normal
 from lmfit import Model, Parameters
@@ -18,6 +23,8 @@ import json
 from spectral_cube import SpectralCube
 from astropy.wcs import WCS
 from time import process_time
+from matplotlib.pyplot import get_cmap
+from warnings import warn
 
 
 def generate_lte_model_func(config):
@@ -184,6 +191,10 @@ class ModelSpectrum:
         self.model_fit = None
         self.normalize = False
         self.figure = None
+
+        self.tag_colors = None
+        self.tag_other_sp_colors = None
+        self.cpt_cols = None
 
     def load_config(self, path):
         with open(path) as f:
@@ -492,12 +503,231 @@ class ModelSpectrum:
 
         return res
 
-    def make_plot(self, tag=None, filename=None, dirname=None, gui=False, verbose=True, basic=False,
-                  other_species=None, display_all=True, other_species_selection=None, dpi=None,
-                  pdf_multi=False):
-        make_plot(self, tag=tag, filename=filename, dirname=dirname, gui=gui, verbose=verbose, basic=basic,
-                  other_species=other_species, display_all=display_all, other_species_selection=other_species_selection,
-                  dpi=dpi, pdf_multi=pdf_multi)
+    def setup_plot_fus(self):
+        """
+        Plot in full spectrum mode (self.bandwidth is None)
+        :return:
+        """
+        pass
+
+    def setup_plot_la(self, verbose=True, other_species_dict: dict | None = None):
+        """
+        Prepare all data to do the plots in line analysis mode
+
+        :param verbose:
+        :param other_species_dict: a dictionary of other species and their thresholds
+        :return:
+        """
+
+        # Define some useful quantities
+        plot_pars = self.plot_pars()
+        vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
+        fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
+
+        self.update_parameters(params=plot_pars)
+
+        if other_species_dict is not None:  # list of tags for which the user wants line positions
+            thresholds_other = other_species_dict
+        else:
+            thresholds_other = {}
+        list_other_species = list(thresholds_other.keys())
+
+        # lines from other species : if many other species, more efficient to first find all transitions
+        # across entire observed range, then filter in each window
+        if len(list_other_species) > 0:
+            other_species_lines = get_transition_df(list_other_species, [[min(self.x_file), max(self.x_file)]],
+                                            **thresholds_other)
+        else:
+            other_species_lines = pd.DataFrame()  # empty dataframe
+
+        # Compute model overall model : takes longer than cycling through windows unless strong overlap of windows (TBC)
+        # self.y_mod = self.compute_model_intensities(params=plot_pars, x_values=self.x_mod,
+        #                                             line_list=self.line_list_all)
+
+        # Compute model and line positions for each window
+        for win in self.win_list_plot:
+            tr = win.transition
+            f_ref = tr.f_trans_mhz
+            win.v_range_plot = [-self.bandwidth / 2 + vlsr, self.bandwidth / 2 + vlsr]
+            win.f_range_plot = [velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
+                                for v in win.v_range_plot]
+            win.bottom_unit = 'km/s'
+
+            # all transitions in the window (no thresholds) :
+            fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
+            model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 2 * fwhm_mhz,
+                                                              max(win.f_range_plot) + 2 * fwhm_mhz])
+            # all_lines_win = select_transitions(self.line_list_all, xrange=[min(win.f_range_plot) - 2 * fwhm_mhz,
+            #                                                                max(win.f_range_plot) + 2 * fwhm_mhz])
+
+            # compute the model :
+            # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
+            win.x_mod = linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
+            win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                       line_list=model_lines_win)
+            if len(self.cpt_list) > 1:
+                for icpt in range(len(self.cpt_list)):
+                    win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                                        line_list=model_lines_win,
+                                                                        cpt=self.cpt_list[icpt]))
+
+            win.x_mod_plot = frequency_to_velocity(win.x_mod, f_ref, vref_kms=vlsr)
+            win.x_file_plot = frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
+
+            # transitions from model species, w/i thresholds :
+            model_lines_user = select_transitions(model_lines_win,
+                                                  thresholds=self.thresholds)
+            # find "bright" lines (if aij_max not None and/or eup_min non-zero):
+            # bright_lines = select_transitions(all_lines_win,  # xrange=[fmin, fmax],
+            #                                   thresholds=self.thresholds,
+            #                                   # bright_lines_only=True)
+
+            # transitions from model species, outside thresholds :
+            model_lines_other = pd.concat([model_lines_user,
+                                           model_lines_win]).drop_duplicates(subset='db_id', keep=False)
+
+            # transitions from other species :
+            other_species_win = select_transitions(other_species_lines,
+                                                   xrange=[min(win.f_range_plot), max(win.f_range_plot)])
+            # try:
+            #     other_species_display = pd.concat([all_lines_display, bright_lines,
+            #                                        other_lines_win]).drop_duplicates(subset='db_id', keep=False)
+            # except IndexError:
+            #     other_species_display = pd.DataFrame()  # empty dataframe
+            #
+
+            for icpt, cpt in enumerate(self.cpt_list):
+                # build list of dataframes containing lines to be plotted for each component
+                win.main_lines_display[icpt] = self.get_lines_plot_params(
+                    model_lines_user[model_lines_user['tag'].isin(cpt.tag_list)], cpt, f_ref)
+                win.other_lines_display[icpt] = self.get_lines_plot_params(
+                    model_lines_other[model_lines_other['tag'].isin(cpt.tag_list)], cpt, f_ref)
+
+            # line plot parameters for other species (not component-dependent)
+            tag_other_sp_colors = {t: PLOT_COLORS[(itag + len(self.tag_colors)) % len(PLOT_COLORS)]
+                                   for itag, t in enumerate(other_species_win.tag)}
+            if len(other_species_win) > 0:
+                win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
+                                                                       tag_colors=tag_other_sp_colors)
+
+    def get_lines_plot_params(self, line_list: pd.DataFrame, cpt: Component, f_ref: float,
+                              tag_colors: dict = None):
+
+        colors = self.tag_colors if tag_colors is None else tag_colors
+        lines_plot_params = line_list.copy()
+        lines_plot_params['x_pos'] = [frequency_to_velocity(row.fMHz, f_ref, vref_kms=cpt.vlsr)
+                                      for i, row in lines_plot_params.iterrows()]
+        lines_plot_params['x_pos_err'] = [delta_v_to_delta_f(row.f_err_mhz, f_ref, reverse=True)
+                                          for i, row in lines_plot_params.iterrows()]
+        lines_plot_params['label'] = [row.tag for i, row in lines_plot_params.iterrows()]
+        lines_plot_params['color'] = [self.tag_colors[row.tag] if row.tag in self.tag_colors.keys()
+                                      else colors[row.tag] for i, row in lines_plot_params.iterrows()]
+
+        return lines_plot_params
+
+    def select_windows(self, tag: str | None = None,
+                       other_species_win_selection: str | None = None,
+                       display_all=True, reset_selection=False):
+        """
+        Determine windows to plot
+        :param tag: tag selection if do not want all the tags
+        :param other_species_win_selection: select only windows with other lines from this tag.
+        :param display_all: if False, only display windows with fitted data
+        :param reset_selection: re-do window selection from scratch
+        :return:
+        """
+
+        if len(self.win_list_plot) == 0 or reset_selection:
+            self.win_list_plot = self.win_list  # by default, plot everything
+
+        if not display_all:  # only display windows with fitted data
+            self.win_list_plot = [w for w in self.win_list_plot if w.in_fit]
+
+        if tag is not None:  # user only wants one tag
+            self.win_list_plot = [w for w in self.win_list_plot if w.transition.tag == tag]
+
+        if other_species_win_selection is not None:
+            # user only wants windows with other lines from the tag given in other_species_selection
+            sub_list = []
+            for win in self.win_list_plot:  # check if window contains a transition from other_species_selection
+                if other_species_win_selection in win.other_lines_display['tag']:
+                    sub_list.append(win)
+                    # f_ref = win.transition.f_trans_mhz
+                    # delta_f = 3. * delta_v_to_delta_f(fwhm, fref_mhz=f_ref)
+                    # res = select_transitions(tr_list_other_species_selection, thresholds=thresholds_other,
+                    #                          xrange=[f_ref - delta_f, f_ref + delta_f],
+                    #                          return_type='df')
+                    # if len(res) > 0:
+                    #     win.other_species_selection = res
+                    #     self.win_list_plot.append(win)
+            if len(sub_list) == 0:
+                warn(f"No windows with transitions from {other_species_win_selection}.")
+
+        if self.win_list_plot == 0:
+            raise LookupError("No windows to plot. Please check your tag selection.")
+
+    def make_plot(self, tag: str | None = None,
+                  filename: str | None = None, dirname: str | os.PathLike | None = None,
+                  gui=False, verbose=True, basic=False,
+                  other_species: list | dict | str | os.PathLike = None,
+                  other_species_plot: list | str = 'all',
+                  other_species_win_selection: str | None = None,
+                  display_all=True, dpi=None,
+                  nrows=4, ncols=3, **kwargs):
+        """
+        Prepare all data to do the plot(s)
+
+        :param tag: tag selection if do not want all the tags
+        :param filename: nome of the file to be saved
+        :param dirname: directory where to save the file
+        :param gui: interactive display
+        :param verbose:
+        :param basic: do not plot other species
+        :param other_species: list or dictionary or file with other species ;
+            dictionary and file can contain their thresholds
+        :param other_species_plot: list of other species to plot ; if None, other_species is used ;
+            if other_species is provided, only these species are kept
+        :param other_species_win_selection: select only windows with other lines from this tag.
+        :param display_all: if False, only display windows with fitted data
+        :param dpi:
+        :param nrows: maximum number of rows per page
+        :param ncols: maximum number of columns per page
+        :return:
+
+        Notes :
+            - other_species_selection is deprecated, use other_species_win_selection
+        """
+
+        # set colors for model tags and components
+        self.tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
+        self.cpt_cols = get_cmap('hsv')(linspace(0.1, 0.8, len(self.cpt_list)))
+
+        if 'other_species_selection' in kwargs.keys():
+            warn('other_species_selection will be deprecated, use other_species_win_selection instead',
+                 DeprecationWarning, stacklevel=2)
+            other_species_win_selection = kwargs['other_species_selection']
+
+        if other_species is not None:
+            if other_species_plot == 'all':
+                thresholds_other = get_species_thresholds(other_species)
+            else:
+                thresholds_other = get_species_thresholds(other_species, select_species=other_species_plot)
+        else:
+            thresholds_other = None
+
+        if self.bandwidth is None:
+            self.setup_plot_fus()
+        else:
+            self.select_windows(tag=tag, display_all=display_all)
+            self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other)
+            self.select_windows(other_species_win_selection=other_species_win_selection)
+
+        if gui:
+            gui_plot(self)
+
+        if filename:
+            file_plot(self, filename, dirname=dirname, verbose=verbose,
+                      dpi=dpi, nrows=nrows, ncols=ncols)
 
     def set_filepath(self, filename, dirname=None, ext=None):
         sub_dir = self.output_dir
@@ -750,15 +980,16 @@ class ModelSpectrum:
         else:  # assume cont defined as array => need to write it to a file
             tc = self.save_spectrum(filename, dirname=dirname, continuum=True)
 
-        components = {'# Component parameters 1':
-                          {'Comp1Name': 'Continuum',
-                           'Comp1Enabled': 'true',
-                           'Comp1Interacting': 'false',
-                           'Comp1ContinuumSelected': 'CONSTANT',
-                           'Comp1Continuum': 'Continuum 0 [K]',
-                           'Comp1ContinuumSize': tc
-                           }
-                      }
+        components = {
+            '# Component parameters 1': {
+                'Comp1Name': 'Continuum',
+                'Comp1Enabled': 'true',
+                'Comp1Interacting': 'false',
+                'Comp1ContinuumSelected': 'CONSTANT',
+                'Comp1Continuum': 'Continuum 0 [K]',
+                'Comp1ContinuumSize': tc
+            }
+        }
 
         # Define other components
         params = self.params2fit
@@ -804,9 +1035,9 @@ class ModelSpectrum:
 
         for filepath, tel in zip(filepaths, tels):
             with open(filepath, 'w') as f:
-                if 'telescopeData'in tuning:
+                if 'telescopeData' in tuning:
                     tuning['telescopeData'] = tel
-                if 'telescope'in tuning:
+                if 'telescope' in tuning:
                     tuning['telescope'] = tel
                 lte_radex['telescope'] = tel
                 f.writelines(all_lines)
@@ -1022,7 +1253,7 @@ class ModelCube:
             # res = model.integrated_intensities()
 
             t2_start = process_time()
-            model.make_plot(filename=self._model_configuration.base_name+"_plots_{}_{}".format(i,j)+".png", gui=False)
+            model.make_plot(filename=self._model_configuration.base_name+"_plots_{}_{}".format(i, j)+".png", gui=False)
             t2_stop = process_time()
             print("Execution time : {:.2f} seconds".format(t2_stop - t2_start))
 
@@ -1055,7 +1286,8 @@ class ModelCube:
                     continue
             hdu = fits.PrimaryHDU(self._param_arrays['{}_arr'.format(param)], header=hdr)
             hdul = fits.HDUList([hdu])
-            hdul.writeto(os.path.join(self._data_path, self._source + '_' + self._tag + '_' + param + '.fits'), overwrite=True)
+            hdul.writeto(os.path.join(self._data_path, self._source + '_' + self._tag + '_' + param + '.fits'),
+                         overwrite=True)
 
     @property
     def param_arrays(self):

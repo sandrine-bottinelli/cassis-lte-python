@@ -1,5 +1,6 @@
 import astropy.constants.codata2014 as const  # h,k_B,c # SI units
 import numpy as np
+from matplotlib.pyplot import get_cmap
 """
 A few useful constants
 """
@@ -17,3 +18,16 @@ TEL_DIAM = {'iram': 30.,
             'gbt': 100.,
             'alma_400m': 400.,
             'alma_170m': 170.}
+
+# CPT_COLORS = ['blue', 'green', 'mediumorchid']
+# CPT_COLORS = [
+#     'blue', 'dodgerblue', 'deepskyblue',
+#     'orange',
+#     'gold',
+#     # 'yellow',
+#     'green',
+#     'purple', 'mediumorchid', 'pink']
+TAB20 = get_cmap('tab20')(np.linspace(0, 1, 20))
+PLOT_COLORS = np.concatenate([TAB20[:][::2], TAB20[:][1::2]])
+# PLOT_LINESTYLES = ['-', '--']
+PLOT_LINESTYLES = ['-', ':']

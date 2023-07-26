@@ -184,11 +184,30 @@ def delta_v_to_delta_f(value, fref_mhz, reverse=False):
         return value * 1.e3 * fref_mhz / C_LIGHT
 
 
-def velocity_to_frequency(value, fref_mhz, reverse=False, vref_kms=0.):
+def velocity_to_frequency(value, fref_mhz, vref_kms=0., reverse=False):
+    """
+    Convert a velocity to a frequency.
+    :param value: velocity to be converted, in the same unit as vref_kms (generally km/s)
+    :param fref_mhz:
+    :param vref_kms:
+    :param reverse: deprecated (kept for compatibility) ; use frequency_to_velocity
+    :return:
+    """
     if reverse:
-        return C_LIGHT * (1. - value / fref_mhz) * 1.e-3 + vref_kms
-    else:
-        return fref_mhz * (1. - (value - vref_kms) * 1.e3 / C_LIGHT)
+        return frequency_to_velocity(value, fref_mhz, vref_kms=vref_kms)
+    return fref_mhz * (1. - (value - vref_kms) * 1.e3 / C_LIGHT)
+
+
+def frequency_to_velocity(value, fref_mhz, vref_kms=0.):
+    return C_LIGHT * (1. - value / fref_mhz) * 1.e-3 + vref_kms
+
+
+def velo2freq(f_ref, vref_kms):
+    return lambda v: velocity_to_frequency(v, f_ref, vref_kms=vref_kms)
+
+
+def freq2velo(f_ref, vref_kms):
+    return lambda v: frequency_to_velocity(v, f_ref, vref_kms=vref_kms)
 
 
 def Teq(fmhz):
