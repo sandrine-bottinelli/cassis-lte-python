@@ -534,11 +534,11 @@ class ModelSpectrum:
 
         # lines from other species : if many other species, more efficient to first find all transitions
         # across entire observed range, then filter in each window
-        if len(list_other_species) > 0:
-            other_species_lines = get_transition_df(list_other_species, [[min(self.x_file), max(self.x_file)]],
-                                            **thresholds_other)
-        else:
-            other_species_lines = pd.DataFrame()  # empty dataframe
+        # if len(list_other_species) > 0:
+        other_species_lines = get_transition_df(list_other_species, [[min(self.x_file), max(self.x_file)]],
+                                                **thresholds_other)
+        # else:
+        #     other_species_lines = pd.DataFrame()  # empty dataframe
 
         # Compute model overall model : takes longer than cycling through windows unless strong overlap of windows (TBC)
         # self.y_mod = self.compute_model_intensities(params=plot_pars, x_values=self.x_mod,

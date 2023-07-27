@@ -6,6 +6,26 @@ from cassis_lte_python.database.species import get_species_info
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 
 
+# Define dictionary for query fields and corresponding column names in the dataframe for transitions
+# query can be on : ['id_transitions', 'fMHz', 'err', 'aint', 'elow', 'eup', 'igu', 'catdir_id', 'qn',
+# 'id_database', 'gamma_self', 'gamma_self_error']
+FIELDS = {
+    'id_transitions': 'db_id',
+    'fMHz': 'fMHz',
+    'err': 'f_err_mhz',
+    'aint': 'aij',
+    'elow': 'elow',
+    'eup': 'eup',
+    'igu': 'igu',
+    'catdir_id': 'catdir_id',
+    'qn': 'qn'
+}
+TRAN_COLNAME = 'transition'
+TAG_COLNAME = 'tag'
+SP_COLNAME = 'sp_name'
+TRAN_DF_COLS = [TRAN_COLNAME, TAG_COLNAME, SP_COLNAME] + list(FIELDS.values())
+
+
 class Transition:
     def __init__(self, tag, f_trans_mhz, aij, elo_cm, gup, sp_name='', f_err_mhz=None, db_id=None, qn=None):
         self.f_trans_mhz = f_trans_mhz
@@ -53,7 +73,7 @@ def get_transition_list(species: list | str, fmhz_ranges, database=DATABASE_SQL,
 
 def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, **thresholds):
     if len(species) == 0:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=TRAN_DF_COLS)
 
     species_list = [species] if type(species) is not list else species  # make sure it is a list
     tag_list = [str(sp) for sp in species_list]  # ensure it is a list of strings
@@ -65,9 +85,7 @@ def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, *
     # thresholds = {tag: {label: thresholds[tag].get(label, value)
     #                     for label, value in THRESHOLDS_DEF.items()} for tag in tag_list}
 
-    # query can be on : ['id_transitions', 'fMHz', 'err', 'aint', 'elow', 'eup', 'igu', 'catdir_id', 'qn',
-    # 'id_database', 'gamma_self', 'gamma_self_error']
-    fields = ['id_transitions', 'fMHz', 'err', 'aint', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
+    fields = FIELDS.keys()
 
     database = database.cursor()
     sp_transitions = []
@@ -108,15 +126,15 @@ def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, *
             sp_transitions.extend(all_rows)
 
     tran_dict = {c: [r[i] for r in sp_transitions] for i, c in enumerate(fields)}
-    tran_dict['tag'] = [sp_infos[cid]['speciesid'] for cid in tran_dict['catdir_id']]
-    tran_dict['sp_name'] = [sp_infos[cid]['name'] for cid in tran_dict['catdir_id']]
+    # tran_dict[TAG_COLNAME] = [sp_infos[cid]['speciesid'] for cid in tran_dict['catdir_id']]
+    # tran_dict[SP_COLNAME] = [sp_infos[cid]['name'] for cid in tran_dict['catdir_id']]
     tran_df = pd.DataFrame(tran_dict)
-    # df = pd.read_sql_query(cmd, database)
-    # df.insert(0, "tag", [tag] * len(df))
-    tran_df.insert(0, "transition", [Transition(row.tag, row.fMHz, row.aint, row.elow, row.igu,
+    tran_df.insert(0, SP_COLNAME, [sp_infos[cid]['name'] for cid in tran_dict['catdir_id']])
+    tran_df.insert(0, TAG_COLNAME, [sp_infos[cid]['speciesid'] for cid in tran_dict['catdir_id']])
+    tran_df.insert(0, TRAN_COLNAME, [Transition(row.tag, row.fMHz, row.aint, row.elow, row.igu,
                                                 f_err_mhz=row.err, sp_name=row.sp_name, db_id=row.id_transitions)
                                      for i, row in tran_df.iterrows()])
-    tran_df.rename(columns={'id_transitions': 'db_id', 'aint': 'aij', 'err': 'f_err_mhz'}, inplace=True)
+    tran_df.rename(columns={key: val for key, val in FIELDS.items() if key != val}, inplace=True)
     # if len(df) == 0:  # no transitions found, going to the next tag
     #     # print(f"No transitions found for tag {tag}.")
     #     continue
@@ -178,7 +196,7 @@ def select_transitions(tran_df: pd.DataFrame, thresholds: dict | None = None, xr
     if len(thresholds) == 0:
         return tran_df
     else:
-        res = pd.DataFrame()
+        res = pd.DataFrame(columns=tran_df.columns)
         for tag, thres in thresholds.items():
             selected = tran_df[tran_df.tag == tag]
             if bright_lines_only:
