@@ -135,6 +135,9 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                     handlelength=0, handletextpad=0, fancybox=True)
     for item in leg.legendHandles:
         item.set_visible(False)
+    for text in leg.get_texts():
+        col = lte_model.tag_colors[text.get_text()]
+        text.set_color(col)
 
     sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
                         # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
@@ -146,6 +149,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                         handlelength=0, handletextpad=0, fancybox=True)
     for text in sat_leg.get_texts():
         text.set_fontstyle("italic")
+        col = win.other_species_display[win.other_species_display.tag == text.get_text()].color.values[0]
+        text.set_color(col)
 
     for item in sat_leg.legendHandles:
         item.set_visible(False)
