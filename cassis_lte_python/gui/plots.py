@@ -310,63 +310,96 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     #         print(t)
     #     print(" ")
 
-    if filename is not None:  # save to file
+    if nplots == 0:
+        raise IndexError("Nothing to plot.")
+
+    nplots = 13
+    # nx = int(np.ceil(np.sqrt(nplots)))
+    # ny = int(np.ceil(nplots / nx))
+    if nplots == 1:
+        nx, ny = 1, 1
+    else:
+        nx, ny = nrows, ncols
+    # nx = 4
+    # ny = 3
+
+    # determine if more than one page
+    nb_pages = int(np.ceil(nplots / (nx * ny)))
+    if nb_pages == 1:  # one page : keep user's extension
         file_path = lte_model.set_filepath(filename, dirname=dirname)
+    else:
+        file_path = lte_model.set_filepath(filename, dirname=dirname, ext='pdf')
 
-        if verbose:
-            print("\nSaving plot to {} \n...".format(file_path))
+    if verbose:
+        print("\nSaving plot to {} \n...".format(file_path))
 
-        # nplots = 30
-        # nx = int(np.ceil(np.sqrt(nplots)))
-        # ny = int(np.ceil(nplots / nx))
-        if nplots == 1:
-            nx, ny = 1, 1
-        else:
-            nx, ny = nrows, ncols
-        # nx = 4
-        # ny = 3
-        scale = 4
-        fig, axes = plt.subplots(nx, ny, figsize=(nx * scale, ny * scale), dpi=dpi)
-        ax2 = None
+    scale = 4
+    fig, axes = plt.subplots(nx, ny, figsize=(nx * scale, ny * scale), dpi=dpi)
+    axes2 = []
+    ax2 = None
 
+    # Draw first page
+    for i in range(nx * ny):
+        ax = fig.axes[i]
+        if i >= nplots:
+            ax.set_frame_on(False)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            # NB: could use ax.set_visible(False), but this changes the figure's layout -> ok?
+            continue
+        ax2 = ax.twiny()
+        ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
+        ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+        axes2.append(ax2)
+        # ax2 = ax.secondary_xaxis('top',
+        #                          functions=(velo2freq(win.transition.f_trans_mhz, lte_model.vlsr_file),
+        #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
+        # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
+        ax.xaxis.set_major_locator(plt.MaxNLocator(4))
+        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+
+        win = lte_model.win_list_plot[i]
+        plot_window(lte_model, win, ax=ax, ax2=ax2)
+
+    if nb_pages == 1:
+        fig.savefig(file_path, bbox_inches='tight', dpi=dpi)
+
+    else:
         with PdfPages(file_path) as pdf:
-            for i in range(nplots):
-                win = lte_model.win_list_plot[i]
-                ax = fig.axes[i % (nx * ny)]
-                # Clear elements from the selected axis :
-                ax.clear()  # takes longer than clearing individual elements but
-                # clearing individual elements produces an error in some environments??? - TBC
-                # ax.lines.clear()
-                # ax.texts.clear()
-                # ax.patches.clear()
-
-                if i / (nx * ny) < 1:  # page 1: define number of ticks and call secondary axis
-                    ax2 = ax.twiny()
-                    ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
-                    ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-
-                    # ax2 = ax.secondary_xaxis('top',
-                    #                          functions=(velo2freq(win.transition.f_trans_mhz, lte_model.vlsr_file),
-                    #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
-                    # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
-                    ax.xaxis.set_major_locator(plt.MaxNLocator(4))
-                    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-                    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-
-                if i >= nplots:
-                    ax.set_frame_on(False)
-                    ax.set_xticks([])
-                    ax.set_yticks([])
-                    continue
-
-                plot_window(lte_model, win, ax=ax, ax2=ax2)
-
-                if i % (nx * ny) == (nx * ny - 1):
-                    pdf.savefig(fig)
-            # last page
+            # save first page
             pdf.savefig(fig)
-            plt.close()
-        #     # fig.savefig(file_path, bbox_inches='tight', dpi=dpi)
+            # plot and save pages 2+
+            for p in range(1, nb_pages):
+                for i in range(nx * ny):
+                    ax = fig.axes[i]
+                    ax2 = axes2[i]
+                    # Clear elements from the selected axis :
+                    ax.clear()  # takes longer than clearing individual elements but
+                    # clearing individual elements produces an error in some environments??? - TBC
+                    # ax.lines.clear()
+                    # ax.texts.clear()
+                    # ax.patches.clear()
 
-        if verbose:
-            print("Done\n")
+                    plot_ind = p * nx * ny + i
+                    if plot_ind >= nplots:
+                        ax.set_frame_on(False)
+                        ax.set_xticks([])
+                        ax.set_yticks([])
+                        if ax2 is not None:
+                            ax2.set_frame_on(False)
+                            ax2.set_xticks([])
+                            ax2.set_yticks([])
+                        continue
+
+                    win = lte_model.win_list_plot[plot_ind]
+                    plot_window(lte_model, win, ax=ax, ax2=ax2)
+
+                pdf.savefig(fig)
+        # last page
+        # pdf.savefig(fig)
+        plt.close()
+    #     # fig.savefig(file_path, bbox_inches='tight', dpi=dpi)
+
+    if verbose:
+        print("Done\n")
