@@ -479,6 +479,8 @@ class Window:
         self.y_mod_cpt = None
         self.bottom_unit = 'MHz'
         self.top_unit = 'MHz'
+        self.bottom_lim = None
+        self.top_lim = None
         self.x_mod_plot = None
         self.x_file_plot = None
         self._x_file = None

@@ -48,6 +48,10 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     :return:
     """
 
+    ax.xaxis.set_major_locator(plt.MaxNLocator(4))
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+
     # plot range used for chi2 calculation
     v_range = win.v_range_fit
     if v_range is not None:
@@ -69,12 +73,12 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         ymax += 0.001  # arbitrary
     ax.set_ylim(ymin, ymax)
     dy = ymax - ymin
-    xmin, xmax = ax.get_xlim()
+
+    ax.set_xlim(win.bottom_lim)
+    xmin, xmax = win.bottom_lim
 
     if ax2 is not None:
-        xmin2, xmax2 = [velocity_to_frequency(x, win.transition.f_trans_mhz, lte_model.cpt_list[0].vlsr)
-                        for x in [xmin, xmax]]
-        ax2.set_xlim(xmin2, xmax2)
+        ax2.set_xlim(win.top_lim)
 
     # write transition number (center, bottom)
     if number:
@@ -181,9 +185,6 @@ def gui_plot(lte_model):
     # root.rowconfigure(1, weight=1)
 
     fig, ax = plt.subplots(1, 1, figsize=(5, 4))
-    ax.xaxis.set_major_locator(plt.MaxNLocator(4))
-    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
     ax2 = ax.twiny()
     ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
@@ -364,10 +365,6 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         # ax2 = ax.secondary_xaxis('top',
         #                          functions=(velo2freq(win.transition.f_trans_mhz, lte_model.vlsr_file),
         #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
-        # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
-        ax.xaxis.set_major_locator(plt.MaxNLocator(4))
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
         win = lte_model.win_list_plot[i]
         plot_window(lte_model, win, ax=ax, ax2=ax2)

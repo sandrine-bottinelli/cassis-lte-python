@@ -523,6 +523,7 @@ class ModelSpectrum:
         plot_pars = self.plot_pars()
         vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
         fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
+        padding = 0.05
 
         self.update_parameters(params=plot_pars)
 
@@ -552,11 +553,15 @@ class ModelSpectrum:
             win.f_range_plot = [velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
                                 for v in win.v_range_plot]
             win.bottom_unit = 'km/s'
+            dx1 = max(win.v_range_plot) - min(win.v_range_plot)
+            win.bottom_lim = (min(win.v_range_plot) - padding * dx1, max(win.v_range_plot) + padding * dx1)
+            win.top_lim = (velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
+                           for v in win.v_range_plot)
 
             # all transitions in the window (no thresholds) :
             fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
             model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 2 * fwhm_mhz,
-                                                              max(win.f_range_plot) + 2 * fwhm_mhz])
+                                                                max(win.f_range_plot) + 2 * fwhm_mhz])
             # all_lines_win = select_transitions(self.line_list_all, xrange=[min(win.f_range_plot) - 2 * fwhm_mhz,
             #                                                                max(win.f_range_plot) + 2 * fwhm_mhz])
 
