@@ -113,14 +113,14 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                            color=row.color, label=row.label, linewidth=lw, linestyle=ls)
 
     # store labels and handles for all lines and keep only those corresponding to the other species
-    handles, labels = ax.get_legend_handles_labels()
-    labels = labels[len(mainLabels):]
-    handles = handles[len(mainHandles):]
+    handles_all, labels_all = ax.get_legend_handles_labels()
+    labels = labels_all[len(mainLabels):]
+    handles = handles_all[len(mainHandles):]
 
     # keep unique labels
     newLabels, newHandles = [], []  # for main lines
     satLabels, satHandles = [], []  # for satellites lines
-    for handle, label in zip(handles, labels):
+    for handle, label in zip(handles_all, labels_all):
         if label in mainLabels and label not in newLabels:
             newLabels.append(label)
             newHandles.append(handle)
@@ -133,6 +133,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                     loc='upper left',
                     fontsize='small',
                     handlelength=0, handletextpad=0, fancybox=True)
+    for item in leg.legendHandles:
+        item.set_visible(False)
 
     sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
                         # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
@@ -144,6 +146,9 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                         handlelength=0, handletextpad=0, fancybox=True)
     for text in sat_leg.get_texts():
         text.set_fontstyle("italic")
+
+    for item in sat_leg.legendHandles:
+        item.set_visible(False)
 
     # Manually add the first legend back
     ax.add_artist(leg)
@@ -313,7 +318,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if nplots == 0:
         raise IndexError("Nothing to plot.")
 
-    nplots = 13
+    # nplots = 13
     # nx = int(np.ceil(np.sqrt(nplots)))
     # ny = int(np.ceil(nplots / nx))
     if nplots == 1:
@@ -336,7 +341,6 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     scale = 4
     fig, axes = plt.subplots(nx, ny, figsize=(nx * scale, ny * scale), dpi=dpi)
     axes2 = []
-    ax2 = None
 
     # Draw first page
     for i in range(nx * ny):
@@ -347,6 +351,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
             ax.set_yticks([])
             # NB: could use ax.set_visible(False), but this changes the figure's layout -> ok?
             continue
+        # ax2 = None
         ax2 = ax.twiny()
         ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
         ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
