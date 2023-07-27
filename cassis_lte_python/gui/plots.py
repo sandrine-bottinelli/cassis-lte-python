@@ -219,10 +219,8 @@ def gui_plot(lte_model):
         """
         # get selected indices
         iwin = event.widget.curselection()[0]
-        # update fig
-        ax.lines.clear()
-        ax.texts.clear()
-        ax.patches.clear()
+        # clear axis
+        ax.clear()
         plot_window(lte_model, lte_model.win_list_plot[iwin], ax, ax2=ax2)
         canvas.draw_idle()
         # canvas.flush_events()
@@ -336,10 +334,11 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
                 win = lte_model.win_list_plot[i]
                 ax = fig.axes[i % (nx * ny)]
                 # Clear elements from the selected axis :
-                # ax.clear()  # takes longer than clearing individual elements - TBC
-                ax.lines.clear()
-                ax.texts.clear()
-                ax.patches.clear()
+                ax.clear()  # takes longer than clearing individual elements but
+                # clearing individual elements produces an error in some environments??? - TBC
+                # ax.lines.clear()
+                # ax.texts.clear()
+                # ax.patches.clear()
 
                 if i / (nx * ny) < 1:  # page 1: define number of ticks and call secondary axis
                     ax2 = ax.twiny()
