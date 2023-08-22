@@ -476,7 +476,7 @@ class Window:
         self._in_fit = False
         self._x_mod = None
         self._y_mod = None
-        self.y_mod_cpt = None
+        self.y_mod_cpt = []
         self.bottom_unit = 'MHz'
         self.top_unit = 'MHz'
         self.bottom_lim = None
