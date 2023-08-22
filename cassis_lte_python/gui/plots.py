@@ -110,7 +110,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
 
     # other species :
     y_pos_other = ymin + (ymax - ymin) * np.array([0., 0.075])
-    lw = 0.75
+    lw = 1.5
     ls = '-'
     for irow, row in win.other_species_display.iterrows():
         plot_line_position(ax, row.x_pos, y_pos_other, row.x_pos_err,
@@ -135,7 +135,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                     bbox_to_anchor=(xmin, y_pos[1] - 0.01 * (ymax - ymin)),
                     bbox_transform=ax.transData,
                     loc='upper left',
-                    fontsize='small',
+                    fontsize='large',
                     handlelength=0, handletextpad=0, fancybox=True)
     for item in leg.legendHandles:
         item.set_visible(False)
@@ -149,7 +149,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                         bbox_to_anchor=(xmax, y_pos_other[1] + 0.01 * (ymax - ymin)),
                         bbox_transform=ax.transData,
                         loc='lower right',
-                        fontsize='small',
+                        fontsize='large',
                         handlelength=0, handletextpad=0, fancybox=True)
     for text in sat_leg.get_texts():
         text.set_fontstyle("italic")
