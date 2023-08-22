@@ -555,8 +555,8 @@ class ModelSpectrum:
             win.bottom_unit = 'km/s'
             dx1 = max(win.v_range_plot) - min(win.v_range_plot)
             win.bottom_lim = (min(win.v_range_plot) - padding * dx1, max(win.v_range_plot) + padding * dx1)
-            win.top_lim = (velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
-                           for v in win.v_range_plot)
+            win.top_lim = [velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
+                           for v in win.v_range_plot]
 
             # all transitions in the window (no thresholds) :
             fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
