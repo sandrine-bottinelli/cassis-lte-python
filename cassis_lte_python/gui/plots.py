@@ -94,12 +94,6 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         for irow, row in win.main_lines_display[icpt].iterrows():
             plot_line_position(ax, row.x_pos, y_pos, row.x_pos_err,
                                color=row.color, label=row.label, linewidth=lw)
-        # other lines : compute vertical positions, shifting up for each component
-        y_pos_other = ymin + (ymax - ymin) * np.array([0., 0.075])
-        lw = 0.75
-        for irow, row in win.other_lines_display[icpt].iterrows():
-            plot_line_position(ax, row.x_pos, y_pos_other, row.x_pos_err,
-                               color=row.color, label=row.label, linewidth=lw)
 
         if len(lte_model.cpt_list) > 1:
             ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
@@ -142,6 +136,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     for text in leg.get_texts():
         col = lte_model.tag_colors[text.get_text()]
         text.set_color(col)
+        text.set_weight('bold')
 
     sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
                         # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
@@ -155,6 +150,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         text.set_fontstyle("italic")
         col = win.other_species_display[win.other_species_display.tag == text.get_text()].color.values[0]
         text.set_color(col)
+        text.set_weight('bold')
 
     for item in sat_leg.legendHandles:
         item.set_visible(False)
