@@ -594,12 +594,8 @@ class ModelSpectrum:
             # transitions from other species :
             other_species_win = select_transitions(other_species_lines,
                                                    xrange=[min(win.f_range_plot), max(win.f_range_plot)])
-            # try:
-            #     other_species_display = pd.concat([all_lines_display, bright_lines,
-            #                                        other_lines_win]).drop_duplicates(subset='db_id', keep=False)
-            # except IndexError:
-            #     other_species_display = pd.DataFrame()  # empty dataframe
-            #
+            other_species_win = pd.concat([model_lines_user, model_lines_win,
+                                           other_species_win]).drop_duplicates(subset='db_id', keep=False)
 
             for icpt, cpt in enumerate(self.cpt_list):
                 # build list of dataframes containing lines to be plotted for each component
