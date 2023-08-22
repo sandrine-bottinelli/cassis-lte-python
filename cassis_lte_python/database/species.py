@@ -92,7 +92,7 @@ class Species:
         # tmp = find_nearest_id(self.pf[0], tex)
         # tmp = self.pf[1][tmp]
         qex = power(10., tmp)
-        return get_partition_function_tex(self.pf[0], self.pf[1], tex)
+        return get_partition_function_tex(self.pf[0], self.pf[1], tex, tag=self.tag)
 
 
 def get_species_thresholds(sp_threshold_infos: list | dict | str | os.PathLike,
@@ -177,16 +177,16 @@ def get_partition_function(tag, db=DATABASE_SQL.cursor(), temp=None):
     if temp is None:
         return tref, qlog
     else:
-        return get_partition_function_tex(tref, qlog, temp)
+        return get_partition_function_tex(tref, qlog, temp, tag=tag)
 
 
-def get_partition_function_tex(tref, qlog, temp):
-    if temp <= tref[0]:
-        print(f'{temp} is below the lowest temperature of the partition function ({tref[0]}) : '
+def get_partition_function_tex(tref, qlog, temp, tag=''):
+    if temp < tref[0]:
+        print(f'Tag {tag}: {temp} is below the lowest temperature of the partition function ({tref[0]}) : '
               f'setting Q({temp}K)=Q({tref[0]}K)')
         return power(10., qlog[0])
-    if temp >= tref[-1]:
-        print(f'{temp} is above the highest temperature of the partition function ({tref[-1]}) : '
+    if temp > tref[-1]:
+        print(f'Tag {tag}: {temp} is above the highest temperature of the partition function ({tref[-1]}) : '
               f'setting Q({temp}K)=Q({tref[-1]}K)')
         return power(10., qlog[-1])
     for i, t in enumerate(tref[:-1]):
