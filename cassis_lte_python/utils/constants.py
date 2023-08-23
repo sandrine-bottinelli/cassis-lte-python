@@ -27,7 +27,9 @@ TEL_DIAM = {'iram': 30.,
 #     # 'yellow',
 #     'green',
 #     'purple', 'mediumorchid', 'pink']
-TAB20 = get_cmap('tab20')(np.linspace(0, 1, 20))
-PLOT_COLORS = np.concatenate([TAB20[:][::2], TAB20[:][1::2]])
+# TAB = get_cmap('tab20')(np.linspace(0, 1, 20))
+# PLOT_COLORS = np.concatenate([TAB[:][::2], TAB[:][1::2]])
+TAB = get_cmap('Paired')(np.linspace(0, 1, 12))
+PLOT_COLORS = np.concatenate([TAB[:][1::2], TAB[:][::2]])
 # PLOT_LINESTYLES = ['-', '--']
 PLOT_LINESTYLES = ['-', ':']

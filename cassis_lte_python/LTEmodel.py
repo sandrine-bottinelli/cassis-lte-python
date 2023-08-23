@@ -587,32 +587,37 @@ class ModelSpectrum:
             other_species_win = pd.concat([model_lines_other,
                                            other_species_win_all]).drop_duplicates(subset='db_id', keep='first')
 
+            win_colors = {t: PLOT_COLORS[itag] for itag, t in enumerate(model_lines_user.tag.unique())}
             for icpt, cpt in enumerate(self.cpt_list):
                 # build list of dataframes containing lines to be plotted for each component
                 win.main_lines_display[icpt] = self.get_lines_plot_params(
-                    model_lines_user[model_lines_user['tag'].isin(cpt.tag_list)], cpt, f_ref)
-                win.other_lines_display[icpt] = self.get_lines_plot_params(
-                    model_lines_other[model_lines_other['tag'].isin(cpt.tag_list)], cpt, f_ref)
+                    model_lines_user[model_lines_user['tag'].isin(cpt.tag_list)], cpt, f_ref, tag_colors=win_colors)
+                # win.other_lines_display[icpt] = self.get_lines_plot_params(
+                #     model_lines_other[model_lines_other['tag'].isin(cpt.tag_list)], cpt, f_ref, tag_colors=win_colors)
 
-            # line plot parameters for other species (not component-dependent)
-            tag_other_sp_colors = {t: PLOT_COLORS[(itag + len(self.tag_colors)) % len(PLOT_COLORS)]
-                                   for itag, t in enumerate(other_species_win.tag)}
+            # line plot parameters for other lines and other species (not component-dependent)
+            plot_colors_sub = PLOT_COLORS[len(win_colors):]
+            icol = 0
+            for itag, t in enumerate(other_species_win.tag.unique()):
+                if t not in win_colors.keys():
+                    win_colors[t] = plot_colors_sub[icol % len(plot_colors_sub)]
+                    icol += 1
+
             if len(other_species_win) > 0:
                 win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
                                                                        tag_colors=tag_other_sp_colors)
 
     def get_lines_plot_params(self, line_list: pd.DataFrame, cpt: Component, f_ref: float,
-                              tag_colors: dict = None):
+                              tag_colors: dict):
 
-        colors = self.tag_colors if tag_colors is None else tag_colors
+        colors = tag_colors
         lines_plot_params = line_list.copy()
         lines_plot_params['x_pos'] = [frequency_to_velocity(row.fMHz, f_ref, vref_kms=cpt.vlsr)
                                       for i, row in lines_plot_params.iterrows()]
         lines_plot_params['x_pos_err'] = [delta_v_to_delta_f(row.f_err_mhz, f_ref, reverse=True)
                                           for i, row in lines_plot_params.iterrows()]
         lines_plot_params['label'] = [row.tag for i, row in lines_plot_params.iterrows()]
-        lines_plot_params['color'] = [self.tag_colors[row.tag] if row.tag in self.tag_colors.keys()
-                                      else colors[row.tag] for i, row in lines_plot_params.iterrows()]
+        lines_plot_params['color'] = [colors[row.tag] for i, row in lines_plot_params.iterrows()]
 
         return lines_plot_params
 
