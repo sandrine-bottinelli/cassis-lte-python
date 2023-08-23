@@ -605,7 +605,19 @@ class ModelSpectrum:
 
             if len(other_species_win) > 0:
                 win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
-                                                                       tag_colors=tag_other_sp_colors)
+                                                                       tag_colors=win_colors)
+
+        # save line list
+        # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
+        cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'qn']
+        with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+            for win in self.win_list_plot:
+                f.write(f"{win.name} : model species within thresholds\n")
+                f.writelines(win.main_lines_display[0][cols].to_string(index=False))
+                f.write("\n\n")
+                f.write(f"{win.name} : model species outside thresholds and other species within thresholds\n")
+                f.writelines(win.other_species_display[cols].to_string(index=False))
+                f.write("\n\n")
 
     def get_lines_plot_params(self, line_list: pd.DataFrame, cpt: Component, f_ref: float,
                               tag_colors: dict):
