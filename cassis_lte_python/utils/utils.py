@@ -1,6 +1,6 @@
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H
 
-from numpy import exp, genfromtxt, array, log, log10, abs, linspace, append, interp, sqrt, pi, empty, where
+from numpy import exp, genfromtxt, array, log, log10, abs, linspace, append, interp, sqrt, pi, empty, where, ndarray
 import os
 import astropy.io.fits as fits
 from astropy import units as u
@@ -86,15 +86,22 @@ def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=3):
     return f.format(value)
 
 
-def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
+def select_from_ranges(x_values, ranges, y_values=None, oversampling=None, extend=False):
     if type(ranges[0]) is not list:
         ranges = [ranges]
+
     x_new = []
-    if y_values is not None:
-        y_new = []
-        df = pd.DataFrame({"x": x_values, "y": y_values})
+    y_new = []
+
     for x_range in ranges:
-        x_sub = x_values[(x_values >= min(x_range)) & (x_values <= max(x_range))]
+        imin = find_nearest_id(x_values, min(x_range))
+        imax = find_nearest_id(x_values, max(x_range))
+        if extend:
+            if x_values[imin] > min(x_range) and imin > 0:
+                imin = imin - 1
+            if x_values[imax] < max(x_range) and imax < len(x_values):
+                imax = imax + 1
+        x_sub = x_values[imin:imax+1]
         if len(x_sub) == 0:
             continue
         xmin, xmax = min(x_sub), max(x_sub)
@@ -108,21 +115,32 @@ def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
     return x_new, y_new if y_values is not None else x_new
 
 
-def find_nearest(array, value):
-    idx = (abs(array - value)).argmin()
-    return array[idx]
+def find_nearest(arr, value):
+    """
+    Find the value in "arr" that is closest to "value".
+    :param arr:
+    :param value:
+    :return:
+    """
+    idx = find_nearest_id(arr, value)
+    return arr[idx]
 
 
-def find_nearest_id(array, value):
-    if isinstance(array, list):
-        array = array(array)
-    return (abs(array - value)).argmin()
+def find_nearest_id(arr: ndarray | list, value):
+    """
+    Find the index of the value in "arr" that is closest to "value".
+    :param arr:
+    :param value:
+    :return:
+    """
+    if isinstance(arr, list):
+        arr = array(arr)
+
+    return (abs(arr - value)).argmin()
 
 
 def find_nearest_trans(trans_list, value):
-    f_trans_list = []
-    for tr in trans_list:
-        f_trans_list.append(tr.f_trans_mhz)
+    f_trans_list = [tr.f_trans_mhz for tr in trans_list]
     idx = (abs(array(f_trans_list) - value)).argmin()
     return trans_list[idx]
 

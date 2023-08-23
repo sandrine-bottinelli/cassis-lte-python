@@ -297,7 +297,7 @@ class ModelConfiguration:
                     f_range_plot.sort()
                     x_win, y_win = None, None
                     if self.x_file is not None:
-                        x_win, y_win = select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
+                        x_win, y_win = select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file, extend=True)
                         if len(x_win) < 5 or len(set(y_win)) == 1:
                             continue
                     win = Window(tr, len(win_list_tag) + 1)
