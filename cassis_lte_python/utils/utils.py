@@ -170,6 +170,22 @@ def read_noise_info(noise_file):
     return noise_info
 
 
+def compute_weight(intensity, rms, cal):
+    """
+    Returns the weight as 1./sqrt(rms**2 + cal_uncertainty**2) where cal_uncertainty is the calibration uncertainty
+    in percent * the intensity at the given frequency.
+    :param intensity: intensity
+    :param rms: noise for the given intensity, in the same units
+    :param cal: calibration uncertainty in percent
+    :return: 1. / sqrt(rms**2 + cal_uncertainty**2)
+    """
+    for arg in [intensity, rms, cal]:
+        if isinstance(arg, list):  # convert to numpy array if list
+            arg = array(arg)
+    cal = cal / 100.
+    return 1. / sqrt(rms**2 + (cal * intensity)**2)
+
+
 def fwhm_to_sigma(value, reverse=False):
     if reverse:
         return value * (2. * sqrt(2. * log(2.)))

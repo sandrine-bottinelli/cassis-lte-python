@@ -2,7 +2,7 @@ from cassis_lte_python.utils.utils import get_telescope, get_beam_size, get_tmb2
 from cassis_lte_python.utils.utils import get_valid_pixels, reduce_wcs_dim
 from cassis_lte_python.utils.utils import format_float, is_in_range, select_from_ranges, find_nearest_id
 from cassis_lte_python.utils.utils import velocity_to_frequency, frequency_to_velocity, \
-    fwhm_to_sigma, delta_v_to_delta_f
+    fwhm_to_sigma, delta_v_to_delta_f, compute_weight
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SQLITE_FILE
@@ -10,7 +10,7 @@ from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, TEL_DIAM
 from cassis_lte_python.utils.constants import PLOT_COLORS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
-from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log
+from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log, concatenate
 from numpy.random import normal
 from lmfit import Model, Parameters
 from scipy import stats, signal
@@ -296,20 +296,6 @@ class ModelSpectrum:
 
         return rms if len(rms) > 1 else rms[0]
 
-    def get_weight(self, fmhz, intensity=0.):
-        """
-        Returns the weight as 1./sqrt(rms**2 + cal_uncertainty**2) where cal_uncertainty is the calibration uncertainty
-        in percent * the intensity at the given frequency.
-        :param fmhz: frequency in MHz
-        :param intensity: intensity at fmhz
-        :return: 1. / sqrt(rms**2 + cal_uncertainty**2)
-        """
-        for win in self.win_list_fit:
-            if min(win.f_range_fit) <= fmhz <= max(win.f_range_fit):
-                rms = win.rms
-                cal = win.cal / 100.
-                return 1. / sqrt(rms**2 + (cal * intensity)**2)
-
     def get_params2fit(self, normalize=False):
         params2fit = Parameters()
 
@@ -372,8 +358,7 @@ class ModelSpectrum:
         if self.model is None:
             self.generate_lte_model(normalize=normalize)
 
-        wt = array([self.get_weight(x, intensity=y)
-                    for x, y in zip(self.x_fit, self.y_fit - self.get_tc(self.x_fit))])
+        wt = concatenate([compute_weight(win.y_fit, win.rms, win.cal) for win in self.win_list_fit], axis=None)
         # wt = None
         self.model_fit = self.model.fit(self.y_fit, params=self.params2fit, fmhz=self.x_fit,
                                         weights=wt,
