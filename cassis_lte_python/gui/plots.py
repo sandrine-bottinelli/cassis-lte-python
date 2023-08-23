@@ -131,7 +131,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                     bbox_to_anchor=(0.125, 0.85),
                     bbox_transform=plt.gcf().transFigure,
                     loc='upper left',
-                    fontsize='large',
+                    # fontsize='large',
                     handlelength=0, handletextpad=0, fancybox=True)
     for item in leg.legendHandles:
         item.set_visible(False)
@@ -148,7 +148,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                         bbox_to_anchor=(0.9, 0.15),
                         bbox_transform=plt.gcf().transFigure,
                         loc='lower right',
-                        fontsize='large',
+                        # fontsize='large',
                         handlelength=0, handletextpad=0, fancybox=True)
     for text in sat_leg.get_texts():
         text.set_fontstyle("italic")
@@ -174,7 +174,7 @@ def plot_line_position(x_axis, x_pos, y_range, x_pos_err, err_color=None, **kwar
 
 def gui_plot(lte_model):
     fontsize = 12
-    # plt.rc('font', size=fontsize)
+    plt.rc('font', size=fontsize)
     plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
     plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
     plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
