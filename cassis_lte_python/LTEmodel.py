@@ -609,7 +609,7 @@ class ModelSpectrum:
 
         # save line list
         # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
-        cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'qn']
+        cols = ['tag', 'sp_name', 'x_pos', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'qn']
         with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
             for win in self.win_list_plot:
                 f.write(f"{win.name} : model species within thresholds\n")
