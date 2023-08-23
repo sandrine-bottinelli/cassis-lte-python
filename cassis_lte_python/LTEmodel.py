@@ -535,13 +535,13 @@ class ModelSpectrum:
             tr = win.transition
             f_ref = tr.f_trans_mhz
             win.v_range_plot = [-self.bandwidth / 2 + vlsr, self.bandwidth / 2 + vlsr]
-            win.f_range_plot = [velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
+            win.f_range_plot = [velocity_to_frequency(v, f_ref, vref_kms=vlsr)
                                 for v in win.v_range_plot]
             win.bottom_unit = 'km/s'
             dx1 = max(win.v_range_plot) - min(win.v_range_plot)
-            win.bottom_lim = (min(win.v_range_plot) - padding * dx1, max(win.v_range_plot) + padding * dx1)
-            win.top_lim = [velocity_to_frequency(v, f_ref, vref_kms=self.vlsr_file)
-                           for v in win.v_range_plot]
+            win.bottom_lim = [min(win.v_range_plot) - padding * dx1, max(win.v_range_plot) + padding * dx1]
+            win.top_lim = [velocity_to_frequency(v, f_ref, vref_kms=vlsr)
+                           for v in win.bottom_lim]
 
             # all transitions in the window (no thresholds) :
             fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
