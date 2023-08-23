@@ -594,12 +594,13 @@ class ModelSpectrum:
             # transitions from other species :
             other_species_win_all = select_transitions(other_species_lines,
                                                        xrange=[min(win.f_range_plot), max(win.f_range_plot)])
-            # concatenate, keeping first occurrence of duplicates
+            # remove main lines
+            other_species_win_all = pd.concat([model_lines_user,
+                                               other_species_win_all]).drop_duplicates(subset='db_id', keep=False)
+
+            # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
             other_species_win = pd.concat([model_lines_other,
                                            other_species_win_all]).drop_duplicates(subset='db_id', keep='first')
-            # remove main lines
-            other_species_win = pd.concat([model_lines_user,
-                                           other_species_win]).drop_duplicates(subset='db_id', keep=False)
 
             for icpt, cpt in enumerate(self.cpt_list):
                 # build list of dataframes containing lines to be plotted for each component
