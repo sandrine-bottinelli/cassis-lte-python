@@ -55,7 +55,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     # plot range used for chi2 calculation
     v_range = win.v_range_fit
     if v_range is not None:
-        ax.axvspan(v_range[0], v_range[1], facecolor='purple', alpha=0.05)
+        ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.15)
 
     # Plot data and/or model
     if win.x_file is not None:
@@ -125,6 +125,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         elif label in labels and label not in satLabels:
             satLabels.append(label)
             satHandles.append(handle)
+    # upper left legend
     leg = ax.legend(newHandles, newLabels, labelcolor='linecolor', frameon=False,
                     # bbox_to_anchor=(xmin, y_pos[1] - 0.01 * (ymax - ymin)),
                     # bbox_transform=ax.transData,
@@ -140,12 +141,13 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         text.set_color(col)
         text.set_weight('bold')
 
+    # lower right legend
     sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
                         # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
                         # bbox_transform=ax.transData, loc='upper right',
                         # bbox_to_anchor=(xmax, y_pos_other[1] + 0.01 * (ymax - ymin)),
                         # bbox_transform=ax.transData,
-                        bbox_to_anchor=(0.9, 0.15),
+                        bbox_to_anchor=(0.9, 0.25),
                         bbox_transform=plt.gcf().transFigure,
                         loc='lower right',
                         # fontsize='large',
@@ -173,7 +175,7 @@ def plot_line_position(x_axis, x_pos, y_range, x_pos_err, err_color=None, **kwar
 
 
 def gui_plot(lte_model):
-    fontsize = 12
+    fontsize = 16
     plt.rc('font', size=fontsize)
     plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
     plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
@@ -183,7 +185,7 @@ def gui_plot(lte_model):
 
     root = tkinter.Tk()
     root.wm_title("LTEmodel - Results")
-    root.geometry("700x500")
+    root.geometry("1000x700")
     # root.columnconfigure(0, weight=1)
     # root.columnconfigure(1, weight=3)
     # root.rowconfigure(0, weight=3)
