@@ -48,7 +48,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     :return:
     """
 
-    ax.xaxis.set_major_locator(plt.MaxNLocator(4))
+    # ax.xaxis.set_major_locator(plt.MaxNLocator(4))
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
@@ -183,7 +183,7 @@ def gui_plot(lte_model):
     fig, ax = plt.subplots(1, 1, figsize=(5, 4))
 
     ax2 = ax.twiny()
-    ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
+    # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
     ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
 
     plot_window(lte_model, lte_model.win_list_plot[0], ax, ax2=ax2)
@@ -355,7 +355,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
             continue
         # ax2 = None
         ax2 = ax.twiny()
-        ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
+        # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
         ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
         axes2.append(ax2)
         # ax2 = ax.secondary_xaxis('top',
