@@ -126,8 +126,10 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
             satLabels.append(label)
             satHandles.append(handle)
     leg = ax.legend(newHandles, newLabels, labelcolor='linecolor', frameon=False,
-                    bbox_to_anchor=(xmin, y_pos[1] - 0.01 * (ymax - ymin)),
-                    bbox_transform=ax.transData,
+                    # bbox_to_anchor=(xmin, y_pos[1] - 0.01 * (ymax - ymin)),
+                    # bbox_transform=ax.transData,
+                    bbox_to_anchor=(0.125, 0.85),
+                    bbox_transform=plt.gcf().transFigure,
                     loc='upper left',
                     fontsize='large',
                     handlelength=0, handletextpad=0, fancybox=True)
@@ -141,8 +143,10 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
                         # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
                         # bbox_transform=ax.transData, loc='upper right',
-                        bbox_to_anchor=(xmax, y_pos_other[1] + 0.01 * (ymax - ymin)),
-                        bbox_transform=ax.transData,
+                        # bbox_to_anchor=(xmax, y_pos_other[1] + 0.01 * (ymax - ymin)),
+                        # bbox_transform=ax.transData,
+                        bbox_to_anchor=(0.9, 0.15),
+                        bbox_transform=plt.gcf().transFigure,
                         loc='lower right',
                         fontsize='large',
                         handlelength=0, handletextpad=0, fancybox=True)
@@ -169,6 +173,11 @@ def plot_line_position(x_axis, x_pos, y_range, x_pos_err, err_color=None, **kwar
 
 
 def gui_plot(lte_model):
+    fontsize = 12
+    # plt.rc('font', size=fontsize)
+    plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
+    plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
     nplots = len(lte_model.win_list_plot)
 
