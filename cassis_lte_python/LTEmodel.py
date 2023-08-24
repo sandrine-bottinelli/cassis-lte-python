@@ -516,6 +516,10 @@ class ModelSpectrum:
             thresholds_other = other_species_dict
         else:
             thresholds_other = {}
+
+        for t in self.tag_list:
+            if t in thresholds_other:
+                thresholds_other.pop(t)
         list_other_species = list(thresholds_other.keys())
 
         # lines from other species : if many other species, more efficient to first find all transitions
@@ -579,9 +583,6 @@ class ModelSpectrum:
             # transitions from other species :
             other_species_win_all = select_transitions(other_species_lines,
                                                        xrange=[min(win.f_range_plot), max(win.f_range_plot)])
-            # remove main lines
-            other_species_win_all = pd.concat([model_lines_user,
-                                               other_species_win_all]).drop_duplicates(subset='db_id', keep=False)
 
             # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
             other_species_win = pd.concat([model_lines_other,
