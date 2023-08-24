@@ -41,6 +41,7 @@ class ModelConfiguration:
         self.jypb = None
         self._v_range_user = configuration.get('v_range', None)
         self._rms_cal_user = configuration.get('chi2_info', None)
+        self._rms_cal = None
         self.win_list = []
         self.win_list_fit = None
         self.win_list_plot = []
@@ -236,8 +237,8 @@ class ModelConfiguration:
             self.tuning_info = pd.DataFrame(tuning_info)
 
     def get_linelist(self, config=None, check_tel_range=False):
-        if config is None:
-            config = self._configuration_dict
+        # if config is None:
+        #     config = self._configuration_dict
 
         self.line_list_all = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'])
         tr_list_tresh = select_transitions(self.line_list_all, thresholds=self.thresholds)
@@ -266,17 +267,48 @@ class ModelConfiguration:
                 raise TypeError("v_range must be a dictionary or a path to an appropriate file.")
 
     def get_rms_cal_info(self):
+        if self.tr_list_by_tag is None:
+            raise ValueError("Missing transition list.")
+
         # extract rms/cal info
         if self._rms_cal_user is not None:
             if isinstance(self._rms_cal_user, dict):
-                if '*' in self._rms_cal_user:
-                    self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
+                if next(iter(self._rms_cal_user))[0] == '[':  # info by frequency range
+                    frange, fmin, fmax, rms, cal = [], [], [], [], []
+                    for k, v in self._rms_cal_user.items():
+                        k = k.strip('[').strip(']').strip()  # remove brackets and spaces ; could be improved
+                        k = k.split(',')
+                        frange.append([float(elt) for elt in k])
+                        fmin.append(float(k[0]))
+                        fmax.append(float(k[1]))
+                        rms.append(float(v[0]))
+                        cal.append(float(v[1]))
+                    self._rms_cal = pd.DataFrame({'freq_range': frange,
+                                                  'fmin': fmin,
+                                                  'fmax': fmax,
+                                                  'rms': rms,
+                                                  'cal': cal})
 
-                if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._rms_cal_user:
-                    # only one species and tag not given => "reformat" dictionary to contain tag
-                    self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
+                else:
+                    if '*' in self._rms_cal_user:
+                        self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
+
+                    if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._rms_cal_user:
+                        # only one species and tag not given => "reformat" dictionary to contain tag
+                        self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
+
+                    tup, rms, cal = [], [], []
+                    for tag, chi2_info in self._rms_cal_user.items():
+                        for k, v in expand_dict(chi2_info).items():
+                            tup.append((tag, k))
+                            rms.append(float(v[0]))
+                            cal.append(float(v[1]))
+                    self._rms_cal = pd.DataFrame({'win_id': tup,
+                                                  'rms': rms,
+                                                  'cal': cal})
 
             elif isinstance(self._rms_cal_user, str):
+                # TODO: TBC
                 self._rms_cal_user = read_noise_info(self._rms_cal_user)
 
             else:
@@ -314,18 +346,28 @@ class ModelConfiguration:
 
                 # if self._v_range_user is not None and self._rms_cal_user is not None:
                 if (all([self._v_range_user is not None, self._rms_cal_user is not None])
-                        and (tag in self._v_range_user or '*' in self._v_range_user)
-                        and (tag in self._rms_cal_user or '*' in self._rms_cal_user)):
+                        and (tag in self._v_range_user or '*' in self._v_range_user)):
+                        # and (tag in self._rms_cal_user or '*' in self._rms_cal_user)):
                     v_range = expand_dict(self._v_range_user[tag], nt)
-                    rms_cal = expand_dict(self._rms_cal_user[tag], nt)
+                    # rms_cal = expand_dict(self._rms_cal_user[tag], nt)
                     for win in win_list_tag:
                         win_num = win.plot_nb
-                        if win_num in v_range and win_num in rms_cal:
+                        if 'freq_range' in self._rms_cal.columns:
+                            rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
+                                                    & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
+                        else:
+                            rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
+                            if len(rms_cal) == 0:
+                                rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
+                        if len(rms_cal) == 0:
+                            raise IndexError(f"rms/cal info not found for {win.transition}.")
+
+                        if win_num in v_range:
                             win.v_range_fit = v_range[win_num]
-                            win.rms = rms_cal[win_num][0]
+                            win.rms = rms_cal['rms'].values[0]
                             # if self.jypb is not None:
                             #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
-                            win.cal = rms_cal[win_num][1]
+                            win.cal = rms_cal['cal'].values[0]
                             f_range = [velocity_to_frequency(v, win.transition.f_trans_mhz, vref_kms=self.vlsr_file)
                                        for v in v_range[win_num]]
                             f_range.sort()

@@ -153,9 +153,13 @@ def is_in_range(fmhz, list_ranges):
     return res
 
 
-def expand_dict(dic: dict, n_items):
+def expand_dict(dic: dict, n_items=None):
     if '*' in dic:
-        new_dic = {i + 1: dic['*'] for i in range(n_items)}
+        if n_items is not None:
+            new_dic = {i + 1: dic['*'] for i in range(n_items)}
+        else:
+            # print("Missing number of transitions.")
+            return dic
     else:
         new_dic = {}
         for k, v in dic.items():
