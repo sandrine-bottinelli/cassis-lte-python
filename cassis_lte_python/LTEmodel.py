@@ -545,8 +545,8 @@ class ModelSpectrum:
 
             # all transitions in the window (no thresholds) :
             fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
-            model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 2 * fwhm_mhz,
-                                                                max(win.f_range_plot) + 2 * fwhm_mhz])
+            model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 0.5 * fwhm_mhz,
+                                                                max(win.f_range_plot) + 0.5 * fwhm_mhz])
             # all_lines_win = select_transitions(self.line_list_all, xrange=[min(win.f_range_plot) - 2 * fwhm_mhz,
             #                                                                max(win.f_range_plot) + 2 * fwhm_mhz])
 
