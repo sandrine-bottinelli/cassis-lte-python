@@ -86,7 +86,7 @@ def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=3):
     return f.format(value)
 
 
-def select_from_ranges(x_values, ranges, y_values=None, oversampling=None, extend=False):
+def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
     if type(ranges[0]) is not list:
         ranges = [ranges]
 
@@ -96,11 +96,6 @@ def select_from_ranges(x_values, ranges, y_values=None, oversampling=None, exten
     for x_range in ranges:
         imin = find_nearest_id(x_values, min(x_range))
         imax = find_nearest_id(x_values, max(x_range))
-        if extend:
-            if x_values[imin] > min(x_range) and imin > 0:
-                imin = imin - 1
-            if x_values[imax] < max(x_range) and imax < len(x_values):
-                imax = imax + 1
         x_sub = x_values[imin:imax+1]
         if len(x_sub) == 0:
             continue
@@ -136,7 +131,7 @@ def find_nearest_id(arr: ndarray | list, value):
     if isinstance(arr, list):
         arr = array(arr)
 
-    return (abs(arr - value)).argmin()
+    return (abs(arr - value)).argmin()  # NB: could improve memory usage by using dichotomy
 
 
 def find_nearest_trans(trans_list, value):
