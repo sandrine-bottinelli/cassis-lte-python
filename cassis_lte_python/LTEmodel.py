@@ -10,7 +10,7 @@ from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, TEL_DIAM
 from cassis_lte_python.utils.constants import PLOT_COLORS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
-from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log, concatenate
+from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log, concatenate, average
 from numpy.random import normal
 from lmfit import Model, Parameters
 from scipy import stats, signal
@@ -559,6 +559,10 @@ class ModelSpectrum:
             win.x_mod = linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
             win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
                                                        line_list=model_lines_win)
+            win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
+                                                                    line_list=model_lines_win)
+            win.y_res += self.get_tc(win.x_file)
+
             if len(self.cpt_list) > 1:
                 for icpt in range(len(self.cpt_list)):
                     win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,

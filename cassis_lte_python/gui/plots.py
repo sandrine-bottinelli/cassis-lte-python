@@ -61,6 +61,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     if win.x_file is not None:
         ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1)
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='r', linewidth=1.5)
+        ax.step(win.x_file_plot, win.y_res, where='mid', color='lightskyblue', linewidth=0.75)
     else:
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
 

@@ -527,6 +527,7 @@ class Window:
         self.x_file_plot = None
         self._x_file = None
         self._y_file = None
+        self._y_res = None
         self.other_species_selection = None
         self.main_lines_display = {}
         self.other_lines_display = {}
@@ -643,6 +644,14 @@ class Window:
         self._y_file = value
         self.y_min = min([self._y_min, min(self._y_file)])
         self.y_max = max([self._y_max, max(self._y_file)])
+
+    @property
+    def y_res(self):
+        return self._y_res
+
+    @y_res.setter
+    def y_res(self, value):
+        self._y_res = value
 
     @property
     def y_min(self):
