@@ -1028,23 +1028,26 @@ class ModelSpectrum:
             'frequency': 'SKY' if self.cpt_list[0].vlsr != 0. else 'REST'
         }
         if ext == 'lam':
-            lte_radex = {'lteRadexSelected': 'true', **lte_radex, 'overSampling': self.oversampling,
-                         'frequency': 'SKY' if self.vlsr_file == 0. else 'REST'}
+            lte_radex = {'lteRadexSelected': 'true', **lte_radex, 'overSampling': self.oversampling}
 
         # Define continuum
-        if isinstance(self.tc, (float, int)):
-            tc = self.tc
-        else:  # assume cont defined as array => need to write it to a file
-            tc = self.save_spectrum(filename, dirname=dirname, continuum=True)
+        if isinstance(self.model_config.cont_info, (float, int)):
+            cont_type = 'CONSTANT'
+            cont_size = self.tc  # in fact the continuum value
+            cont = 'Continuum 0 [K]'  # default
+        else:  # it is a file
+            cont_type = 'FILE'
+            cont_size = '0.0'  # default
+            cont = self.model_config.cont_info
 
         components = {
             '# Component parameters 1': {
                 'Comp1Name': 'Continuum',
                 'Comp1Enabled': 'true',
                 'Comp1Interacting': 'false',
-                'Comp1ContinuumSelected': 'CONSTANT',
-                'Comp1Continuum': 'Continuum 0 [K]',
-                'Comp1ContinuumSize': tc
+                'Comp1ContinuumSelected': cont_type,
+                'Comp1Continuum': cont,
+                'Comp1ContinuumSize': cont_size
             }
         }
 
