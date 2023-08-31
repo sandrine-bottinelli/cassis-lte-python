@@ -118,14 +118,12 @@ class SimpleSpectrum:
 class ModelSpectrum:
     def __init__(self, configuration: (dict, str, ModelConfiguration),
                  verbose=True, check_tel_range=False):
-        if not isinstance(configuration, ModelConfiguration):
-            config = configuration  # assume it is a dictionary
-            if not isinstance(configuration, dict):
-                try:  # assume config is a path to a file
-                    config = self.load_config(configuration)
-                except TypeError:
-                    print("Configuration must be a dictionary or a path to a configuration file "
-                          "or of type ModelConfiguration.")
+        if isinstance(configuration, (dict, str)):  # dictionary or string
+            if isinstance(configuration, str):  # string : load the file
+                config = self.load_config(configuration)
+            else:  # it is a dictionary
+                config = configuration
+
             model_config = ModelConfiguration(config, verbose=verbose, check_tel_range=check_tel_range)
 
             if 'data_file' in model_config._configuration_dict or 'x_obs' in model_config._configuration_dict:
@@ -137,8 +135,12 @@ class ModelSpectrum:
             model_config.get_linelist()
             model_config.get_windows()
 
-        else:  # configuration is of type ModelConfiguration
+        elif isinstance(configuration, ModelConfiguration):
             model_config = configuration
+
+        else:  # unknown
+            raise TypeError("Configuration must be a dictionary or a path to a configuration file "
+                            "or of type ModelConfiguration.")
 
         self.output_dir = model_config.output_dir
 
@@ -199,8 +201,11 @@ class ModelSpectrum:
         self.model_config = model_config
 
     def load_config(self, path):
-        with open(path) as f:
-            return json.load(f)  # , cls=type(self))
+        try:
+            with open(path) as f:
+                return json.load(f)  # , cls=type(self))
+        except FileNotFoundError:
+            print(f"File not found : {path}")
 
     def save_config(self, filename, dirname=None):
         config_save = {

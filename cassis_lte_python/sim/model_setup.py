@@ -49,6 +49,8 @@ class ModelConfiguration:
                     self.fit_freq_except = [self._fit_freq_except_user]
             else:
                 raise TypeError("fit_freq_except must be a list or a path to an appropriate file.")
+        else:
+            self.fit_freq_except = None
 
         self._v_range_user = configuration.get('v_range', None)
         self._rms_cal_user = configuration.get('chi2_info', None)
