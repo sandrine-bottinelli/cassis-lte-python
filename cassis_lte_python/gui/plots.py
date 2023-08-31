@@ -52,18 +52,27 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
-    # plot range used for chi2 calculation
+    # plot range used (or not) for chi2 calculation
     v_range = win.v_range_fit
     if v_range is not None:
         ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.15)
+    for f_range in win.f_ranges_nofit:
+        ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.15)
 
     # Plot data and/or model
     if win.x_file is not None:
         ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1)
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='r', linewidth=1.5)
-        ax.step(win.x_file_plot, win.y_res, where='mid', color='lightskyblue', linewidth=0.75)
+        if win.y_res is not None:
+            ax.step(win.x_file_plot, win.y_res, where='mid', color='lightskyblue', linewidth=0.75)
     else:
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
+
+    #  Plot components if more than one
+    if len(lte_model.cpt_list) > 1:
+        for icpt, _ in enumerate(lte_model.cpt_list):
+            ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
+                    color=lte_model.cpt_cols[icpt % len(lte_model.cpt_cols)], linewidth=0.5)
 
     # Define and set limits
     ymax, ymin = win.y_max, win.y_min
@@ -76,29 +85,24 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     dy = ymax - ymin
 
     ax.set_xlim(win.bottom_lim)
-    xmin, xmax = win.bottom_lim
 
     if ax2 is not None:
         ax2.set_xlim(win.top_lim)
 
     # write transition number (center, bottom)
-    if number:
+    if number and win.plot_nb > 0:
         ax.text(0.5, 0.05, "{}".format(win.plot_nb),
                 transform=ax.transAxes, horizontalalignment='center',
                 fontsize='large', color=lte_model.tag_colors[win.transition.tag])
 
-    # plot all lines from modeled tags and components if more than one
-    for icpt, cpt in enumerate(lte_model.cpt_list):
+    # plot all lines from modeled tags
+    for icpt, lines_cpt in win.main_lines_display.items():
         # main lines : compute vertical positions, shifting down for each component
         y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy
         lw = 1.5
-        for irow, row in win.main_lines_display[icpt].iterrows():
+        for irow, row in lines_cpt.iterrows():
             plot_line_position(ax, row.x_pos, y_pos, row.x_pos_err,
                                color=row.color, label=row.label, linewidth=lw)
-
-        if len(lte_model.cpt_list) > 1:
-            ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
-                    color=lte_model.cpt_cols[icpt % len(lte_model.cpt_cols)], linewidth=0.5)
 
     # store labels and handles for main lines
     mainHandles, mainLabels = ax.get_legend_handles_labels()

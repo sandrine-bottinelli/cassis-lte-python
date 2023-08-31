@@ -1,6 +1,7 @@
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H
 
-from numpy import exp, genfromtxt, array, log, log10, abs, linspace, append, interp, sqrt, pi, empty, where, ndarray
+from numpy import exp, genfromtxt, array, log, log10, abs, linspace, append, interp, sqrt, pi, \
+    empty, where, ndarray, equal
 import os
 import astropy.io.fits as fits
 from astropy import units as u
@@ -169,6 +170,11 @@ def expand_dict(dic: dict, n_items=None):
     return new_dic
 
 
+def get_extended_limits(values, padding=0.05):
+    dx = max(values) - min(values)
+    return [min(values) - padding * dx, max(values) + padding * dx]
+
+
 def read_noise_info(noise_file):
     noise_info = {}
     with open(noise_file) as f:
@@ -264,6 +270,9 @@ def get_telescope(fmhz, tuning_info: pd.DataFrame):
     tel_list = empty(len(fmhz), dtype=object)
     for i, row in tuning_info.iterrows():
         tel_list[where((fmhz >= row['fmhz_min']) & (fmhz <= row['fmhz_max']))] = row['telescope']
+
+    if None in tel_list:
+        raise ValueError(f"Telescope not defined for at least one frequency: {fmhz[equal(tel_list, None)]}")
 
     return tel_list
 

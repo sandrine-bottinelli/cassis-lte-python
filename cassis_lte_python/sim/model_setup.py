@@ -9,7 +9,7 @@ from cassis_lte_python.sim.parameters import create_parameter
 from cassis_lte_python.utils.settings import TELESCOPE_DIR, VLSR_DEF, SIZE_DEF
 import os
 import pandas as pd
-from numpy import concatenate, loadtxt, array, interp, ndarray, mean, floor, ceil, float32, linspace, inf
+from numpy import concatenate, loadtxt, array, interp, ndarray, mean, floor, ceil, float32, linspace, inf, empty, where
 
 
 class ModelConfiguration:
@@ -39,6 +39,7 @@ class ModelConfiguration:
         self.cont_info = None
         self.tc = None
         self.jypb = None
+        self.fit_freq_except = configuration.get('fit_freq_except', None)
         self._v_range_user = configuration.get('v_range', None)
         self._rms_cal_user = configuration.get('chi2_info', None)
         self._rms_cal = None
@@ -121,11 +122,18 @@ class ModelConfiguration:
             self.y_file = concatenate(self.y_file)
 
         if self.x_file is not None:
-            x_mod = []
-            for i, row in self.tuning_info.iterrows():
-                x_sub = self.x_file[(self.x_file >= row['fmhz_min']) & (self.x_file <= row['fmhz_max'])]
-                x_mod.extend(linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
-            self.x_mod = array(x_mod)
+            # select data within telescope range
+            x_sub, y_sub = select_from_ranges(self.x_file, self.tuning_info['fmhz_range'].array, y_values=self.y_file)
+            self.x_file, self.y_file = x_sub, y_sub
+
+            if self.oversampling == 1:
+                self.x_mod = self.x_file
+            else:
+                x_mod = []
+                for i, row in self.tuning_info.iterrows():
+                    x_sub = self.x_file[(self.x_file >= row['fmhz_min']) & (self.x_file <= row['fmhz_max'])]
+                    x_mod.extend(linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+                self.x_mod = array(x_mod)
 
     def get_jypb(self, config=None):
         if config is None:
@@ -240,7 +248,12 @@ class ModelConfiguration:
         # if config is None:
         #     config = self._configuration_dict
 
-        self.line_list_all = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'])
+        # search only in data within telescope ranges
+        f_range_search = []
+        for f_range in self.tuning_info['fmhz_range']:
+            x_sub = self.x_file[(self.x_file >= min(f_range)) & (self.x_file <= max(f_range))]
+            f_range_search.append([min(x_sub), max(x_sub)])
+        self.line_list_all = get_transition_df(self.tag_list, f_range_search)
         tr_list_tresh = select_transitions(self.line_list_all, thresholds=self.thresholds)
         # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
         self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
@@ -316,10 +329,54 @@ class ModelConfiguration:
 
     def get_windows(self, verbose=True):
         if self.bandwidth is None:
-            self.win_list = [Window(self.tr_list_by_tag[str(self.tag_list[0])][0], 1)]
+            self.win_list = [Window(name='Full spectrum')]
+            return
+
+        self.get_rms_cal_info()
+
+        if self.fit_freq_except is not None:
+            f_fit = self.x_file
+            y_fit = self.y_file
+            if len(self.fit_freq_except) > 0:
+                if not isinstance(self.fit_freq_except[0], list):
+                    self.fit_freq_except = [self.fit_freq_except]
+                fmin = min(self.x_file)
+                f2fit = []
+                for f_range in self.fit_freq_except:
+                    fmax = max(f_range)
+                    f2fit.append([fmin, fmax])
+                    fmin = fmax
+                f_fit, y_fit = select_from_ranges(self.x_file, f2fit, y_values=self.y_file)
+
+            win = Window(name='Full spectrum')
+            win.x_file = self.x_file
+            win.y_file = self.y_file
+            win.f_ranges_nofit = self.fit_freq_except
+            rms = empty(len(f_fit), dtype=float)
+            cal = empty(len(f_fit), dtype=float)
+            if 'freq_range' in self._rms_cal.columns:
+                for i, row in self._rms_cal.iterrows():
+                    indices = where((f_fit > row['fmin']) & (f_fit < row['fmax']))
+                    rms[indices] = row['rms']
+                    cal[indices] = row['cal']
+
+                if None in rms:
+                    raise ValueError("rms not defined for at least one frequency.")
+                if None in cal:
+                    raise ValueError("calibration error not defined for at least one frequency.")
+            else:
+                raise TypeError("rms and calibration information must be given in frequency ranges.")
+
+            win.x_fit = f_fit
+            win.y_fit = y_fit
+            win.rms = rms
+            win.cal = cal
+            self.win_list = [win]
+            self.win_list_fit = [w for w in self.win_list if w.in_fit]
+
         else:
             self.get_v_range_info()
-            self.get_rms_cal_info()
+
             for tag, tr_list in self.tr_list_by_tag.items():
                 win_list_tag = []  # first find all windows with enough data
                 for i, tr in enumerate(tr_list):
@@ -344,30 +401,14 @@ class ModelConfiguration:
                     for iw, w in enumerate(win_list_tag):
                         print('  {}. {}'.format(iw + 1, w.transition))
 
-                # if self._v_range_user is not None and self._rms_cal_user is not None:
-                if (all([self._v_range_user is not None, self._rms_cal_user is not None])
-                        and (tag in self._v_range_user or '*' in self._v_range_user)):
-                        # and (tag in self._rms_cal_user or '*' in self._rms_cal_user)):
+                # find windows with data to be fitted
+                if self._v_range_user is not None and (tag in self._v_range_user or '*' in self._v_range_user):
                     v_range = expand_dict(self._v_range_user[tag], nt)
-                    # rms_cal = expand_dict(self._rms_cal_user[tag], nt)
                     for win in win_list_tag:
                         win_num = win.plot_nb
-                        if 'freq_range' in self._rms_cal.columns:
-                            rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
-                                                    & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
-                        else:
-                            rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
-                            if len(rms_cal) == 0:
-                                rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
-                        if len(rms_cal) == 0:
-                            raise IndexError(f"rms/cal info not found for {win.transition}.")
 
-                        if win_num in v_range:
+                        if win_num in v_range: # window has data to be fitted
                             win.v_range_fit = v_range[win_num]
-                            win.rms = rms_cal['rms'].values[0]
-                            # if self.jypb is not None:
-                            #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
-                            win.cal = rms_cal['cal'].values[0]
                             f_range = [velocity_to_frequency(v, win.transition.f_trans_mhz, vref_kms=self.vlsr_file)
                                        for v in v_range[win_num]]
                             f_range.sort()
@@ -375,12 +416,27 @@ class ModelConfiguration:
                             if self.x_file is not None:
                                 win.x_fit, win.y_fit = select_from_ranges(self.x_file, f_range, y_values=self.y_file)
 
-                        self.win_list.append(win)
-                else:
-                    self.win_list.extend(win_list_tag)
+                            # get rms and cal for windows to be fitted
+                            try:
+                                if 'freq_range' in self._rms_cal.columns:
+                                    rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
+                                                            & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
+                                else:
+                                    rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
+                                    if len(rms_cal) == 0:
+                                        rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
+                                if len(rms_cal) == 0:
+                                    raise IndexError(f"rms/cal info not found for {win.transition}.")
+                                win.rms = rms_cal['rms'].values[0]
+                                # if self.jypb is not None:
+                                #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
+                                win.cal = rms_cal['cal'].values[0]
+                            except KeyError:
+                                raise KeyError(f"rms/cal info not found.")
+
+                self.win_list.extend(win_list_tag)
 
         self.win_list_fit = [w for w in self.win_list if w.in_fit]
-        self.win_list_plot = []
 
         if self.x_file is not None:
             self.x_fit = concatenate([w.x_fit for w in self.win_list_fit], axis=None)
@@ -390,7 +446,7 @@ class ModelConfiguration:
         else:
             self.x_fit = None
 
-        return self.win_list
+        return
 
 
 class Component:
@@ -503,12 +559,15 @@ class Component:
 
 
 class Window:
-    def __init__(self, transition, plot_nb, v_range_fit=None, f_range_fit=None, rms=None, cal=None):
+    def __init__(self, transition=None, plot_nb=0, name="", v_range_fit=None, f_range_fit=None, rms=None, cal=None):
         self.transition = transition
         self.plot_nb = plot_nb
-        self._name = "{} - {}".format(transition.tag, plot_nb)
+        self._name = name
+        if self.transition is not None:
+            self._name = "{} - {}".format(transition.tag, plot_nb)
         self._v_range_fit = v_range_fit
         self._f_range_fit = f_range_fit
+        self.f_ranges_nofit = []
         self._v_range_plot = None
         self._f_range_plot = None
         self._rms = rms

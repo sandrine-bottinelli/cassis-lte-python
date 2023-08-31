@@ -2,7 +2,7 @@ from cassis_lte_python.utils.utils import get_telescope, get_beam_size, get_tmb2
 from cassis_lte_python.utils.utils import get_valid_pixels, reduce_wcs_dim
 from cassis_lte_python.utils.utils import format_float, is_in_range, select_from_ranges, find_nearest_id
 from cassis_lte_python.utils.utils import velocity_to_frequency, frequency_to_velocity, \
-    fwhm_to_sigma, delta_v_to_delta_f, compute_weight
+    fwhm_to_sigma, delta_v_to_delta_f, compute_weight, get_extended_limits
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SQLITE_FILE
@@ -196,6 +196,8 @@ class ModelSpectrum:
         self.tag_other_sp_colors = None
         self.cpt_cols = None
 
+        self.model_config = model_config
+
     def load_config(self, path):
         with open(path) as f:
             return json.load(f)  # , cls=type(self))
@@ -358,7 +360,11 @@ class ModelSpectrum:
         if self.model is None:
             self.generate_lte_model(normalize=normalize)
 
-        wt = concatenate([compute_weight(win.y_fit, win.rms, win.cal) for win in self.win_list_fit], axis=None)
+        if len(self.win_list_fit) > 1:
+            wt = concatenate([compute_weight(win.y_fit, win.rms, win.cal) for win in self.win_list_fit], axis=None)
+        else:
+            win = self.win_list_fit[0]
+            wt = compute_weight(win.y_fit, win.rms, win.cal)
         # wt = None
         self.model_fit = self.model.fit(self.y_fit, params=self.params2fit, fmhz=self.x_fit,
                                         weights=wt,
@@ -493,7 +499,39 @@ class ModelSpectrum:
         Plot in full spectrum mode (self.bandwidth is None)
         :return:
         """
-        pass
+        win = self.win_list_plot[0]
+        win.f_range_plot = [min(win.x_file), max(win.x_file)]
+        win.bottom_unit = 'MHz'
+        win.bottom_lim = get_extended_limits(win.f_range_plot)
+        win.top_lim = win.bottom_lim
+
+        # compute the model :
+        plot_pars = self.plot_pars()
+        # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
+        if win.x_file is not None:
+            x_mod = []
+            for i, row in self.tuning_info.iterrows():
+                x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
+                x_mod.extend(linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+            win.x_mod = array(x_mod)
+
+        else:
+            pass
+        win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                   line_list=self.line_list_all)
+        if len(self.cpt_list) > 1:
+            for icpt in range(len(self.cpt_list)):
+                win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                                    line_list=self.line_list_all,
+                                                                    cpt=self.cpt_list[icpt]))
+
+        win.x_mod_plot = win.x_mod
+        win.x_file_plot = win.x_file
+
+        if win.x_file is not None:
+            win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
+                                                                    line_list=self.line_list_all)
+            win.y_res += self.get_tc(win.x_file)
 
     def setup_plot_la(self, verbose=True, other_species_dict: dict | None = None):
         """
@@ -508,7 +546,6 @@ class ModelSpectrum:
         plot_pars = self.plot_pars()
         vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
         fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
-        padding = 0.05
 
         self.update_parameters(params=plot_pars)
 
@@ -542,8 +579,7 @@ class ModelSpectrum:
             win.f_range_plot = [velocity_to_frequency(v, f_ref, vref_kms=vlsr)
                                 for v in win.v_range_plot]
             win.bottom_unit = 'km/s'
-            dx1 = max(win.v_range_plot) - min(win.v_range_plot)
-            win.bottom_lim = [min(win.v_range_plot) - padding * dx1, max(win.v_range_plot) + padding * dx1]
+            win.bottom_lim = get_extended_limits(win.v_range_plot)
             win.top_lim = [velocity_to_frequency(v, f_ref, vref_kms=vlsr)
                            for v in win.bottom_lim]
 
@@ -728,7 +764,8 @@ class ModelSpectrum:
         else:
             thresholds_other = None
 
-        if self.bandwidth is None:
+        if self.bandwidth is None or self.model_config.fit_freq_except is not None:
+            self.win_list_plot = self.win_list
             self.setup_plot_fus()
         else:
             self.select_windows(tag=tag, display_all=display_all)
