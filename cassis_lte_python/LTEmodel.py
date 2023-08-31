@@ -361,10 +361,12 @@ class ModelSpectrum:
             self.generate_lte_model(normalize=normalize)
 
         if len(self.win_list_fit) > 1:
-            wt = concatenate([compute_weight(win.y_fit, win.rms, win.cal) for win in self.win_list_fit], axis=None)
+            wt = concatenate([compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
+                              for win in self.win_list_fit], axis=None)
         else:
             win = self.win_list_fit[0]
-            wt = compute_weight(win.y_fit, win.rms, win.cal)
+            wt = compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
+
         # wt = None
         self.model_fit = self.model.fit(self.y_fit, params=self.params2fit, fmhz=self.x_fit,
                                         weights=wt,
