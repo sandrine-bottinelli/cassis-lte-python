@@ -39,7 +39,17 @@ class ModelConfiguration:
         self.cont_info = None
         self.tc = None
         self.jypb = None
-        self.fit_freq_except = configuration.get('fit_freq_except', None)
+        self._fit_freq_except_user = configuration.get('fit_freq_except', None)
+        if self._fit_freq_except_user is not None:
+            if isinstance(self._fit_freq_except_user, str):
+                fmin, fmax = loadtxt(self._fit_freq_except_user, unpack=True)
+                self.fit_freq_except = [[f1, f2] for f1, f2 in zip(fmin, fmax)]
+            elif isinstance(self._fit_freq_except_user, list):
+                if not isinstance(self._fit_freq_except_user[0], list):
+                    self.fit_freq_except = [self._fit_freq_except_user]
+            else:
+                raise TypeError("fit_freq_except must be a list or a path to an appropriate file.")
+
         self._v_range_user = configuration.get('v_range', None)
         self._rms_cal_user = configuration.get('chi2_info', None)
         self._rms_cal = None
