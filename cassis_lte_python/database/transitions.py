@@ -27,7 +27,7 @@ TRAN_DF_COLS = [TRAN_COLNAME, TAG_COLNAME, SP_COLNAME] + list(FIELDS.values())
 
 
 class Transition:
-    def __init__(self, tag, f_trans_mhz, aij, elo_cm, gup, sp_name='', f_err_mhz=None, db_id=None, qn=None):
+    def __init__(self, tag, f_trans_mhz, aij, elo_cm, gup, sp_name='', f_err_mhz=None, db_id=None, qn=''):
         self.f_trans_mhz = f_trans_mhz
         self.f_err_mhz = f_err_mhz
         self.aij = aij
@@ -41,9 +41,15 @@ class Transition:
         self.name = sp_name
         self.db_id = db_id
         self.qn = qn
+        if len(qn) > 0:
+            qns = qn.split(':')
+            self.qn_lo = " ".join(qns[:int(len(qns)/2)])
+            self.qn_hi = " ".join(qns[int(len(qns)/2):])
+        else:
+            self.qn_lo, self.qn_hi = '', ''
 
     def __str__(self):
-        infos = ["{} ({})".format(self.name, self.qn),
+        infos = ["{} ({}_{})".format(self.name, self.qn_lo, self.qn_hi),
                  "Tag = {}".format(self.tag),
                  "f = {} MHz (+/-{})".format(self.f_trans_mhz, self.f_err_mhz),
                  "Eup = {:.2f} K".format(self.eup),
@@ -132,7 +138,8 @@ def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, *
     tran_df.insert(0, SP_COLNAME, [sp_infos[cid]['name'] for cid in tran_dict['catdir_id']])
     tran_df.insert(0, TAG_COLNAME, [sp_infos[cid]['speciesid'] for cid in tran_dict['catdir_id']])
     tran_df.insert(0, TRAN_COLNAME, [Transition(row.tag, row.fMHz, row.aint, row.elow, row.igu,
-                                                f_err_mhz=row.err, sp_name=row.sp_name, db_id=row.id_transitions)
+                                                f_err_mhz=row.err, sp_name=row.sp_name, db_id=row.id_transitions,
+                                                qn=row.qn)
                                      for i, row in tran_df.iterrows()])
     tran_df.rename(columns={key: val for key, val in FIELDS.items() if key != val}, inplace=True)
     # if len(df) == 0:  # no transitions found, going to the next tag
