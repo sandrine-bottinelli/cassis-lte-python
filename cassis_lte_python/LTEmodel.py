@@ -928,6 +928,61 @@ class ModelSpectrum:
 
         return os.path.abspath(file_path)
 
+    def save_stick_spectrum(self, filename, dirname=None, ext='fits'):
+        x_lines = [line['transition'].f_trans_mhz for _, line in self.line_list_all.iterrows()]
+        x_lines.sort()
+        x_lines = array(x_lines)
+        for cpt in self.cpt_list:
+            center_int = self.compute_model_intensities(x_values=x_lines, cpt=cpt)
+            cont = self.get_tc(x_lines)
+            x_vals = []
+            y_vals = []
+            for c, x, y in zip(cont, x_lines, center_int):
+                x_vals.extend([x - 1.e-6, x, x + 1.e-6])
+                y_vals.extend([c, y, c])
+
+            x_vals = array([velocity_to_frequency(cpt.vlsr, x, vref_kms=self.vlsr_file)
+                            for x in x_vals])
+
+            self.save_spectrum(f'{filename}_{cpt.name}', dirname=dirname, spec=(x_vals, y_vals), ext='fits',
+                               vlsr=cpt.vlsr)
+
+    def save_line_list_cassis(self, filename, dirname=None):
+        """
+        Writes the list of lines for display in CASSIS. To be used when fitting the entire spectrum.
+        :param filename:
+        :param dirname:
+        :return:
+        """
+        if len(self.win_list) == 1:
+            self.win_list_plot = self.win_list
+            self.setup_plot_fus()
+            filebase = filename
+            nb_dec = '3'
+            for icpt, cpt in enumerate(self.cpt_list):
+                if len(self.cpt_list) > 1:
+                    filename = f'{filebase}_{cpt.name}'
+                with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
+                    f.write('# ')
+                    f.write('\t'.join(
+                        ['Transition', 'Tag', 'Frequency(MHz)', 'Eup(K)', 'Aij', 'Tau', 'Tex', 'Intensity(K)']))
+                    f.write('\n')
+
+                    for i, row in self.line_list_all.iterrows():
+                        line = row['transition']
+                        if line.tag in cpt.tag_list:
+                            tex = self.best_params[f"{cpt.name}_tex"].value
+                            tau0 = compute_tau0(line,
+                                                self.best_params[f"{cpt.name}_ntot_{line.tag}"].value,
+                                                self.best_params[f"{cpt.name}_fwhm_{line.tag}"].value,
+                                                tex)
+                            ind0 = find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
+                            f.write(f"{line.name} ({line.qn_lo}_{line.qn_hi})\t{line.tag}")
+                            f.write(f"\t{line.f_trans_mhz:.{nb_dec}f}")
+                            f.write(f"\t{line.eup:.{nb_dec}f}\t{line.aij:.{nb_dec}e}\t")
+                            f.write(f"{tau0:.{nb_dec}e}\t{tex:.{nb_dec}f}")
+                            f.write(f"\t{self.win_list[0].y_mod_cpt[icpt][ind0]:.{nb_dec}e}\n")
+
     def save_fit_results(self, filename, dirname=None):
         with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
             f.writelines(self.fit_report(report_kws={'show_correl': True}))
