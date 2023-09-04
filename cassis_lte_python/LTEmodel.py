@@ -2,7 +2,7 @@ from cassis_lte_python.utils.utils import get_telescope, get_beam_size, get_tmb2
 from cassis_lte_python.utils.utils import get_valid_pixels, reduce_wcs_dim
 from cassis_lte_python.utils.utils import format_float, is_in_range, select_from_ranges, find_nearest_id
 from cassis_lte_python.utils.utils import velocity_to_frequency, frequency_to_velocity, \
-    fwhm_to_sigma, delta_v_to_delta_f, compute_weight, get_extended_limits
+    fwhm_to_sigma, delta_v_to_delta_f, compute_weight, get_extended_limits, compute_tau0
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SQLITE_FILE
@@ -59,11 +59,7 @@ def generate_lte_model_func(config):
                 fwhm = params['{}_fwhm_{}'.format(cpt.name, tag)] * norm_factors['{}_fwhm_{}'.format(cpt.name, tag)]
                 qtex = cpt.species_list[isp].get_partition_function(tex)
                 for tran in tran_list:
-                    # nup = ntot * tran.gup / qtex / np.exp(tran.eup_J / const.k_B.value / tex)  # [cm-2]
-                    nup = ntot * tran.gup / qtex / exp(tran.eup / tex)  # [cm-2]
-                    tau0 = C_LIGHT ** 3 * tran.aij * nup * 1.e4 \
-                           * (exp(H * tran.f_trans_mhz * 1.e6 / K_B / tex) - 1.) \
-                           / (4. * pi * (tran.f_trans_mhz * 1.e6) ** 3 * fwhm * 1.e3 * sqrt(pi / log(2.)))
+                    tau0 = compute_tau0(tran, ntot, fwhm, tex, qtex=qtex)
                     if isinstance(tau_max, (float, int)) and tau0 >= tau_max:
                         with open(file_rejected, 'a') as f:
                             f.write('\n')

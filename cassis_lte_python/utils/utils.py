@@ -1,4 +1,5 @@
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H
+from cassis_lte_python.database.species import get_partition_function
 
 from numpy import exp, genfromtxt, array, log, log10, abs, linspace, append, interp, sqrt, pi, \
     empty, where, ndarray, equal
@@ -191,6 +192,16 @@ def read_noise_info(noise_file):
                 noise_info[tag][''.join(elts[2:])] = [float(elts[0]), float(elts[1])]
 
     return noise_info
+
+
+def compute_tau0(tran, ntot, fwhm, tex, qtex=None):
+    if qtex is None:
+        qtex = get_partition_function(tran.tag, temp=tex)
+    # nup = ntot * tran.gup / qtex / np.exp(tran.eup_J / const.k_B.value / tex)  # [cm-2]
+    nup = ntot * tran.gup / qtex / exp(tran.eup / tex)  # [cm-2]
+    tau0 = C_LIGHT ** 3 * tran.aij * nup * 1.e4 * (exp(H * tran.f_trans_mhz * 1.e6 / K_B / tex) - 1.) \
+           / (4. * pi * (tran.f_trans_mhz * 1.e6) ** 3 * fwhm * 1.e3 * sqrt(pi / log(2.)))
+    return tau0
 
 
 def compute_weight(intensity, rms, cal):
