@@ -497,7 +497,7 @@ class ModelSpectrum:
 
         return res
 
-    def setup_plot_fus(self):
+    def setup_plot_fus(self):  # TODO: rename/refactor, most instructions are for model only
         """
         Plot in full spectrum mode (self.bandwidth is None)
         :return:
@@ -870,28 +870,43 @@ class ModelSpectrum:
         spec = x_values, y_values
         self.save_spectrum(filename, dirname=dirname, ext=ext, spec=spec)
 
-    def save_spectrum(self, filename, dirname=None, ext='txt', spec=None, continuum=False):
+    def save_spectrum(self, filename, dirname=None, ext='txt',
+                      spec: None | tuple = None, continuum=False,
+                      vlsr: None | float | int = None):
+        """
+        Write a spectrum (continuum, data or model, depending on the provided parameters) on a file.
+        :param filename:
+        :param dirname:
+        :param ext:
+        :param spec: tuple of x and y values to be written ;
+                     if not provided and continuum is false, stored model is written
+        :param continuum: if True, spec is ignored
+        :param vlsr:
+        :return: the path to the file
+        """
         file_path = self.set_filepath(filename, dirname=dirname, ext=ext)
 
         spectrum_type = ''
-        if spec is not None:
-            x_values, y_values = spec
-        elif continuum:
+        if continuum:  # spec will be ignored
             spectrum_type = 'continuum'
             ext = 'txt'  # force txt extension
             file_path = self.set_filepath(filename + '_cont', dirname=dirname, ext=ext)
             x_values = self.tc['f_mhz']
             y_values = self.tc['tc']
-        elif self.data_file is None and self.x_file is not None:
-            self.data_file = file_path
-            x_values, y_values = self.x_file, self.y_file
         else:
-            x_values, y_values = self.x_mod, self.y_mod
-            spectrum_type = 'synthetic'
+            if spec is not None:  # should be a tuple of x and y values
+                x_values, y_values = spec
+            # elif self.data_file is None and self.x_file is not None:  # TODO: check whether this case is useful
+            #     self.data_file = file_path
+            #     x_values, y_values = self.x_file, self.y_file
+            else:
+                x_values, y_values = self.x_mod, self.y_mod
+                spectrum_type = 'synthetic'
 
         if ext == 'fits':
+            y_vals = y_values[:, 0] if len(shape(y_values)) > 1 else y_values
             col1 = fits.Column(name='wave', format='D', unit='MHz', array=x_values)
-            col2 = fits.Column(name='flux', format='D', unit='K', array=y_values)
+            col2 = fits.Column(name='flux', format='D', unit='K', array=y_vals)
             hdu = fits.BinTableHDU.from_columns([col1, col2])
 
             hdu.header['DATE-HDU'] = (datetime.datetime.now().strftime("%c"), 'Date of HDU creation')
@@ -900,16 +915,26 @@ class ModelSpectrum:
                 hdu.header['MODEL'] = ('Full LTE', 'Model used to compute this spectrum')
                 hdu.header['NOISE'] = (self.noise * 1000., '[mK]Noise added to the spectrum')
 
-            params = self.params2fit
-            if self.best_params is None:
-                params = self.best_pars()
-            try:
-                vlsr = params['{}_vlsr'.format(self.cpt_list[0].name)].value
-            except TypeError:
-                vlsr = self.cpt_list[0].vlsr
+            if vlsr is None:
+                params = self.best_params
+                if self.best_params is None:
+                    params = self.best_pars()
+                try:
+                    vlsr = params['{}_vlsr'.format(self.cpt_list[0].name)].value
+                except TypeError:
+                    vlsr = self.cpt_list[0].vlsr
             hdu.header['VLSR'] = (vlsr, '[km/s]')
 
             hdu.writeto(file_path, overwrite=True)
+
+        if ext == 'fus':  # TODO: to be implemented
+            with open(file_path, 'w') as f:
+                f.writelines([f'// number of lines : {len(x_values)}\n',
+                              f'// vlsr : {self.vlsr_file}\n',
+                              '\t'.join(['FreqLsb', 'VeloLsb', 'FreqUsb', 'VeloUsb', 'Intensity', 'DeltaF', 'DeltaV']),
+                              '\n'])
+                # for i in range(len(x_values)):
+                #     f.write()
 
         if ext == 'txt':
             with open(file_path, 'w') as f:
@@ -921,9 +946,10 @@ class ModelSpectrum:
                                   '#yLabel: [Kelvin] Mean\n'])
                 for x, y in zip(x_values, y_values):
                     if len(shape(y_values)) == 1:
-                        f.write('{}\t{}\n'.format(format_float(x), format_float(y)))
+                        f.write('{}\t{}\n'.format(format_float(x, nb_signif_digits=4), format_float(y)))
                     else:
-                        line = '{}\t'.format(format_float(x)) + '\t'.join([format_float(yy) for yy in y])
+                        line = '{}\t'.format(format_float(x, nb_signif_digits=4))
+                        line += '\t'.join([format_float(yy) for yy in y])
                         f.write(line + '\n')
 
         return os.path.abspath(file_path)
