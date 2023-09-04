@@ -355,9 +355,10 @@ class ModelConfiguration:
                 fmin = min(self.x_file)
                 f2fit = []
                 for f_range in self.fit_freq_except:
-                    fmax = max(f_range)
+                    fmax = min(f_range)
                     f2fit.append([fmin, fmax])
-                    fmin = fmax
+                    fmin = max(f_range)
+                f2fit.append([fmin, max(self.x_file)])
                 f_fit, y_fit = select_from_ranges(self.x_file, f2fit, y_values=self.y_file)
 
             win = Window(name='Full spectrum')
