@@ -340,6 +340,14 @@ class ModelConfiguration:
                 raise TypeError("chi2_info must be a dictionary or a path to an appropriate file.")
 
     def get_windows(self, verbose=True):
+        if self.bandwidth is None or self.fit_freq_except is not None:
+            for tag, tr_list in self.tr_list_by_tag.items():
+                if verbose or verbose == 2:
+                    print('{} : {} transitions found within thresholds'.format(tag, len(tr_list)))
+                if verbose == 2:
+                    for iw, w in enumerate(tr_list):
+                        print('  {}. {}'.format(iw + 1, w.transition))
+
         if self.bandwidth is None:
             self.win_list = [Window(name='Full spectrum')]
             return
