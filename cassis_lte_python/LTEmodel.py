@@ -663,9 +663,10 @@ class ModelSpectrum:
                 f.write(f"{win.name} : model species within thresholds\n")
                 f.writelines(win.main_lines_display[0][cols].to_string(index=False))
                 f.write("\n\n")
-                f.write(f"{win.name} : model species outside thresholds and other species within thresholds\n")
-                f.writelines(win.other_species_display[cols].to_string(index=False))
-                f.write("\n\n")
+                if len(win.other_species_display) > 0:
+                    f.write(f"{win.name} : model species outside thresholds and other species within thresholds\n")
+                    f.writelines(win.other_species_display[cols].to_string(index=False))
+                    f.write("\n\n")
 
     def get_lines_plot_params(self, line_list: pd.DataFrame, cpt: Component, f_ref: float,
                               tag_colors: dict):
