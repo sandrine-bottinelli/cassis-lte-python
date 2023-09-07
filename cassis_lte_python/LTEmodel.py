@@ -650,6 +650,7 @@ class ModelSpectrum:
                 if t not in win_colors.keys():
                     win_colors[t] = plot_colors_sub[icol % len(plot_colors_sub)]
                     icol += 1
+            win.tag_colors = win_colors
 
             if len(other_species_win) > 0:
                 win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,

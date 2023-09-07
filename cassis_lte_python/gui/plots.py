@@ -142,7 +142,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     for item in leg.legendHandles:
         item.set_visible(False)
     for text in leg.get_texts():
-        col = lte_model.tag_colors[text.get_text()]
+        col = win.tag_colors[text.get_text()]
         text.set_color(col)
         text.set_weight('bold')
 
@@ -159,7 +159,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                         handlelength=0, handletextpad=0, fancybox=True)
     for text in sat_leg.get_texts():
         text.set_fontstyle("italic")
-        col = win.other_species_display[win.other_species_display.tag == text.get_text()].color.values[0]
+        col = win.tag_colors[text.get_text()]
+        # col = win.other_species_display[win.other_species_display.tag == text.get_text()].color.values[0]
         text.set_color(col)
         text.set_weight('bold')
 

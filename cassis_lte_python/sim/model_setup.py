@@ -612,6 +612,7 @@ class Window:
         self.main_lines_display = {}
         self.other_lines_display = {}
         self.other_species_display = pd.DataFrame()
+        self.tag_colors = {}
         self._y_min = inf
         self._y_max = -inf
 
