@@ -608,8 +608,12 @@ class ModelSpectrum:
                                                                         line_list=model_lines_win,
                                                                         cpt=self.cpt_list[icpt]))
 
-            win.x_mod_plot = frequency_to_velocity(win.x_mod, f_ref, vref_kms=vlsr)
-            win.x_file_plot = frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
+            if self.vlsr_file == 0.:
+                win.x_mod_plot = frequency_to_velocity(win.x_mod, f_ref, vref_kms=self.vlsr_file)
+                win.x_file_plot = frequency_to_velocity(win.x_file, f_ref, vref_kms=self.vlsr_file)
+            else:
+                win.x_mod_plot = frequency_to_velocity(win.x_mod, f_ref, vref_kms=vlsr)
+                win.x_file_plot = frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
 
             # transitions from model species, w/i thresholds :
             model_lines_user = select_transitions(model_lines_win,
