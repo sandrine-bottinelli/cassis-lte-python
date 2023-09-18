@@ -48,6 +48,11 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     :return:
     """
 
+    label_left_pos = 0.025  # relative to the Axis
+    label_bottom_pos = 0.075
+    label_top_pos = 0.9
+    label_right_pos = 0.975
+
     # ax.xaxis.set_major_locator(plt.MaxNLocator(4))
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
@@ -89,10 +94,11 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     if ax2 is not None:
         ax2.set_xlim(win.top_lim)
 
-    # write transition number (center, bottom)
+    # write transition number (left, bottom)
     if number and win.plot_nb > 0:
-        ax.text(0.5, 0.05, "{}".format(win.plot_nb),
-                transform=ax.transAxes, horizontalalignment='center',
+        ax.text(label_left_pos, label_bottom_pos, "{}".format(win.plot_nb),
+                transform=ax.transAxes,  horizontalalignment='left',
+                bbox=dict(facecolor='white', edgecolor='white', alpha=0.5),
                 fontsize='large', color=lte_model.tag_colors[win.transition.tag])
 
     # plot all lines from modeled tags
@@ -131,14 +137,18 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
             satLabels.append(label)
             satHandles.append(handle)
     # upper left legend
-    leg = ax.legend(newHandles, newLabels, labelcolor='linecolor', frameon=False,
+    leg = ax.legend(newHandles, newLabels, labelcolor='linecolor', frameon=True,
                     # bbox_to_anchor=(xmin, y_pos[1] - 0.01 * (ymax - ymin)),
                     # bbox_transform=ax.transData,
-                    bbox_to_anchor=(0.125, 0.85),
-                    bbox_transform=plt.gcf().transFigure,
+                    bbox_to_anchor=(label_left_pos, label_top_pos),  # default : relative to the Axis
+                    # bbox_transform=plt.gcf().transFigure,
                     loc='upper left',
+                    alignment='left',
                     # fontsize='large',
-                    handlelength=0, handletextpad=0, fancybox=True)
+                    facecolor='white', edgecolor='white', framealpha=0.5,
+                    borderpad=0.2,
+                    handlelength=0, handletextpad=0, borderaxespad=0)
+    # leg.get_frame().set_facecolor('white')
     for item in leg.legendHandles:
         item.set_visible(False)
     for text in leg.get_texts():
@@ -147,16 +157,16 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         text.set_weight('bold')
 
     # lower right legend
-    sat_leg = ax.legend(satHandles, satLabels, frameon=False, labelcolor='linecolor',
+    sat_leg = ax.legend(satHandles, satLabels, labelcolor='linecolor', frameon=True,
                         # bbox_to_anchor=(xmax1 + padding * dx1, y_pos[1] - 0.02 * (ymax - ymin)),
                         # bbox_transform=ax.transData, loc='upper right',
                         # bbox_to_anchor=(xmax, y_pos_other[1] + 0.01 * (ymax - ymin)),
                         # bbox_transform=ax.transData,
-                        bbox_to_anchor=(0.9, 0.25),
-                        bbox_transform=plt.gcf().transFigure,
-                        loc='lower right',
+                        bbox_to_anchor=(label_right_pos, label_bottom_pos),
+                        loc='lower right', alignment='right',
                         # fontsize='large',
-                        handlelength=0, handletextpad=0, fancybox=True)
+                        facecolor='white', edgecolor='white', framealpha=0.5,
+                        borderpad=0.2, handlelength=0, handletextpad=0, borderaxespad=0)
     for text in sat_leg.get_texts():
         text.set_fontstyle("italic")
         col = win.tag_colors[text.get_text()]
@@ -318,6 +328,11 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
     plt.close()
     plt.ticklabel_format(style='plain')
+    fontsize = 12
+    plt.rc('font', size=fontsize)
+    plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
+    plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
     if dpi is None:
         dpi = DPI_DEF
