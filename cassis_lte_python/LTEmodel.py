@@ -308,7 +308,7 @@ class ModelSpectrum:
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                 if 'tex' in par.name:
                     par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
-                            max=cpt.tmax if not isinstance(par.min, (float, int)) else min(par.max, cpt.tmax))
+                            max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
                 params2fit[par.name] = par
 
             for isp, sp in enumerate(cpt.species_list):
