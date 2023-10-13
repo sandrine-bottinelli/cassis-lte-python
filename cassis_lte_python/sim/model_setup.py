@@ -508,7 +508,10 @@ class Component:
         self._tex = create_parameter('{}_tex'.format(self.name), tex)  # K
         for sp in self.species_list:
             sp.tex = self.tex
+        # highest temp for the component should be the lowest value among the max values of the partition functions
         self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
+        # lowest temp for the component should be the highest value among the min values of the partition functions
+        self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
         self.transition_list = None
         self.parameters = [self._vlsr, self._size, self._tex]
 
@@ -563,6 +566,11 @@ class Component:
     def tmax(self):
         self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
         return self._tmax
+
+    @property
+    def tmin(self):
+        self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
+        return self._tmin
 
     def get_transitions(self, fmhz_ranges, **thresholds):
         self.transition_list = get_transition_df(self.species_list, fmhz_ranges, **thresholds)

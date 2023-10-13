@@ -307,7 +307,7 @@ class ModelSpectrum:
                 if 'size' in par.name:
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                 if 'tex' in par.name:
-                    par.set(min=2.73 if not isinstance(par.min, (float, int)) else par.min,
+                    par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
                             max=cpt.tmax if not isinstance(par.min, (float, int)) else min(par.max, cpt.tmax))
                 params2fit[par.name] = par
 
