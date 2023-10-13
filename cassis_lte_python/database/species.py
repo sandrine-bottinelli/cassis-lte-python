@@ -181,14 +181,20 @@ def get_partition_function(tag, db=DATABASE_SQL.cursor(), temp=None):
 
 
 def get_partition_function_tex(tref, qlog, temp, tag=''):
+    """
+    Interpolate the partition function at the desired temp, if temp is w/i the min/max of the database values.
+    Interpolation is done on a log-log scale.
+    :param tref: database values for the temperature
+    :param qlog: log10 of the partition function for the values in tref
+    :param temp: temperature at which the partition function is desired
+    :param tag: tag of the species
+    :return: interpolated partition function at temp
+    """
     if temp < tref[0]:
-        print(f'Tag {tag}: {temp} is below the lowest temperature of the partition function ({tref[0]}) : '
-              f'setting Q({temp}K)=Q({tref[0]}K)')
-        return power(10., qlog[0])
+        raise ValueError(f'Tag {tag}: {temp} is below the lowest temperature of the partition function ({tref[0]})')
     if temp > tref[-1]:
-        print(f'Tag {tag}: {temp} is above the highest temperature of the partition function ({tref[-1]}) : '
-              f'setting Q({temp}K)=Q({tref[-1]}K)')
-        return power(10., qlog[-1])
+        raise ValueError(f'Tag {tag}: {temp} is above the highest temperature of the partition function ({tref[-1]})')
+
     for i, t in enumerate(tref[:-1]):
         if tref[i+1] >= temp >= t:
             tmp = interp(log10(temp), log10(tref[i:i+2]), qlog[i:i+2])
