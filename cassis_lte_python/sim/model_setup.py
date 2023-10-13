@@ -256,9 +256,13 @@ class ModelConfiguration:
                     tuning_info['fmhz_max'].append(r_max)
             self.tuning_info = pd.DataFrame(tuning_info)
 
-    def get_linelist(self, config=None, check_tel_range=False):
+    def get_linelist(self, config=None):
         # if config is None:
         #     config = self._configuration_dict
+
+        # search w/i min/max of data :
+        print(f"{len(get_transition_df(self.tag_list, [[min(self.x_file), max(self.x_file)]], **self.thresholds))} transitions",
+              f"within thresholds and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
 
         # search only in data within telescope ranges
         f_range_search = []
@@ -267,6 +271,7 @@ class ModelConfiguration:
             f_range_search.append([min(x_sub), max(x_sub)])
         self.line_list_all = get_transition_df(self.tag_list, f_range_search)
         tr_list_tresh = select_transitions(self.line_list_all, thresholds=self.thresholds)
+        print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : {self.tuning_info['fmhz_range'].tolist()}")
         # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
         self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
         if all([len(t_list) == 0 for t_list in self.tr_list_by_tag.values()]):
