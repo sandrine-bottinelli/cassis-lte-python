@@ -62,6 +62,15 @@ class Transition:
 
 
 def get_transition_list(species: list | str, fmhz_ranges, database=DATABASE_SQL, return_type='dict', **thresholds):
+    """
+
+    :param species:
+    :param fmhz_ranges:
+    :param database:
+    :param return_type:
+    :param thresholds:
+    :return:
+    """
     tran_df = get_transition_df(species, fmhz_ranges, database=database, **thresholds)
     if return_type == 'dict':  # return dictionary {tag: transition list}
         transition_dict = {}

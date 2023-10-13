@@ -2,6 +2,7 @@ import os
 import sqlite3
 from cassis_lte_python.utils.settings import SQLITE_FILE
 
+conn = None
 
 if os.path.isfile(SQLITE_FILE):
     print(f"Using database : {SQLITE_FILE}")
