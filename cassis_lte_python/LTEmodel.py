@@ -1,4 +1,4 @@
-from cassis_lte_python.utils.utils import get_telescope, get_beam_size, get_tmb2ta_factor, dilution_factor, jnu
+from cassis_lte_python.utils.utils import get_telescope, get_beam, get_tmb2ta_factor, dilution_factor, jnu
 from cassis_lte_python.utils.utils import get_valid_pixels, reduce_wcs_dim
 from cassis_lte_python.utils.utils import format_float, is_in_range, select_from_ranges, find_nearest_id
 from cassis_lte_python.utils.utils import velocity_to_frequency, frequency_to_velocity, \
@@ -262,7 +262,7 @@ class ModelSpectrum:
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
-            'beam_sizes': get_beam_size(x_mod, tel_diam),
+            'beam_sizes': [get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)],
             'tmb2ta': [get_tmb2ta_factor(f_i, self._telescope_data[t])
                        for f_i, t in zip(x_mod, tel)] if self.t_a_star else ones(len(x_mod)),
             'jypb2k': interp(x_mod, self.x_file, self.jypb) if self.jypb is not None else ones(len(x_mod)),

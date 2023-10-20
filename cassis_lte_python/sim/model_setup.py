@@ -1,5 +1,5 @@
 from cassis_lte_python.utils.utils import velocity_to_frequency,\
-    open_data_file, is_in_range, select_from_ranges, find_nearest, expand_dict, read_noise_info
+    open_data_file, is_in_range, select_from_ranges, find_nearest, expand_dict, read_noise_info, read_telescope_file
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, TEL_DIAM
 from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
@@ -195,22 +195,9 @@ class ModelConfiguration:
         if 'tuning_info' in config:
             # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
             for tel in config['tuning_info'].keys():
-                # if tel not in TEL_DIAM.keys():
-                with open(os.path.join(TELESCOPE_DIR, tel), 'r') as f:
-                    col_names = ['Frequency (MHz)', 'Beff/Feff']
-                    tel_data = f.readlines()
-                    for line in tel_data:
-                        if 'Diameter' in line:
-                            continue
-                        TEL_DIAM[tel] = float(line)
-                        break
-                    for line in tel_data:
-                        if 'Frequency' in line:
-                            col_names = line.replace('.', ',').lstrip('//').split(',')
-                            col_names = [c.strip() for c in col_names]
-                            break
-                self._telescope_data[tel] = pd.read_csv(os.path.join(TELESCOPE_DIR, tel), sep='\t', skiprows=3,
-                                                        names=col_names, usecols=list(range(len(col_names))))
+                tel_info = read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
+                TEL_DIAM[tel] = tel_info['Diameter (m)'].unique()
+                self._telescope_data[tel] = tel_info
 
             if check_tel_range:  # check telescope ranges cover all data / all model values:
                 x_vals = self.x_file if self.x_file is not None else [min(self.x_mod), max(self.x_mod)]

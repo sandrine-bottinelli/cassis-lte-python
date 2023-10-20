@@ -271,6 +271,25 @@ def jnu(fmhz, temp: float):
     return list(res) if type(fmhz) == list else res
 
 
+def read_telescope_file(telescope_file):
+    with open(telescope_file, 'r') as f:
+        col_names = ['Frequency (MHz)', 'Beff/Feff']
+        tel_data = f.readlines()
+        tel_diam = float(tel_data[1])
+        if tel_diam == 0:
+            col_names += ['Bmaj (arcsec)', 'Bmin (arcsec)']
+        # get column names:
+        line = tel_data[2]
+        col_names = line.replace('.', ',').lstrip('//').split(',')
+        col_names = [c.strip() for c in col_names]
+
+        tel_info = pd.read_csv(telescope_file, sep='\t', skiprows=3,
+                               names=col_names, usecols=list(range(len(col_names))))
+        tel_info['Diameter (m)'] = [tel_diam for _ in range(len(tel_info))]
+
+        return tel_info
+
+
 def get_telescope(fmhz, tuning_info: pd.DataFrame):
     if isinstance(fmhz, float):
         fmhz = array(fmhz)
@@ -288,34 +307,47 @@ def get_telescope(fmhz, tuning_info: pd.DataFrame):
     return tel_list
 
 
-def get_tmb2ta_factor(fmhz, tel_data):
-    if isinstance(tel_data, pd.DataFrame):
-        f_tel = tel_data[tel_data.columns[0]]
-        beff_tel = tel_data[tel_data.columns[1]]
-        return interp(fmhz, f_tel, beff_tel)
-    else:
-        raise TypeError("Not implemented yet.")
-
-
-def get_beam_size(freq_mhz, tel_diam):
+def get_tmb2ta_factor(freq_mhz: float | int, tel_data: pd.DataFrame) -> float:
     """
-    Computes the beam size at the given frequency
+    Retrieves the beam efficiency to convert from main-beam temperature to antenna temperature
+    :param freq_mhz: frequency in MHz ; float
+    :param tel_data: telescope dataframe containing "tuning" information
+    :return:
+    """
+    f_tel = tel_data[tel_data.columns[0]]
+    beff_tel = tel_data[tel_data.columns[1]]
+    return interp(freq_mhz, f_tel, beff_tel)
+
+
+def get_beam(freq_mhz: float | int, tel_data: pd.DataFrame):
+    tel_data_f = tel_data.iloc[(tel_data['Frequency (MHz)'] - freq_mhz).abs().argmin()]  # index of the closest freq
+    if tel_data_f['Diameter (m)'] == 0:
+        return tel_data_f['Bmaj (arcsec)'], tel_data_f['Bmin (arcsec)']
+    else:
+        bs = get_beam_size(freq_mhz, tel_data_f['Diameter (m)'])
+        return bs, bs
+
+
+def get_beam_size(freq_mhz: float | int | ndarray, tel_diam: float):
+    """
+    Computes the beam size at the given frequency for the given telescope diameter
     :param freq_mhz: frequency in MHz ; float or numpy array
-    :param tel_info: telescope name or dataframe containing "tuning" information
+    :param tel_diam: telescope diameter in meters
     :return: the beam size in arcsec
     """
 
     return (1.22 * C_LIGHT / (freq_mhz * 1.e6)) / tel_diam * 3600. * 180. / pi
 
 
-def dilution_factor(source_size, beam_size, geometry='gaussian'):
+def dilution_factor(source_size, beam, geometry='gaussian'):
     # dilution_factor = tr.mol_size ** 2 / (tr.mol_size**2 + get_beam_size(model.telescope,freq)**2)
     # dilution_factor = (1. - np.cos(cpt.size/3600./180.*np.pi)) / ( (1. - np.cos(cpt.size/3600./180.*np.pi))
     #                    + (1. - np.cos(get_beam_size(self.telescope,self.frequencies)/3600./180.*np.pi)) )
+    beam_size_sq = beam[0]**2 + beam[1]**2
     if geometry == 'disc':
-        return 1. - exp(-log(2.) * (source_size / beam_size) ** 2)
+        return 1. - exp(-log(2.) * (source_size**2 / beam_size_sq))
     else:
-        return source_size ** 2 / (source_size ** 2 + beam_size ** 2)
+        return source_size ** 2 / (source_size ** 2 + beam_size_sq)
 
 
 def reduce_wcs_dim(wcs):
