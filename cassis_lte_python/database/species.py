@@ -130,15 +130,17 @@ def get_species_thresholds(sp_threshold_infos: list | dict | str | os.PathLike,
         sp_thresholds = {str(key): val for key, val in sp_threshold_infos.items()}  # make sure tag is a string
         list_species = list(sp_threshold_infos.keys())
 
-    elif os.path.isfile(sp_threshold_infos):
-        df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#', index_col=False, dtype=str)
-        col_names = df.columns[1:]
-        list_species = [t.strip() for t in df.tag]
-        for index, row in df.iterrows():
-            sp_thresholds[str(int(row.tag))] = {c: float(row[c]) for c in col_names if '*' not in row[c]}
-
+    elif isinstance(sp_threshold_infos, (str, os.PathLike)):
+        try:
+            df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#', index_col=False, dtype=str)
+            col_names = df.columns[1:]
+            list_species = [t.strip() for t in df.tag]
+            for index, row in df.iterrows():
+                sp_thresholds[str(int(row.tag))] = {c: float(row[c]) for c in col_names if '*' not in row[c]}
+        except FileNotFoundError:
+            raise FileNotFoundError
     else:
-        raise TypeError("other_species should be a list, a dictionary or a path to a file.")
+        raise TypeError("Thresholds information should be a list, a dictionary or a path to a file.")
 
     if len(sp_thresholds) > 0:  # if not empty, make sure add default thresholds if necessary
         for sp in sp_thresholds.keys():
