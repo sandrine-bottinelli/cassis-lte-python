@@ -394,10 +394,26 @@ class ModelSpectrum:
         report = self.model_fit.fit_report(**report_kws)
         pvalue = '    p-value            = {}'.format(format_float(stats.chi2.sf(self.model_fit.chisqr,
                                                                                  self.model_fit.nfree),
-                                                                   nb_signif_digits=6))
+                                                                   nb_signif_digits=2))
         lines = report.split(sep='\n')
+        new_lines = []
+        for line in lines:
+            if "+/-" in line:  # reformat
+                begin_line, end_line = line.split(sep=" +/- ")
+                label, val = begin_line.rsplit(sep=' ', maxsplit=1)
+                begin_line = f"{label} {format_float(float(val), nb_signif_digits=2): <8}"
+                err, rest = end_line.split(maxsplit=1)
+                end_line = f"{format_float(float(err), nb_signif_digits=2): <8} {rest}"
+                new_lines.append(" +/- ".join([begin_line, end_line]))
 
-        return '\n'.join(lines[:9] + [pvalue] + lines[9:])
+            elif "=" in line and ":" not in line and "#" not in line:  # reformat
+                elts = line.rsplit(sep="=", maxsplit=1)
+                new_lines.append("= ".join([elts[0], format_float(float(elts[1]), nb_signif_digits=2)]))
+
+            else:  # keep
+                new_lines.append(line)
+
+        return '\n'.join(new_lines[:9] + [pvalue] + new_lines[9:])
 
     def compute_model_intensities(self, params=None, x_values=None, line_list=None, line_center_only=False,
                                   cpt=None):
@@ -447,7 +463,7 @@ class ModelSpectrum:
             for par in params:
                 p = params[par]
                 nf = self.norm_factors[p.name]
-                p.set(min=p.min * nf, max=p.max * nf, value=p.value * nf)
+                p.set(min=p.min * nf, max=p.max * nf, value=p.value * nf, is_init_value=False)
                 if p.stderr is not None:
                     p.stderr *= nf
             self.best_params = params
