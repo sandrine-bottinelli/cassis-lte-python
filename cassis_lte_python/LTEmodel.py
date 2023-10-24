@@ -7,7 +7,7 @@ from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SQLITE_FILE
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, TEL_DIAM
-from cassis_lte_python.utils.constants import PLOT_COLORS
+from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log, concatenate, average
@@ -778,7 +778,8 @@ class ModelSpectrum:
 
         # set colors for model tags and components
         self.tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
-        self.cpt_cols = get_cmap('hsv')(linspace(0.1, 0.8, len(self.cpt_list)))
+        # self.cpt_cols = get_cmap('hsv')(linspace(0.1, 0.8, len(self.cpt_list)))
+        self.cpt_cols = [CPT_COLORS[i % len(CPT_COLORS)] for i in range(len(self.cpt_list))]
 
         if 'other_species_selection' in kwargs.keys():
             warn('other_species_selection will be deprecated, use other_species_win_selection instead',

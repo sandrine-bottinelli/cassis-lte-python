@@ -19,6 +19,7 @@ TEL_DIAM = {'iram': 30.,
             'alma_400m': 400.,
             'alma_170m': 170.}
 
+CPT_COLORS = ['blue', 'orange', 'purple', 'brown', 'pink']
 # CPT_COLORS = ['blue', 'green', 'mediumorchid']
 # CPT_COLORS = [
 #     'blue', 'dodgerblue', 'deepskyblue',
