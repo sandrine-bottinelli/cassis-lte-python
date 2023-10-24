@@ -168,7 +168,7 @@ class ModelSpectrum:
         self.vlsr_plot = model_config.vlsr_plot
         self._telescope_data = model_config._telescope_data
         self.t_a_star = model_config.t_a_star
-        self.jypb = model_config.jypb
+        self.jypb = model_config.jypb  # keep?
 
         self.x_fit = model_config.x_fit
         self.y_fit = model_config.y_fit

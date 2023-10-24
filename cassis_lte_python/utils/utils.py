@@ -2,7 +2,7 @@ from cassis_lte_python.utils.constants import C_LIGHT, K_B, H
 from cassis_lte_python.database.species import get_partition_function
 
 from numpy import exp, genfromtxt, array, log, log10, abs, linspace, append, interp, sqrt, pi, \
-    empty, where, ndarray, equal
+    empty, where, ndarray, equal, isnan
 import os
 import astropy.io.fits as fits
 from astropy import units as u
@@ -11,63 +11,145 @@ from regions import Regions, PixCoord, EllipseSkyRegion
 from astropy.wcs import WCS
 
 
-def open_data_file(filepath):
-    vlsr = 0.
-    ext = os.path.splitext(filepath)[-1]
-    if ext == '.fits':
-        with fits.open(filepath) as hdu:
+class DataFile:
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self._ext = os.path.splitext(filepath)[-1]
+        self._raw_header = None
+        self.header = None
+        self.xdata = None
+        self.ydata = None
+        self.xunit = None
+        self.yunit = None
+        self.vlsr = 0.
+        self.bmaj = None
+        self.bmin = None
+
+        self.open_data_file()
+        self.get_vlsr()
+        if self.xunit is not None:
+            self.xdata = (self.xdata * u.Unit(self.xunit)).to('MHz').value
+
+        if self.yunit in ['Jy/beam', 'beam-1 Jy']:
+            self.get_beam()
+
+    def open_data_file(self):
+        if self._ext == '.fits':
+            self.read_fits()
+
+        elif self._ext in ['.fus', '.lis']:
+            self.read_cassis()
+
+        else:
+            # print('Unknown extension.')
+            # return None
+            self.get_header()
+            data = genfromtxt(self.filepath, skip_header=len(self._raw_header), usecols=[0, 1], unpack=True)
+            data = data[~isnan(data).any(axis=1)]  # TODO : check this line is working correctly
+
+            self.xdata = data[0]
+            self.ydata = data[1]
+            self.xunit = retrieve_unit(self._raw_header)
+            self.yunit = retrieve_unit(self._raw_header, unit_type='y')
+
+        inds = self.xdata.argsort()
+        self.ydata = self.ydata[inds]
+        self.xdata = self.xdata[inds]
+
+    def read_fits(self):
+        with fits.open(self.filepath) as hdu:
+            self.header = hdu[1].header
             data = hdu[1].data
-            try:
-                vlsr = hdu[1].header['VLSR']  # km/s
-            except KeyError:
-                vlsr = 0.
+
             if isinstance(hdu[1], fits.BinTableHDU):
-                xunit = hdu[1].columns.columns[0].unit
-                freq = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()  # to be able to use in a DataFrame
-                flux = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
-                freq = (freq * u.Unit(xunit)).to('MHz').value
+                self.xunit = hdu[1].columns.columns[0].unit
+                self.yunit = hdu[1].columns.columns[1].unit
+                # do the following to be able to use in a DataFrame
+                self.xdata = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()
+                self.ydata = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
             else:
                 raise TypeError("Cannot open this fits file.")
-    elif ext in ['.fus', '.lis']:
-        with open(filepath) as f:
-            nskip = 0
+
+    def read_cassis(self):
+        self.get_header(comment='//')
+
+        data = genfromtxt(self.filepath, skip_header=len(self._raw_header), names=True)
+        self.xdata = data['FreqLsb']
+        try:
+            self.ydata = data['Intensity']
+        except ValueError:
+            self.ydata = data['Int']
+
+    def get_header(self, comment='#'):
+        with open(self.filepath) as f:
+            raw_header = []
+            header = {}
             line = f.readline()
-            while '//' in line:
-                nskip += 1
-                if 'vlsr' in line:
-                    vlsr = float(line.split()[-1])
+            while line.startswith(comment) or len(line.strip()) == 0:
+                raw_header.append(line)
+                if ":" in line and 'Point' not in line:
+                    info = line.lstrip(comment).split(":", maxsplit=1)
+                    header[info[0].strip()] = info[1].strip()
                 line = f.readline()
 
-        data = genfromtxt(filepath, skip_header=nskip, names=True)
-        freq = data['FreqLsb']
+        self._raw_header = raw_header
+        self.header = header
+
+    def get_vlsr(self):
         try:
-            flux = data['Intensity']
-        except ValueError:
-            flux = data['Int']
+            self.vlsr = float(self.header.get('vlsr'))
+        except TypeError:
+            try:
+                self.vlsr = self.header['VLSR']  # km/s
+            except KeyError:
+                print(f"Vlsr not found, using {self.vlsr} km/s")
 
-    else:
-        # print('Unknown extension.')
-        # return None
-        freq, flux = [], []
-        with open(filepath) as f:
-            lines = f.readlines()
-            for line in lines:
-                if len(line.strip()) == 0:
+    def get_beam(self):
+        try:
+            beam_info = self.header['beam size']
+            elts = beam_info.split()
+            beam = []
+            for e in elts:
+                try:
+                    beam.append(float(e))
+                except ValueError:
                     continue
-                if line[0] == '#':
-                    continue
-                elts = line.split()
-                if elts[1] not in ['NaN', 'nan']:
-                    freq.append(float(elts[0]))
-                    flux.append(float(elts[1]))
-        freq = array(freq) * 1000.
-        flux = array(flux)
+            self.bmaj = max(beam)
+            self.bmin = min(beam)
+        except KeyError:
+            try:
+                bmaj_unit = self.header['CUNIT1']
+                bmin_unit = self.header['CUNIT2']
+                self.bmaj = (self.header['BMAJ'] * u.Unit(bmaj_unit)).to('arcsec').value
+                self.bmin = (self.header['BMIN'] * u.Unit(bmin_unit)).to('arcsec').value
+            except KeyError:
+                pass
 
-    inds = freq.argsort()
-    flux = flux[inds]
-    freq = freq[inds]
 
-    return freq, flux, vlsr
+def open_data_file(filepath):
+    data = DataFile(filepath)
+    return data.xdata, data.ydata, data.vlsr
+
+
+def retrieve_unit(infos: str | list, unit_type='x') -> str:
+    """
+
+    :param infos: string or list of strings containing a unit
+    :param unit_type: whether x or y unit
+    :return: the unit
+    """
+    units = ['GHz', 'MHz']
+    if unit_type == 'y':
+        units = ['Jy', 'Jy/beam']
+    # TODO : complete above lists
+
+    if not isinstance(infos, list):
+        infos = [infos]
+
+    for unit in units:
+        for s in infos:
+            if f'({unit})' in s or f'[{unit}]' in s:
+                return unit
 
 
 def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=3):
@@ -348,6 +430,24 @@ def dilution_factor(source_size, beam, geometry='gaussian'):
         return 1. - exp(-log(2.) * (source_size**2 / beam_size_sq))
     else:
         return source_size ** 2 / (source_size ** 2 + beam_size_sq)
+
+
+def compute_jypb2k(freq_mhz, bmaj_arcsec, bmin_arcsec):
+    """
+    Compute the conversion factor from Jansky per beam to Kelvin.
+    T = (conv_fact / nu^2) * I , with :
+    conv_fact = c^2 / (2*k_B*omega) * 1.e-26 (to convert Jy to mks)
+    omega = pi*bmaj*bmin/(4*ln2)
+
+    :param freq_mhz:
+    :param bmaj_arcsec:
+    :param bmin_arcsec:
+    :return:
+    """
+    omega = (bmaj_arcsec * u.Unit('arcsec')).to('rad').value * (bmin_arcsec * u.Unit('arcsec')).to('rad').value
+    omega *= pi / (4 * log(2))
+    conv_fact = C_LIGHT ** 2 / (2 * K_B * omega) * 1.e-26
+    return conv_fact / (freq_mhz * 1.e6)**2
 
 
 def reduce_wcs_dim(wcs):

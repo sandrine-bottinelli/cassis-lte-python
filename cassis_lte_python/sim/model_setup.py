@@ -38,7 +38,8 @@ class ModelConfiguration:
         self.vlsr_plot = None
         self.cont_info = None
         self.tc = None
-        self.jypb = None
+        self.jypb = None  # keep?
+        self.beam = {'bmaj': 0, 'bmin': 0}
         self._fit_freq_except_user = configuration.get('fit_freq_except', None)
         if self._fit_freq_except_user is not None:
             if isinstance(self._fit_freq_except_user, str):
@@ -147,7 +148,7 @@ class ModelConfiguration:
                     x_mod.extend(linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
                 self.x_mod = array(x_mod)
 
-    def get_jypb(self, config=None):
+    def get_jypb(self, config=None):  # keep?
         if config is None:
             config = self._configuration_dict
         if 'beam_info' in config:
