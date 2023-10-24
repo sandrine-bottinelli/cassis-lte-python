@@ -699,20 +699,15 @@ class ModelSpectrum:
 
         return lines_plot_params
 
-    def select_windows(self, tag: str | None = None,
-                       other_species_win_selection: str | None = None,
-                       display_all=True, reset_selection=False):
+    def select_windows(self, tag: str | None = None, display_all=True):
         """
         Determine windows to plot
         :param tag: tag selection if do not want all the tags
-        :param other_species_win_selection: select only windows with other lines from this tag.
         :param display_all: if False, only display windows with fitted data
-        :param reset_selection: re-do window selection from scratch
         :return:
         """
 
-        if len(self.win_list_plot) == 0 or reset_selection:
-            self.win_list_plot = self.win_list  # by default, plot everything
+        self.win_list_plot = self.win_list  # by default, plot everything
 
         if not display_all:  # only display windows with fitted data
             self.win_list_plot = [w for w in self.win_list_plot if w.in_fit]
@@ -720,25 +715,32 @@ class ModelSpectrum:
         if tag is not None:  # user only wants one tag
             self.win_list_plot = [w for w in self.win_list_plot if w.transition.tag == tag]
 
-        if other_species_win_selection is not None:
-            # user only wants windows with other lines from the tag given in other_species_selection
-            sub_list = []
-            for win in self.win_list_plot:  # check if window contains a transition from other_species_selection
-                if other_species_win_selection in win.other_lines_display['tag']:
-                    sub_list.append(win)
-                    # f_ref = win.transition.f_trans_mhz
-                    # delta_f = 3. * delta_v_to_delta_f(fwhm, fref_mhz=f_ref)
-                    # res = select_transitions(tr_list_other_species_selection, thresholds=thresholds_other,
-                    #                          xrange=[f_ref - delta_f, f_ref + delta_f],
-                    #                          return_type='df')
-                    # if len(res) > 0:
-                    #     win.other_species_selection = res
-                    #     self.win_list_plot.append(win)
-            if len(sub_list) == 0:
-                warn(f"No windows with transitions from {other_species_win_selection}.")
-
         if self.win_list_plot == 0:
             raise LookupError("No windows to plot. Please check your tag selection.")
+
+    def select_windows_other_lines(self, other_species_win_selection: str):
+        """
+        Select windows with other lines from this tag
+        :param other_species_win_selection: desired tag
+        :return:
+        """
+
+        sub_list = []
+        for win in self.win_list_plot:  # check if window contains a transition from other_species_selection
+            if other_species_win_selection in win.other_lines_display['tag']:
+                sub_list.append(win)
+                # f_ref = win.transition.f_trans_mhz
+                # delta_f = 3. * delta_v_to_delta_f(fwhm, fref_mhz=f_ref)
+                # res = select_transitions(tr_list_other_species_selection, thresholds=thresholds_other,
+                #                          xrange=[f_ref - delta_f, f_ref + delta_f],
+                #                          return_type='df')
+                # if len(res) > 0:
+                #     win.other_species_selection = res
+                #     self.win_list_plot.append(win)
+        if len(sub_list) == 0:
+            warn(f"No windows with transitions from {other_species_win_selection}.")
+        else:
+            self.win_list_plot = sub_list
 
     def make_plot(self, tag: str | None = None,
                   filename: str | None = None, dirname: str | os.PathLike | None = None,
@@ -771,6 +773,8 @@ class ModelSpectrum:
         Notes :
             - other_species_selection is deprecated, use other_species_win_selection
         """
+        if isinstance(tag, int):
+            tag = str(tag)
 
         # set colors for model tags and components
         self.tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
@@ -795,7 +799,10 @@ class ModelSpectrum:
         else:
             self.select_windows(tag=tag, display_all=display_all)
             self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other)
-            self.select_windows(other_species_win_selection=other_species_win_selection)
+            if other_species_win_selection is not None:
+                if isinstance(other_species_win_selection, int):
+                    other_species_win_selection = str(other_species_win_selection)
+                self.select_windows_other_lines(other_species_win_selection)
 
         if gui:
             gui_plot(self)
