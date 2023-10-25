@@ -197,7 +197,7 @@ class ModelSpectrum(object):
         config_save = {
             'data_file': os.path.abspath(self.data_file) if self.data_file is not None else None,
             'output_dir': os.path.abspath(self.output_dir) if self.output_dir is not None else None,
-            'tc': os.path.abspath(self.cont_info) if os.path.isfile(self.cont_info) else self.cont_info,
+            'tc': os.path.abspath(self.cont_info) if isinstance(self.cont_info, (str, os.PathLike)) else self.cont_info,
             'tcmb': self.tcmb,
             'tuning_info': self.model_config._tuning_info_user,
             'v_range': self.model_config._v_range_user,
