@@ -700,7 +700,7 @@ class ModelSpectrum(object):
 
         return lines_plot_params
 
-    def select_windows(self, tag: str | None = None, display_all=True):
+    def select_windows(self, tag: list | None = None, display_all=True):
         """
         Determine windows to plot
         :param tag: tag selection if do not want all the tags
@@ -714,7 +714,7 @@ class ModelSpectrum(object):
             self.win_list_plot = [w for w in self.win_list_plot if w.in_fit]
 
         if tag is not None:  # user only wants one tag
-            self.win_list_plot = [w for w in self.win_list_plot if w.transition.tag == tag]
+            self.win_list_plot = [w for w in self.win_list_plot if w.transition.tag in tag]
 
         if self.win_list_plot == 0:
             raise LookupError("No windows to plot. Please check your tag selection.")
@@ -743,7 +743,7 @@ class ModelSpectrum(object):
         else:
             self.win_list_plot = sub_list
 
-    def make_plot(self, tag: str | None = None,
+    def make_plot(self, tag: str | list | None = None,
                   filename: str | None = None, dirname: str | os.PathLike | None = None,
                   gui=False, verbose=True, basic=False,
                   other_species: list | dict | str | os.PathLike = None,
@@ -774,8 +774,10 @@ class ModelSpectrum(object):
         Notes :
             - other_species_selection is deprecated, use other_species_win_selection
         """
-        if isinstance(tag, int):
-            tag = str(tag)
+        if tag is not None:
+            if not isinstance(tag, list):
+                tag = [tag]
+            tag = [str(t) for t in tag]
 
         # set colors for model tags and components
         self.tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
