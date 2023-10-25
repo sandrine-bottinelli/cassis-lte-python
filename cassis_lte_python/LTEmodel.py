@@ -1,16 +1,11 @@
-from cassis_lte_python.utils.utils import get_telescope, get_beam, get_tmb2ta_factor, dilution_factor, jnu
-from cassis_lte_python.utils.utils import get_valid_pixels, reduce_wcs_dim
-from cassis_lte_python.utils.utils import format_float, is_in_range, select_from_ranges, find_nearest_id
-from cassis_lte_python.utils.utils import velocity_to_frequency, frequency_to_velocity, \
-    fwhm_to_sigma, delta_v_to_delta_f, compute_weight, get_extended_limits, compute_tau0
+from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SQLITE_FILE
-from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, TEL_DIAM
-from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS
+from cassis_lte_python.utils.constants import TEL_DIAM, PLOT_COLORS, CPT_COLORS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
-from numpy import exp, sqrt, pi, array, interp, ones, linspace, mean, hstack, zeros, shape, log, concatenate, average
+import numpy as np
 from numpy.random import normal
 from lmfit import Model, Parameters
 from scipy import stats, signal
@@ -41,7 +36,7 @@ def generate_lte_model_func(config):
         line_list = config['line_list']
         tau_max = config['tau_max']
         file_rejected = config['file_rejected']
-        intensity_before = tc + jnu(fmhz_mod, tcmb)
+        intensity_before = tc + utils.jnu(fmhz_mod, tcmb)
         intensity = 0.
         for icpt, cpt in enumerate(config['cpt_list']):
             tex = params['{}_tex'.format(cpt.name)] * norm_factors['{}_tex'.format(cpt.name)]
@@ -59,40 +54,39 @@ def generate_lte_model_func(config):
                 fwhm = params['{}_fwhm_{}'.format(cpt.name, tag)] * norm_factors['{}_fwhm_{}'.format(cpt.name, tag)]
                 qtex = cpt.species_list[isp].get_partition_function(tex)
                 for tran in tran_list:
-                    tau0 = compute_tau0(tran, ntot, fwhm, tex, qtex=qtex)
+                    tau0 = utils.compute_tau0(tran, ntot, fwhm, tex, qtex=qtex)
                     if isinstance(tau_max, (float, int)) and tau0 >= tau_max:
                         with open(file_rejected, 'a') as f:
                             f.write('\n')
-                            f.write('\t'.join([str(tag), format_float(ntot), format_float(tex), format_float(fwhm),
-                                               format_float(tran.f_trans_mhz),
-                                               format_float(tran.eup),
-                                               format_float(tran.aij),
+                            f.write('\t'.join([str(tag), utils.format_float(ntot), utils.format_float(tex),
+                                               utils.format_float(fwhm), utils.format_float(tran.f_trans_mhz),
+                                               utils.format_float(tran.eup), utils.format_float(tran.aij),
                                                str(tran.gup),
-                                               format_float(tau0)]))
+                                               utils.format_float(tau0)]))
                         continue
 
-                    num = fmhz_mod - velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file)
-                    den = fwhm_to_sigma(delta_v_to_delta_f(fwhm, tran.f_trans_mhz))
+                    num = fmhz_mod - utils.velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file)
+                    den = utils.fwhm_to_sigma(utils.delta_v_to_delta_f(fwhm, tran.f_trans_mhz))
                     if config['line_center_only']:
-                        offset = find_nearest_id(fmhz_mod,
-                                                 velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file))
+                        offset = utils.find_nearest_id(
+                            fmhz_mod, utils.velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file))
                         pulse = signal.unit_impulse(len(fmhz_mod), offset)
                         sum_tau += tau0 * pulse
                     else:
-                        sum_tau += tau0 * exp(-0.5 * (num / den) ** 2)
+                        sum_tau += tau0 * np.exp(-0.5 * (num / den) ** 2)
 
-            ff = array([dilution_factor(size, bs) for bs in beam_sizes])
+            ff = np.array([utils.dilution_factor(size, bs) for bs in beam_sizes])
             if not cpt.isInteracting:
-                intensity_cpt = jnu(fmhz_mod, tex) * (1. - exp(-sum_tau)) - \
-                                intensity_before * (1. - exp(-sum_tau))
+                intensity_cpt = utils.jnu(fmhz_mod, tex) * (1. - np.exp(-sum_tau)) - \
+                                intensity_before * (1. - np.exp(-sum_tau))
                 intensity += ff * intensity_cpt
             else:
                 intensity_before += intensity
-                intensity_cpt = jnu(fmhz_mod, tex) * (1. - exp(-sum_tau)) - \
-                                intensity_before * (1. - exp(-sum_tau))
+                intensity_cpt = utils.jnu(fmhz_mod, tex) * (1. - np.exp(-sum_tau)) - \
+                                intensity_before * (1. - np.exp(-sum_tau))
                 intensity = ff * intensity_cpt
 
-        intensity = intensity + intensity_before - jnu(fmhz_mod, tcmb)
+        intensity = intensity + intensity_before - utils.jnu(fmhz_mod, tcmb)
         intensity += normal(0., config['noise'], len(intensity))  # add gaussian noise
         intensity *= tmb2ta  # convert to Ta
         intensity /= jypb2k  # convert to Jy/beam
@@ -111,12 +105,14 @@ class SimpleSpectrum:
         self.yunit = yunit
 
 
-class ModelSpectrum:
+class ModelSpectrum(object):
     def __init__(self, configuration: (dict, str, ModelConfiguration),
-                 verbose=True, check_tel_range=False):
+                 verbose=True, check_tel_range=False, **kwargs):
         if isinstance(configuration, (dict, str)):  # dictionary or string
             if isinstance(configuration, str):  # string : load the file
                 config = self.load_config(configuration)
+                for key, val in kwargs.items():
+                    config[key] = val
             else:  # it is a dictionary
                 config = configuration
 
@@ -138,46 +134,7 @@ class ModelSpectrum:
             raise TypeError("Configuration must be a dictionary or a path to a configuration file "
                             "or of type ModelConfiguration.")
 
-        self.output_dir = model_config.output_dir
-
-        self.tag_list = model_config.tag_list
-        self.cpt_list = model_config.cpt_list
-        self.line_list_all = model_config.line_list_all
-
-        self.cont_info = model_config.cont_info
-        self.tc = model_config.tc
-        self.tcmb = model_config.tcmb
-        self._tuning_info_user = model_config._tuning_info_user
-        self.tuning_info = model_config.tuning_info
-        self._rms_cal_user = model_config._rms_cal_user
-        self._v_range_user = model_config._v_range_user
-        self.bandwidth = model_config.bandwidth
-        self.oversampling = model_config.oversampling
-        self.fmin_mhz = model_config.fmin_mhz
-        self.fmax_mhz = model_config.fmax_mhz
-        self.dfmhz = model_config.dfmhz
-        self.noise = model_config.noise
-        self.tau_max = model_config.tau_max
-        self.file_rejected = model_config.file_rejected
-        self.thresholds = model_config.thresholds
-
-        self.data_file = model_config.data_file
-        self.x_file = model_config.x_file
-        self.y_file = model_config.y_file
-        self.vlsr_file = model_config.vlsr_file
-        self.vlsr_plot = model_config.vlsr_plot
-        self._telescope_data = model_config._telescope_data
-        self.t_a_star = model_config.t_a_star
-        self.jypb = model_config.jypb  # keep?
-
-        self.x_fit = model_config.x_fit
-        self.y_fit = model_config.y_fit
-        self.x_mod = model_config.x_mod
-        self.y_mod = model_config.y_mod
-
-        self.win_list = model_config.win_list
-        self.win_list_fit = model_config.win_list_fit
-        self.win_list_plot = model_config.win_list_plot
+        self.model_config = model_config
 
         self.params2fit = None
         self.norm_factors = None
@@ -194,7 +151,40 @@ class ModelSpectrum:
         self.tag_other_sp_colors = None
         self.cpt_cols = None
 
-        self.model_config = model_config
+        if self.minimize:
+            t_start = process_time()
+            self.generate_lte_model()
+            # Perform the fit
+            self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
+            t_stop = process_time()
+            if self.exec_time:
+                print("Execution time for minimization : {:.2f} seconds".format(t_stop - t_start))
+            if self.save_res_configs:
+                filename = ''
+                if self.name_lam is not None:
+                    filename = self.name_lam + '_'
+                filename = filename + 'fit_res'
+                self.save_fit_results(filename)
+
+        if self.save_res_configs:
+            if self.name_lam is not None:
+                self.write_lam(self.name_lam)
+            if self.name_config is not None:
+                self.save_config(self.name_config)
+
+        if self.plot_gui:
+            self.make_plot(gui=True, **self.gui_kws)
+        if self.plot_file:
+            t_start = process_time()
+            self.make_plot(gui=False, **self.file_kws)
+            t_stop = process_time()
+            if self.exec_time:
+                print("Execution time for saving plot : {:.2f} seconds".format(t_stop - t_start))
+
+    def __getattr__(self, item):
+        # method called for the times that __getattribute__ raised an AttributeError
+        # in this case, assume the item is in model_config
+        return self.model_config.__getattribute__(item)
 
     def load_config(self, path):
         try:
@@ -207,11 +197,11 @@ class ModelSpectrum:
         config_save = {
             'data_file': os.path.abspath(self.data_file) if self.data_file is not None else None,
             'output_dir': os.path.abspath(self.output_dir) if self.output_dir is not None else None,
-            'tc': self.cont_info,
+            'tc': os.path.abspath(self.cont_info) if os.path.isfile(self.cont_info) else self.cont_info,
             'tcmb': self.tcmb,
-            'tuning_info': self._tuning_info_user,
-            'v_range': self._v_range_user,
-            'chi2_info': self._rms_cal_user,
+            'tuning_info': self.model_config._tuning_info_user,
+            'v_range': self.model_config._v_range_user,
+            'chi2_info': self.model_config._rms_cal_user,
             'bandwidth': self.bandwidth,
             'oversampling': self.oversampling,
             'fghz_min': self.fmin_mhz / 1.e3,
@@ -220,6 +210,16 @@ class ModelSpectrum:
             'noise': self.noise,
             'tau_max': self.tau_max,
             'thresholds': self.thresholds,
+            'minimize': self.minimize,
+            'max_iter': self.max_iter,
+            'fit_kws': self.fit_kws,
+            'name_lam': self.name_lam,
+            'name_config': os.path.abspath(self.name_config) if os.path.isfile(self.name_config) else self.name_config,
+            'plot_gui': self.plot_gui,
+            'gui_kws': self.gui_kws,
+            'plot_file': os.path.abspath(self.plot_file) if os.path.isfile(self.plot_file) else self.plot_file,
+            'file_kws': self.file_kws,
+            'exec_time': self.exec_time,
             'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list}
         }
         json_dump = json.dumps(config_save, indent=4)  # separators=(', \n', ': '))
@@ -255,17 +255,17 @@ class ModelSpectrum:
             cpt.update_parameters(pars)
 
     def model_info(self, x_mod, line_list=None, cpt_list=None, line_center_only=False):
-        tel = get_telescope(x_mod, self.tuning_info)
-        tel_diam = array([TEL_DIAM[t] for t in tel])
+        tel = utils.get_telescope(x_mod, self.tuning_info)
+        tel_diam = np.array([TEL_DIAM[t] for t in tel])
         return {
             'tc': self.get_tc(x_mod),
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
-            'beam_sizes': [get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)],
-            'tmb2ta': [get_tmb2ta_factor(f_i, self._telescope_data[t])
-                       for f_i, t in zip(x_mod, tel)] if self.t_a_star else ones(len(x_mod)),
-            'jypb2k': interp(x_mod, self.x_file, self.jypb) if self.jypb is not None else ones(len(x_mod)),
+            'beam_sizes': [utils.get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)],
+            'tmb2ta': [utils.get_tmb2ta_factor(f_i, self._telescope_data[t])
+                       for f_i, t in zip(x_mod, tel)] if self.t_a_star else np.ones(len(x_mod)),
+            'jypb2k': np.interp(x_mod, self.x_file, self.jypb) if self.jypb is not None else np.ones(len(x_mod)),
             'line_list': self.line_list_all if line_list is None else line_list,
             'cpt_list': self.cpt_list if cpt_list is None else cpt_list,
             'noise': self.noise,
@@ -282,9 +282,9 @@ class ModelSpectrum:
             names = self.tc.dtype.names
             tc = []
             for x in x_mod:
-                id = find_nearest_id(self.tc[names[0]], x)
+                id = utils.find_nearest_id(self.tc[names[0]], x)
                 tc.append(self.tc[names[1]][id])
-            tc = array(tc)
+            tc = np.array(tc)
         return tc
 
     def get_rms(self, fmhz):
@@ -335,8 +335,8 @@ class ModelSpectrum:
         if self.x_fit is not None:
             lte_model_func = generate_lte_model_func(self.model_info(self.x_fit))
         else:
-            self.x_mod = linspace(self.fmin_mhz, self.fmax_mhz,
-                                  num=int((self.fmax_mhz - self.fmin_mhz) / self.dfmhz) + 1)
+            self.x_mod = np.linspace(self.fmin_mhz, self.fmax_mhz,
+                                     num=int((self.fmax_mhz - self.fmin_mhz) / self.dfmhz) + 1)
             lte_model_func = generate_lte_model_func(self.model_info(self.x_mod))
             self.y_mod = lte_model_func(self.x_mod, **self.params2fit)
         res = Model(lte_model_func)
@@ -362,11 +362,11 @@ class ModelSpectrum:
             self.generate_lte_model(normalize=normalize)
 
         if len(self.win_list_fit) > 1:
-            wt = concatenate([compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
-                              for win in self.win_list_fit], axis=None)
+            wt = np.concatenate([utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
+                                 for win in self.win_list_fit], axis=None)
         else:
             win = self.win_list_fit[0]
-            wt = compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
+            wt = utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
 
         # wt = None
         self.model_fit = self.model.fit(self.y_fit, params=self.params2fit, fmhz=self.x_fit,
@@ -392,23 +392,23 @@ class ModelSpectrum:
             report_kws['show_correl'] = False
 
         report = self.model_fit.fit_report(**report_kws)
-        pvalue = '    p-value            = {}'.format(format_float(stats.chi2.sf(self.model_fit.chisqr,
-                                                                                 self.model_fit.nfree),
-                                                                   nb_signif_digits=2))
+        pvalue = '    p-value            = {}'.format(
+            utils.format_float(stats.chi2.sf(self.model_fit.chisqr, self.model_fit.nfree), nb_signif_digits=2)
+        )
         lines = report.split(sep='\n')
         new_lines = []
         for line in lines:
             if "+/-" in line:  # reformat
                 begin_line, end_line = line.split(sep=" +/- ")
                 label, val = begin_line.rsplit(sep=' ', maxsplit=1)
-                begin_line = f"{label} {format_float(float(val), nb_signif_digits=2): <8}"
+                begin_line = f"{label} {utils.format_float(float(val), nb_signif_digits=2): <8}"
                 err, rest = end_line.split(maxsplit=1)
-                end_line = f"{format_float(float(err), nb_signif_digits=2): <8} {rest}"
+                end_line = f"{utils.format_float(float(err), nb_signif_digits=2): <8} {rest}"
                 new_lines.append(" +/- ".join([begin_line, end_line]))
 
             elif "=" in line and ":" not in line and "#" not in line:  # reformat
                 elts = line.rsplit(sep="=", maxsplit=1)
-                new_lines.append("= ".join([elts[0], format_float(float(elts[1]), nb_signif_digits=2)]))
+                new_lines.append("= ".join([elts[0], utils.format_float(float(elts[1]), nb_signif_digits=2)]))
 
             else:  # keep
                 new_lines.append(line)
@@ -424,7 +424,7 @@ class ModelSpectrum:
         if x_values is None:
             x_values = self.x_mod
         elif type(x_values) is list:
-            x_values = array(x_values)
+            x_values = np.array(x_values)
 
         if cpt is not None:
             c_best_pars = {}
@@ -493,19 +493,19 @@ class ModelSpectrum:
                 f_ref = win.transition.f_trans_mhz
                 fwhm = best_pars['{}_fwhm_{}'.format(cpt.name, win.transition.tag)].value
                 vlsr = best_pars['{}_vlsr'.format(cpt.name)].value
-                fmin_mod, fmax_mod = [velocity_to_frequency(vlsr + v, f_ref, vref_kms=self.vlsr_file)
+                fmin_mod, fmax_mod = [utils.velocity_to_frequency(vlsr + v, f_ref, vref_kms=self.vlsr_file)
                                       for v in [fwhm, -fwhm]]
                 # x_file_win = self.x_file[(fmin_mod <= self.x_file) & (self.x_file <= fmax_mod)]
                 # x_mod = np.linspace(min(x_file_win), max(x_file_win),
                 #                     num=self.oversampling * len(x_file_win))
                 npts = 100
-                x_mod = linspace(fmin_mod, fmax_mod, num=npts)
+                x_mod = np.linspace(fmin_mod, fmax_mod, num=npts)
                 y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=[win.transition])
 
                 dv = 2. * fwhm / (npts - 1)
                 K_kms = 0.
                 for i in range(len(y_mod) - 1):
-                    K_kms += mean([y_mod[i], y_mod[i+1]]) * dv
+                    K_kms += np.mean([y_mod[i], y_mod[i+1]]) * dv
 
                 fluxes.append([win.transition.tag, win.plot_nb, f_ref, K_kms])
 
@@ -521,18 +521,19 @@ class ModelSpectrum:
         win = self.win_list_plot[0]
         win.f_range_plot = [min(win.x_file), max(win.x_file)]
         win.bottom_unit = 'MHz'
-        win.bottom_lim = get_extended_limits(win.f_range_plot)
+        win.bottom_lim = utils.get_extended_limits(win.f_range_plot)
         win.top_lim = win.bottom_lim
 
         # compute the model :
         plot_pars = self.plot_pars()
         # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
+        # TODO: check if following is necessary
         if win.x_file is not None:
             x_mod = []
             for i, row in self.tuning_info.iterrows():
                 x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
-                x_mod.extend(linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
-            win.x_mod = array(x_mod)
+                x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+            win.x_mod = np.array(x_mod)
 
         else:
             pass
@@ -595,15 +596,15 @@ class ModelSpectrum:
             tr = win.transition
             f_ref = tr.f_trans_mhz
             win.v_range_plot = [-self.bandwidth / 2 + vlsr, self.bandwidth / 2 + vlsr]
-            win.f_range_plot = [velocity_to_frequency(v, f_ref, vref_kms=vlsr)
+            win.f_range_plot = [utils.velocity_to_frequency(v, f_ref, vref_kms=vlsr)
                                 for v in win.v_range_plot]
             win.bottom_unit = 'km/s'
-            win.bottom_lim = get_extended_limits(win.v_range_plot)
-            win.top_lim = [velocity_to_frequency(v, f_ref, vref_kms=vlsr)
+            win.bottom_lim = utils.get_extended_limits(win.v_range_plot)
+            win.top_lim = [utils.velocity_to_frequency(v, f_ref, vref_kms=vlsr)
                            for v in win.bottom_lim]
 
             # all transitions in the window (no thresholds) :
-            fwhm_mhz = delta_v_to_delta_f(fwhm, f_ref)
+            fwhm_mhz = utils.delta_v_to_delta_f(fwhm, f_ref)
             model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 0.5 * fwhm_mhz,
                                                                 max(win.f_range_plot) + 0.5 * fwhm_mhz])
             # all_lines_win = select_transitions(self.line_list_all, xrange=[min(win.f_range_plot) - 2 * fwhm_mhz,
@@ -611,7 +612,7 @@ class ModelSpectrum:
 
             # compute the model :
             # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
-            win.x_mod = linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
+            win.x_mod = np.linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
             win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
                                                        line_list=model_lines_win)
             win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
@@ -625,11 +626,11 @@ class ModelSpectrum:
                                                                         cpt=self.cpt_list[icpt]))
 
             if self.vlsr_file == 0.:
-                win.x_mod_plot = frequency_to_velocity(win.x_mod, f_ref, vref_kms=self.vlsr_file)
-                win.x_file_plot = frequency_to_velocity(win.x_file, f_ref, vref_kms=self.vlsr_file)
+                win.x_mod_plot = utils.frequency_to_velocity(win.x_mod, f_ref, vref_kms=self.vlsr_file)
+                win.x_file_plot = utils.frequency_to_velocity(win.x_file, f_ref, vref_kms=self.vlsr_file)
             else:
-                win.x_mod_plot = frequency_to_velocity(win.x_mod, f_ref, vref_kms=vlsr)
-                win.x_file_plot = frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
+                win.x_mod_plot = utils.frequency_to_velocity(win.x_mod, f_ref, vref_kms=vlsr)
+                win.x_file_plot = utils.frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
 
             # transitions from model species, w/i thresholds :
             model_lines_user = select_transitions(model_lines_win,
@@ -690,9 +691,9 @@ class ModelSpectrum:
 
         colors = tag_colors
         lines_plot_params = line_list.copy()
-        lines_plot_params['x_pos'] = [frequency_to_velocity(row.fMHz, f_ref, vref_kms=cpt.vlsr)
+        lines_plot_params['x_pos'] = [utils.frequency_to_velocity(row.fMHz, f_ref, vref_kms=cpt.vlsr)
                                       for i, row in lines_plot_params.iterrows()]
-        lines_plot_params['x_pos_err'] = [delta_v_to_delta_f(row.f_err_mhz, f_ref, reverse=True)
+        lines_plot_params['x_pos_err'] = [utils.delta_v_to_delta_f(row.f_err_mhz, f_ref, reverse=True)
                                           for i, row in lines_plot_params.iterrows()]
         lines_plot_params['label'] = [row.tag for i, row in lines_plot_params.iterrows()]
         lines_plot_params['color'] = [colors[row.tag] for i, row in lines_plot_params.iterrows()]
@@ -852,16 +853,16 @@ class ModelSpectrum:
         else:
             x_values = [self.x_file[0]]
             for x in self.x_file[1:]:
-                x_temp = linspace(x_values[-1], x, num=self.oversampling+1)
+                x_temp = np.linspace(x_values[-1], x, num=self.oversampling+1)
                 x_values.extend(list(x_temp[1:]))
-            x_values = array([x for x in x_values if is_in_range(x, list(self.tuning_info['fmhz_range']))])
+            x_values = np.array([x for x in x_values if utils.is_in_range(x, list(self.tuning_info['fmhz_range']))])
 
         if not full_spectrum:
             x_values = []
             y_values = []
             for win in self.win_list:
                 if win.x_mod is None:
-                    win.x_mod = linspace(min(win.x_file), max(win.x_file),
+                    win.x_mod = np.linspace(min(win.x_file), max(win.x_file),
                                 num=self.oversampling * (len(win.x_file) - 1) + 1)
                     mdl_info = self.model_info(win.x_mod)
                     model = Model(generate_lte_model_func(mdl_info))
@@ -876,7 +877,7 @@ class ModelSpectrum:
                                     c_best_pars[pname] = par.value
                             c_lte_func = generate_lte_model_func(mdl_info)
                             y_cpt = c_lte_func(win.x_mod, **c_best_pars)
-                            y_mod = hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
+                            y_mod = np.hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
                     win.y_mod = y_mod
                 x_values.extend(win.x_mod)
                 y_values.extend(win.y_mod)
@@ -895,7 +896,7 @@ class ModelSpectrum:
                             c_best_pars[pname] = par.value
                     c_lte_func = generate_lte_model_func(mdl_info)
                     y_cpt = c_lte_func(x_values, **c_best_pars)
-                    y_values = hstack((y_values, y_cpt.reshape(len(y_cpt), 1)))
+                    y_values = np.hstack((y_values, y_cpt.reshape(len(y_cpt), 1)))
 
         spec = x_values, y_values
         self.save_spectrum(filename, dirname=dirname, ext=ext, spec=spec)
@@ -934,7 +935,7 @@ class ModelSpectrum:
                 spectrum_type = 'synthetic'
 
         if ext == 'fits':
-            y_vals = y_values[:, 0] if len(shape(y_values)) > 1 else y_values
+            y_vals = y_values[:, 0] if len(np.shape(y_values)) > 1 else y_values
             col1 = fits.Column(name='wave', format='D', unit='MHz', array=x_values)
             col2 = fits.Column(name='flux', format='D', unit='K', array=y_vals)
             hdu = fits.BinTableHDU.from_columns([col1, col2])
@@ -975,11 +976,11 @@ class ModelSpectrum:
                                   '#xLabel: frequency [MHz]\n',
                                   '#yLabel: [Kelvin] Mean\n'])
                 for x, y in zip(x_values, y_values):
-                    if len(shape(y_values)) == 1:
-                        f.write('{}\t{}\n'.format(format_float(x, nb_signif_digits=4), format_float(y)))
+                    if len(np.shape(y_values)) == 1:
+                        f.write('{}\t{}\n'.format(utils.format_float(x, nb_signif_digits=4), utils.format_float(y)))
                     else:
-                        line = '{}\t'.format(format_float(x, nb_signif_digits=4))
-                        line += '\t'.join([format_float(yy) for yy in y])
+                        line = '{}\t'.format(utils.format_float(x, nb_signif_digits=4))
+                        line += '\t'.join([utils.format_float(yy) for yy in y])
                         f.write(line + '\n')
 
         return os.path.abspath(file_path)
@@ -987,7 +988,7 @@ class ModelSpectrum:
     def save_stick_spectrum(self, filename, dirname=None, ext='fits'):
         x_lines = [line['transition'].f_trans_mhz for _, line in self.line_list_all.iterrows()]
         x_lines.sort()
-        x_lines = array(x_lines)
+        x_lines = np.array(x_lines)
         for cpt in self.cpt_list:
             center_int = self.compute_model_intensities(x_values=x_lines, cpt=cpt)
             cont = self.get_tc(x_lines)
@@ -997,8 +998,8 @@ class ModelSpectrum:
                 x_vals.extend([x - 1.e-6, x, x + 1.e-6])
                 y_vals.extend([c, y, c])
 
-            x_vals = array([velocity_to_frequency(cpt.vlsr, x, vref_kms=self.vlsr_file)
-                            for x in x_vals])
+            x_vals = np.array([utils.velocity_to_frequency(cpt.vlsr, x, vref_kms=self.vlsr_file)
+                               for x in x_vals])
 
             self.save_spectrum(f'{filename}_{cpt.name}', dirname=dirname, spec=(x_vals, y_vals), ext='fits',
                                vlsr=cpt.vlsr)
@@ -1028,11 +1029,11 @@ class ModelSpectrum:
                         line = row['transition']
                         if line.tag in cpt.tag_list:
                             tex = self.best_params[f"{cpt.name}_tex"].value
-                            tau0 = compute_tau0(line,
-                                                self.best_params[f"{cpt.name}_ntot_{line.tag}"].value,
-                                                self.best_params[f"{cpt.name}_fwhm_{line.tag}"].value,
-                                                tex)
-                            ind0 = find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
+                            tau0 = utils.compute_tau0(line,
+                                                      self.best_params[f"{cpt.name}_ntot_{line.tag}"].value,
+                                                      self.best_params[f"{cpt.name}_fwhm_{line.tag}"].value,
+                                                      tex)
+                            ind0 = utils.find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
                             f.write(f"{line.name} ({line.qn_lo}_{line.qn_hi})\t{line.tag}")
                             f.write(f"\t{line.f_trans_mhz:.{nb_dec}f}")
                             f.write(f"\t{line.eup:.{nb_dec}f}\t{line.aij:.{nb_dec}e}\t")
@@ -1230,16 +1231,13 @@ class ModelSpectrum:
     def write_ltm(self, filename, dirname=None):
         self.write_cassis_file(filename, dirname=dirname)
 
-    def write_lam(self, filename, dirname=None, save_fit=True):
+    def write_lam(self, filename, dirname=None):
         """
         Writes a line analysis configuration file for CASSIS
         :param filename: the name of the file
         :param dirname: the directory where to save the file
-        :param save_fit: whether to save the results of the fit
-        :return:
+        :return: None
         """
-        if save_fit:
-            self.save_fit_results(filename + '_fit_res', dirname=dirname)
         self.write_cassis_file(filename, dirname=dirname)
 
 
@@ -1291,18 +1289,18 @@ class ModelCube:
                 hdr = cube.hdulist[0].header
             if hdr['BUNIT'] in ['Jy/beam', 'beam-1 Jy']:  # calculate conversion factor Jy/beam to K
                 try:
-                    bmaj = hdr['BMAJ'] * pi / 180.  # major axis in radians, assuming unit = degrees
-                    bmin = hdr['BMIN'] * pi / 180.  # major axis in radians, assuming unit = degrees
+                    bmaj = hdr['BMAJ'] * np.pi / 180.  # major axis in radians, assuming unit = degrees
+                    bmin = hdr['BMIN'] * np.pi / 180.  # major axis in radians, assuming unit = degrees
                 except KeyError:
                     for hdu in cube.hdulist[1:]:
                         try:
                             unit = hdu.columns['BMAJ'].unit  # assume bmaj and bmin have the same unit
                             fact = u.Quantity("1. {}".format(unit)).to(u.rad).value
-                            bmaj = mean(hdu.data['BMAJ']) * fact
-                            bmin = mean(hdu.data['BMIN']) * fact
+                            bmaj = np.mean(hdu.data['BMAJ']) * fact
+                            bmin = np.mean(hdu.data['BMIN']) * fact
                         except KeyError:
                             raise KeyError("Beam information not found in file {}.".format(self._data_file[h]))
-                omega = pi * bmaj * bmin / (4. * log(2.))
+                omega = np.pi * bmaj * bmin / (4. * np.log(2.))
                 sp = (cube.spectral_axis.to(u.MHz)).value
                 beams['f_mhz'].append(sp)
                 beams['beam_omega'].append([omega for _ in sp])
@@ -1319,7 +1317,7 @@ class ModelCube:
             file2 = None
             if len(masks) > 1:
                 file2 = os.path.join(self._data_path, masks[1])
-            self._masked_pix_list = get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
+            self._masked_pix_list = utils.get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
 
         self._model_configuration = ModelConfiguration(configuration)
 
@@ -1331,7 +1329,7 @@ class ModelCube:
         # create arrays of zeros for the output parameters
         self._param_arrays = dict()
         for param in params:
-            self._param_arrays['{}_arr'.format(param)] = zeros((self._nx, self._ny))
+            self._param_arrays['{}_arr'.format(param)] = np.zeros((self._nx, self._ny))
 
     def do_minimization(self, pix_nb=None, single_pix=True, size=None):
         if size is None:
@@ -1386,7 +1384,7 @@ class ModelCube:
                 self._model_configuration.get_windows()
             else:
                 for win in self._model_configuration.win_list:
-                    _, ywin = select_from_ranges(spec, [min(win.x_file), max(win.x_file)], y_values=data)
+                    _, ywin = utils.select_from_ranges(spec, [min(win.x_file), max(win.x_file)], y_values=data)
                     win.y_file = ywin
 
             # Create the model ; set verbose to False to prevent printing of number of transitions
@@ -1427,7 +1425,7 @@ class ModelCube:
     def make_maps(self):
         # read out parameter arrays into fits files
         units = {'tex': 'K', 'vlsr': 'km/s', 'fwhm': 'km/s', 'ntot': 'cm^-2', 'size': 'arcsec'}
-        hdr = reduce_wcs_dim(self._wcs).to_header()
+        hdr = utils.reduce_wcs_dim(self._wcs).to_header()
 
         for param in self._param_arrays.keys():
             unit = 'dimensionless'

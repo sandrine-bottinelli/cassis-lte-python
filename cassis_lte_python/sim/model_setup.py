@@ -1,5 +1,4 @@
-from cassis_lte_python.utils.utils import velocity_to_frequency,\
-    open_data_file, is_in_range, select_from_ranges, find_nearest, expand_dict, read_noise_info, read_telescope_file
+from cassis_lte_python.utils import utils
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, TEL_DIAM
 from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
@@ -9,7 +8,7 @@ from cassis_lte_python.sim.parameters import create_parameter
 from cassis_lte_python.utils.settings import TELESCOPE_DIR, VLSR_DEF, SIZE_DEF
 import os
 import pandas as pd
-from numpy import concatenate, loadtxt, array, interp, ndarray, mean, floor, ceil, float32, linspace, inf, empty, where
+import numpy as np
 
 
 class ModelConfiguration:
@@ -43,7 +42,7 @@ class ModelConfiguration:
         self._fit_freq_except_user = configuration.get('fit_freq_except', None)
         if self._fit_freq_except_user is not None:
             if isinstance(self._fit_freq_except_user, str):
-                fmin, fmax = loadtxt(self._fit_freq_except_user, unpack=True)
+                fmin, fmax = np.loadtxt(self._fit_freq_except_user, unpack=True)
                 self.fit_freq_except = [[f1, f2] for f1, f2 in zip(fmin, fmax)]
             elif isinstance(self._fit_freq_except_user, list):
                 if not isinstance(self._fit_freq_except_user[0], list):
@@ -115,6 +114,18 @@ class ModelConfiguration:
                               '\t'.join(['# Tag ', 'Ntot', 'Tex', 'FWHM', 'f_mhz', 'Eup', 'Aij', 'gup', 'tau'])
                               ])
 
+        self.minimize = configuration.get('minimize', False)
+        self.max_iter = configuration.get('max_iter', None)
+        self.fit_kws = configuration.get('fit_kws', None)
+        self.save_res_configs = configuration.get('save_res_configs', True)
+        self.name_lam = configuration.get('name_lam', None)
+        self.name_config = configuration.get('name_config', None)
+        self.plot_gui = configuration.get('plot_gui', True)
+        self.gui_kws = configuration.get('gui_kws', {})
+        self.plot_file = configuration.get('plot_file', False)
+        self.file_kws = configuration.get('file_kws', {})
+        self.exec_time = configuration.get('exec_time', True)
+
     def get_data(self, config=None):
         if config is None:
             config = self._configuration_dict
@@ -124,19 +135,20 @@ class ModelConfiguration:
         self.y_file = config.get('y_obs', None)
         self.vlsr_file = config.get('vlsr_obs', 0.)
         if self.data_file is not None and self.x_file is None:
-            self.x_file, self.y_file, self.vlsr_file = open_data_file(self.data_file)
+            self.x_file, self.y_file, self.vlsr_file = utils.open_data_file(self.data_file)
         self.vlsr_plot = self.vlsr_file
         if self.vlsr_plot == 0.:
             self.vlsr_plot = self.cpt_list[0].vlsr
 
-        if self.x_file is not None and isinstance(self.x_file[0], ndarray):
-            self.x_file = concatenate(self.x_file)
-        if self.y_file is not None and isinstance(self.y_file[0], ndarray):
-            self.y_file = concatenate(self.y_file)
+        if self.x_file is not None and isinstance(self.x_file[0], np.ndarray):
+            self.x_file = np.concatenate(self.x_file)
+        if self.y_file is not None and isinstance(self.y_file[0], np.ndarray):
+            self.y_file = np.concatenate(self.y_file)
 
         if self.x_file is not None:
             # select data within telescope range
-            x_sub, y_sub = select_from_ranges(self.x_file, self.tuning_info['fmhz_range'].array, y_values=self.y_file)
+            x_sub, y_sub = utils.select_from_ranges(self.x_file, self.tuning_info['fmhz_range'].array,
+                                                    y_values=self.y_file)
             self.x_file, self.y_file = x_sub, y_sub
 
             if self.oversampling == 1:
@@ -145,15 +157,15 @@ class ModelConfiguration:
                 x_mod = []
                 for i, row in self.tuning_info.iterrows():
                     x_sub = self.x_file[(self.x_file >= row['fmhz_min']) & (self.x_file <= row['fmhz_max'])]
-                    x_mod.extend(linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
-                self.x_mod = array(x_mod)
+                    x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+                self.x_mod = np.array(x_mod)
 
     def get_jypb(self, config=None):  # keep?
         if config is None:
             config = self._configuration_dict
         if 'beam_info' in config:
-            f_hz_beam = concatenate(config['beam_info']['f_mhz']) * 1.e6
-            omega = concatenate(config['beam_info']['beam_omega'])
+            f_hz_beam = np.concatenate(config['beam_info']['f_mhz']) * 1.e6
+            omega = np.concatenate(config['beam_info']['beam_omega'])
             self.jypb = 1.e-26 * C_LIGHT ** 2 / (f_hz_beam * f_hz_beam) / (2. * K_B * omega)
 
     def get_continuum(self, config=None):
@@ -169,16 +181,16 @@ class ModelConfiguration:
             self.tc = self.cont_info
         elif isinstance(self.cont_info, str) and os.path.isfile(self.cont_info):
             # cont_info is a CASSIS continuum file : MHz [tab] K
-            f_cont, t_cont = loadtxt(self.cont_info, delimiter='\t', unpack=True)
-            self.tc = array([interp(x, f_cont, t_cont) for x in self.x_file])
+            f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', unpack=True)
+            self.tc = np.array([np.interp(x, f_cont, t_cont) for x in self.x_file])
         elif isinstance(self.cont_info, dict):  # to compute continuum over ranges given by the user
             tc = []
             for freqs, fluxes, franges in zip(self.x_file, self.y_file, self.cont_info.values()):
                 cont_data = []
                 for frange in franges:
                     cont_data.append(fluxes[(freqs >= min(frange)) & (freqs <= max(frange))])
-                tc.append([mean(cont_data) for _ in freqs])
-            self.tc = concatenate(tc)
+                tc.append([np.mean(cont_data) for _ in freqs])
+            self.tc = np.concatenate(tc)
         else:
             raise TypeError("Continuum must be a float, an integer or a 2-column tab-separated file (MHz K).")
         # else:  # HDU
@@ -186,8 +198,8 @@ class ModelConfiguration:
             # tc = cont_info[datafile].data.squeeze()[j, i]
 
         if not isinstance(self.tc, (float, int)):
-            self.tc = array([(f, t) for f, t in zip(self.x_file, self.tc)],
-                               dtype=[('f_mhz', float32), ('tc', float32)])
+            self.tc = np.array([(f, t) for f, t in zip(self.x_file, self.tc)],
+                               dtype=[('f_mhz', np.float32), ('tc', np.float32)])
 
     def get_tuning_info(self, config=None, check_tel_range=False):
         if config is None:
@@ -196,7 +208,7 @@ class ModelConfiguration:
         if 'tuning_info' in config:
             # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
             for tel in config['tuning_info'].keys():
-                tel_info = read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
+                tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
                 TEL_DIAM[tel] = tel_info['Diameter (m)'].unique()
                 self._telescope_data[tel] = tel_info
 
@@ -207,15 +219,15 @@ class ModelConfiguration:
                     # is_in_range = [val[0] <= x <= val[1] for val in config['tuning_info'].values()]
                     limits = list(config['tuning_info'].values())
                     limits = [item for sublist in limits for item in sublist]
-                    if not is_in_range(x, config['tuning_info'].values):
-                        # raise LookupError("Telescope ranges do not cover some of the data, e.g. at {} MHz.". format(x))
+                    if not utils.is_in_range(x, config['tuning_info'].values):
+                        # raise LookupError("Telescope ranges do not cover some of the data, e.g. at {} MHz.".format(x))
                         extended = True
-                        nearest = find_nearest(array(limits), x)
+                        nearest = utils.find_nearest(np.array(limits), x)
                         for key, val in config['tuning_info'].items():
                             # new_lo = 5. * np.floor(x / 5.) if val[0] == nearest else val[0]
                             # new_hi = 5. * np.ceil(x / 5.) if val[1] == nearest else val[1]
-                            new_lo = floor(x) if val[0] == nearest else val[0]
-                            new_hi = ceil(x) if val[1] == nearest else val[1]
+                            new_lo = np.floor(x) if val[0] == nearest else val[0]
+                            new_hi = np.ceil(x) if val[1] == nearest else val[1]
                             config['tuning_info'][key] = [new_lo, new_hi]
                 if extended:
                     print("Some telescope ranges did not cover some of the data ; ranges were extended to :")
@@ -223,9 +235,9 @@ class ModelConfiguration:
 
             tuning_info = {'fmhz_range': [], 'telescope': [], 'fmhz_min': [], 'fmhz_max': []}
             for key, val in config['tuning_info'].items():
-                arr = array(val)
+                arr = np.array(val)
                 if len(arr.shape) == 1:
-                    arr = array([val])
+                    arr = np.array([val])
                 for r in arr:
                     r_min, r_max = min(r), max(r)
                     # if self.x_file is not None:
@@ -249,8 +261,8 @@ class ModelConfiguration:
         #     config = self._configuration_dict
 
         # search w/i min/max of data :
-        print(f"{len(get_transition_df(self.tag_list, [[min(self.x_file), max(self.x_file)]], **self.thresholds))} transitions",
-              f"within thresholds and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
+        print(f"{len(get_transition_df(self.tag_list, [[min(self.x_file), max(self.x_file)]], **self.thresholds))} ",
+              f"transitions within thresholds and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
 
         # search only in data within telescope ranges
         f_range_search = []
@@ -259,7 +271,8 @@ class ModelConfiguration:
             f_range_search.append([min(x_sub), max(x_sub)])
         self.line_list_all = get_transition_df(self.tag_list, f_range_search)
         tr_list_tresh = select_transitions(self.line_list_all, thresholds=self.thresholds)
-        print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : {self.tuning_info['fmhz_range'].tolist()}")
+        print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
+              f"{self.tuning_info['fmhz_range'].tolist()}")
         # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
         self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
         if all([len(t_list) == 0 for t_list in self.tr_list_by_tag.values()]):
@@ -279,7 +292,7 @@ class ModelConfiguration:
                         self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
 
             elif isinstance(self._v_range_user, str):
-                self._v_range_user = read_noise_info(self._v_range_user)
+                self._v_range_user = utils.read_noise_info(self._v_range_user)
 
             else:
                 raise TypeError("v_range must be a dictionary or a path to an appropriate file.")
@@ -317,7 +330,7 @@ class ModelConfiguration:
 
                     tup, rms, cal = [], [], []
                     for tag, chi2_info in self._rms_cal_user.items():
-                        for k, v in expand_dict(chi2_info).items():
+                        for k, v in utils.expand_dict(chi2_info).items():
                             tup.append((tag, k))
                             rms.append(float(v[0]))
                             cal.append(float(v[1]))
@@ -327,7 +340,7 @@ class ModelConfiguration:
 
             elif isinstance(self._rms_cal_user, str):
                 # TODO: TBC
-                self._rms_cal_user = read_noise_info(self._rms_cal_user)
+                self._rms_cal_user = utils.read_noise_info(self._rms_cal_user)
 
             else:
                 raise TypeError("chi2_info must be a dictionary or a path to an appropriate file.")
@@ -360,17 +373,17 @@ class ModelConfiguration:
                     f2fit.append([fmin, fmax])
                     fmin = max(f_range)
                 f2fit.append([fmin, max(self.x_file)])
-                f_fit, y_fit = select_from_ranges(self.x_file, f2fit, y_values=self.y_file)
+                f_fit, y_fit = utils.select_from_ranges(self.x_file, f2fit, y_values=self.y_file)
 
             win = Window(name='Full spectrum')
             win.x_file = self.x_file
             win.y_file = self.y_file
             win.f_ranges_nofit = self.fit_freq_except
-            rms = empty(len(f_fit), dtype=float)
-            cal = empty(len(f_fit), dtype=float)
+            rms = np.empty(len(f_fit), dtype=float)
+            cal = np.empty(len(f_fit), dtype=float)
             if 'freq_range' in self._rms_cal.columns:
                 for i, row in self._rms_cal.iterrows():
-                    indices = where((f_fit > row['fmin']) & (f_fit < row['fmax']))
+                    indices = np.where((f_fit > row['fmin']) & (f_fit < row['fmax']))
                     rms[indices] = row['rms']
                     cal[indices] = row['cal']
 
@@ -394,13 +407,13 @@ class ModelConfiguration:
             for tag, tr_list in self.tr_list_by_tag.items():
                 win_list_tag = []  # first find all windows with enough data
                 for i, tr in enumerate(tr_list):
-                    f_range_plot = [velocity_to_frequency(v, tr.f_trans_mhz, vref_kms=self.vlsr_file)
+                    f_range_plot = [utils.velocity_to_frequency(v, tr.f_trans_mhz, vref_kms=self.vlsr_file)
                                     for v in [-1. * self.bandwidth / 2 + self.vlsr_plot,
                                               1. * self.bandwidth / 2 + self.vlsr_plot]]
                     f_range_plot.sort()
                     x_win, y_win = None, None
                     if self.x_file is not None:
-                        x_win, y_win = select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
+                        x_win, y_win = utils.select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
                         if len(x_win) < 5 or len(set(y_win)) == 1:
                             continue
                     win = Window(tr, len(win_list_tag) + 1)
@@ -417,18 +430,20 @@ class ModelConfiguration:
 
                 # find windows with data to be fitted
                 if self._v_range_user is not None and (tag in self._v_range_user or '*' in self._v_range_user):
-                    v_range = expand_dict(self._v_range_user[tag], nt)
+                    v_range = utils.expand_dict(self._v_range_user[tag], nt)
                     for win in win_list_tag:
                         win_num = win.plot_nb
 
-                        if win_num in v_range: # window has data to be fitted
+                        if win_num in v_range:  # window has data to be fitted
                             win.v_range_fit = v_range[win_num]
-                            f_range = [velocity_to_frequency(v, win.transition.f_trans_mhz, vref_kms=self.vlsr_file)
+                            f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
+                                                                   vref_kms=self.vlsr_file)
                                        for v in v_range[win_num]]
                             f_range.sort()
                             win.f_range_fit = f_range
                             if self.x_file is not None:
-                                win.x_fit, win.y_fit = select_from_ranges(self.x_file, f_range, y_values=self.y_file)
+                                win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, f_range,
+                                                                                y_values=self.y_file)
 
                             # get rms and cal for windows to be fitted
                             try:
@@ -453,8 +468,8 @@ class ModelConfiguration:
         self.win_list_fit = [w for w in self.win_list if w.in_fit]
 
         if self.x_file is not None:
-            self.x_fit = concatenate([w.x_fit for w in self.win_list_fit], axis=None)
-            self.y_fit = concatenate([w.y_fit for w in self.win_list_fit], axis=None)
+            self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
+            self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
             # x_mod = select_from_ranges(self.x_file, self.line_list['fmhz_range_plot'], oversampling=self.oversampling)
             # self.x_mod = x_mod[0]  # TODO: why do I have to do this?
         else:
@@ -614,8 +629,8 @@ class Window:
         self.other_lines_display = {}
         self.other_species_display = pd.DataFrame()
         self.tag_colors = {}
-        self._y_min = inf
-        self._y_max = -inf
+        self._y_min = np.inf
+        self._y_max = -np.inf
 
     @property
     def name(self):

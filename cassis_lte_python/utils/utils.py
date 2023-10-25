@@ -1,8 +1,7 @@
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H
 from cassis_lte_python.database.species import get_partition_function
 
-from numpy import exp, genfromtxt, array, log, log10, abs, linspace, append, interp, sqrt, pi, \
-    empty, where, ndarray, equal, isnan
+import numpy as np
 import os
 import astropy.io.fits as fits
 from astropy import units as u
@@ -44,8 +43,8 @@ class DataFile:
             # print('Unknown extension.')
             # return None
             self.get_header()
-            data = genfromtxt(self.filepath, skip_header=len(self._raw_header), usecols=[0, 1], unpack=True)
-            data = data[~isnan(data).any(axis=1)]  # TODO : check this line is working correctly
+            data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), usecols=[0, 1], unpack=True)
+            data = data[~np.isnan(data).any(axis=1)]  # TODO : check this line is working correctly
 
             self.xdata = data[0]
             self.ydata = data[1]
@@ -73,7 +72,7 @@ class DataFile:
     def read_cassis(self):
         self.get_header(comment='//')
 
-        data = genfromtxt(self.filepath, skip_header=len(self._raw_header), names=True)
+        data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), names=True)
         self.xdata = data['FreqLsb']
         try:
             self.ydata = data['Intensity']
@@ -164,7 +163,7 @@ def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=3):
     if fmt:
         return fmt.format(value)
 
-    power = log10(abs(value)) if value != 0 else 0.
+    power = np.log10(abs(value)) if value != 0 else 0.
     rpst = "e" if (power < -2 or power > nb_digits) else "f"
     f = "{:." + str(nb_signif_digits) + rpst + "}"
     return f.format(value)
@@ -185,11 +184,11 @@ def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
             continue
         if oversampling is not None:
             xmin, xmax = min(x_sub), max(x_sub)
-            x_sub = linspace(xmin, xmax, num=len(x_sub)*oversampling, endpoint=True)
-        x_new = append(x_new, x_sub)
+            x_sub = np.linspace(xmin, xmax, num=len(x_sub)*oversampling, endpoint=True)
+        x_new = np.append(x_new, x_sub)
         if y_values is not None:
             y_sub = y_values[imin:imax+1]
-            y_new = append(y_new, y_sub)
+            y_new = np.append(y_new, y_sub)
 
     return x_new, y_new if y_values is not None else x_new
 
@@ -205,7 +204,7 @@ def find_nearest(arr, value):
     return arr[idx]
 
 
-def find_nearest_id(arr: ndarray | list, value):
+def find_nearest_id(arr: np.ndarray | list, value):
     """
     Find the index of the value in "arr" that is closest to "value".
     :param arr:
@@ -213,14 +212,14 @@ def find_nearest_id(arr: ndarray | list, value):
     :return:
     """
     if isinstance(arr, list):
-        arr = array(arr)
+        arr = np.array(arr)
 
     return (abs(arr - value)).argmin()  # NB: could improve memory usage by using dichotomy
 
 
 def find_nearest_trans(trans_list, value):
     f_trans_list = [tr.f_trans_mhz for tr in trans_list]
-    idx = (abs(array(f_trans_list) - value)).argmin()
+    idx = (abs(np.array(f_trans_list) - value)).argmin()
     return trans_list[idx]
 
 
@@ -280,9 +279,9 @@ def compute_tau0(tran, ntot, fwhm, tex, qtex=None):
     if qtex is None:
         qtex = get_partition_function(tran.tag, temp=tex)
     # nup = ntot * tran.gup / qtex / np.exp(tran.eup_J / const.k_B.value / tex)  # [cm-2]
-    nup = ntot * tran.gup / qtex / exp(tran.eup / tex)  # [cm-2]
-    tau0 = C_LIGHT ** 3 * tran.aij * nup * 1.e4 * (exp(H * tran.f_trans_mhz * 1.e6 / K_B / tex) - 1.) \
-           / (4. * pi * (tran.f_trans_mhz * 1.e6) ** 3 * fwhm * 1.e3 * sqrt(pi / log(2.)))
+    nup = ntot * tran.gup / qtex / np.exp(tran.eup / tex)  # [cm-2]
+    tau0 = C_LIGHT ** 3 * tran.aij * nup * 1.e4 * (np.exp(H * tran.f_trans_mhz * 1.e6 / K_B / tex) - 1.) \
+           / (4. * np.pi * (tran.f_trans_mhz * 1.e6) ** 3 * fwhm * 1.e3 * np.sqrt(np.pi / np.log(2.)))
     return tau0
 
 
@@ -297,16 +296,16 @@ def compute_weight(intensity, rms, cal):
     """
     for arg in [intensity, rms, cal]:
         if isinstance(arg, list):  # convert to numpy array if list
-            arg = array(arg)
+            arg = np.array(arg)
     cal = cal / 100.
-    return 1. / sqrt(rms**2 + (cal * intensity)**2)
+    return 1. / np.sqrt(rms**2 + (cal * intensity)**2)
 
 
 def fwhm_to_sigma(value, reverse=False):
     if reverse:
-        return value * (2. * sqrt(2. * log(2.)))
+        return value * (2. * np.sqrt(2. * np.log(2.)))
     else:
-        return value / (2. * sqrt(2. * log(2.)))
+        return value / (2. * np.sqrt(2. * np.log(2.)))
 
 
 def delta_v_to_delta_f(value, fref_mhz, reverse=False):
@@ -347,9 +346,9 @@ def Teq(fmhz):
 
 
 def jnu(fmhz, temp: float):
-    fmhz_arr = array(fmhz) if type(fmhz) == list else fmhz
+    fmhz_arr = np.array(fmhz) if type(fmhz) == list else fmhz
     res = (H * fmhz_arr * 1.e6 / K_B) / \
-          (exp(H * fmhz_arr * 1.e6 / (K_B * temp)) - 1.)
+          (np.exp(H * fmhz_arr * 1.e6 / (K_B * temp)) - 1.)
     return list(res) if type(fmhz) == list else res
 
 
@@ -374,17 +373,17 @@ def read_telescope_file(telescope_file):
 
 def get_telescope(fmhz, tuning_info: pd.DataFrame):
     if isinstance(fmhz, float):
-        fmhz = array(fmhz)
+        fmhz = np.array(fmhz)
 
     if len(tuning_info) == 1:
         return [tuning_info['telescope'][0]] * len(fmhz)
 
-    tel_list = empty(len(fmhz), dtype=object)
+    tel_list = np.empty(len(fmhz), dtype=object)
     for i, row in tuning_info.iterrows():
-        tel_list[where((fmhz >= row['fmhz_min']) & (fmhz <= row['fmhz_max']))] = row['telescope']
+        tel_list[np.where((fmhz >= row['fmhz_min']) & (fmhz <= row['fmhz_max']))] = row['telescope']
 
     if None in tel_list:
-        raise ValueError(f"Telescope not defined for at least one frequency: {fmhz[equal(tel_list, None)]}")
+        raise ValueError(f"Telescope not defined for at least one frequency: {fmhz[np.equal(tel_list, None)]}")
 
     return tel_list
 
@@ -398,7 +397,7 @@ def get_tmb2ta_factor(freq_mhz: float | int, tel_data: pd.DataFrame) -> float:
     """
     f_tel = tel_data[tel_data.columns[0]]
     beff_tel = tel_data[tel_data.columns[1]]
-    return interp(freq_mhz, f_tel, beff_tel)
+    return np.interp(freq_mhz, f_tel, beff_tel)
 
 
 def get_beam(freq_mhz: float | int, tel_data: pd.DataFrame):
@@ -410,7 +409,7 @@ def get_beam(freq_mhz: float | int, tel_data: pd.DataFrame):
         return bs, bs
 
 
-def get_beam_size(freq_mhz: float | int | ndarray, tel_diam: float):
+def get_beam_size(freq_mhz: float | int | np.ndarray, tel_diam: float):
     """
     Computes the beam size at the given frequency for the given telescope diameter
     :param freq_mhz: frequency in MHz ; float or numpy array
@@ -418,7 +417,7 @@ def get_beam_size(freq_mhz: float | int | ndarray, tel_diam: float):
     :return: the beam size in arcsec
     """
 
-    return (1.22 * C_LIGHT / (freq_mhz * 1.e6)) / tel_diam * 3600. * 180. / pi
+    return (1.22 * C_LIGHT / (freq_mhz * 1.e6)) / tel_diam * 3600. * 180. / np.pi
 
 
 def dilution_factor(source_size, beam, geometry='gaussian'):
@@ -427,7 +426,7 @@ def dilution_factor(source_size, beam, geometry='gaussian'):
     #                    + (1. - np.cos(get_beam_size(self.telescope,self.frequencies)/3600./180.*np.pi)) )
     beam_size_sq = beam[0]**2 + beam[1]**2
     if geometry == 'disc':
-        return 1. - exp(-log(2.) * (source_size**2 / beam_size_sq))
+        return 1. - np.exp(-np.log(2.) * (source_size**2 / beam_size_sq))
     else:
         return source_size ** 2 / (source_size ** 2 + beam_size_sq)
 
@@ -445,7 +444,7 @@ def compute_jypb2k(freq_mhz, bmaj_arcsec, bmin_arcsec):
     :return:
     """
     omega = (bmaj_arcsec * u.Unit('arcsec')).to('rad').value * (bmin_arcsec * u.Unit('arcsec')).to('rad').value
-    omega *= pi / (4 * log(2))
+    omega *= np.pi / (4 * np.log(2))
     conv_fact = C_LIGHT ** 2 / (2 * K_B * omega) * 1.e-26
     return conv_fact / (freq_mhz * 1.e6)**2
 
