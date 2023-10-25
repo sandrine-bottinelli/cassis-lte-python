@@ -1,4 +1,4 @@
-from cassis_lte_python.utils.utils import velocity_to_frequency  # , delta_v_to_delta_f, velo2freq, freq2velo
+from cassis_lte_python.utils.constants import COLOR_RESIDUAL
 from cassis_lte_python.utils.settings import DPI_DEF
 # from cassis_lte_python.gui.basic_units import mhz, BasicUnit
 import numpy as np
@@ -60,24 +60,24 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     # plot range used (or not) for chi2 calculation
     v_range = win.v_range_fit
     if v_range is not None:
-        ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.15)
+        ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.1)
     for f_range in win.f_ranges_nofit:
-        ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.15)
+        ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.1)
 
     # Plot data and/or model
-    if win.x_file is not None:
-        ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1)
+    if win.x_file is not None:  # data and model
+        ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1.5)
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='r', linewidth=1.5)
         if win.y_res is not None:
-            ax.step(win.x_file_plot, win.y_res, where='mid', color='lightskyblue', linewidth=0.75)
-    else:
+            ax.step(win.x_file_plot, win.y_res, where='mid', color=COLOR_RESIDUAL, linewidth=1)
+    else:  # model only
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
 
     #  Plot components if more than one
     if len(lte_model.cpt_list) > 1:
         for icpt, _ in enumerate(lte_model.cpt_list):
             ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
-                    color=lte_model.cpt_cols[icpt % len(lte_model.cpt_cols)], linewidth=0.5)
+                    color=lte_model.cpt_cols[icpt], linewidth=1)
 
     # Define and set limits
     ymax, ymin = win.y_max, win.y_min
@@ -191,6 +191,12 @@ def plot_line_position(x_axis, x_pos, y_range, x_pos_err, err_color=None, **kwar
 
 
 def gui_plot(lte_model):
+    if len(lte_model.cpt_list) > 1:
+        color_message = []
+        for i in range(len(lte_model.cpt_list)):
+            color_message.append(f"{lte_model.cpt_list[i].name} - {lte_model.cpt_cols[i]}")
+        print("Component colors are :", " ; ".join(color_message))
+
     fontsize = 16
     plt.rc('font', size=fontsize)
     plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
