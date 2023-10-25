@@ -406,9 +406,14 @@ class ModelSpectrum(object):
                 end_line = f"{utils.format_float(float(err), nb_signif_digits=2): <8} {rest}"
                 new_lines.append(" +/- ".join([begin_line, end_line]))
 
-            elif "=" in line and ":" not in line and "#" not in line:  # reformat
+            elif "=" in line and ":" not in line and "#" not in line:  # reformat statistics if not integers
                 elts = line.rsplit(sep="=", maxsplit=1)
                 new_lines.append("= ".join([elts[0], utils.format_float(float(elts[1]), nb_signif_digits=2)]))
+
+            elif "fixed" in line:  # keep if expr is None, else ignore
+                par = line.split(sep=":")[0].strip()
+                if self.params2fit[par].expr is None:
+                    new_lines.append(line)
 
             else:  # keep
                 new_lines.append(line)
