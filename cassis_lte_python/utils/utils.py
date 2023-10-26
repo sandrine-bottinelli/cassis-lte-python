@@ -1,4 +1,4 @@
-from cassis_lte_python.utils.constants import C_LIGHT, K_B, H
+from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
 from cassis_lte_python.database.species import get_partition_function
 
 import numpy as np
@@ -29,8 +29,8 @@ class DataFile:
         if self.xunit is not None:
             self.xdata = (self.xdata * u.Unit(self.xunit)).to('MHz').value
 
-        if self.yunit in ['Jy/beam', 'beam-1 Jy']:
-            self.get_beam()
+        if self.yunit in UNITS['flux']:
+            self.read_beam()
 
     def open_data_file(self):
         if self._ext == '.fits':
@@ -49,13 +49,14 @@ class DataFile:
             self.xdata = data[0]
             self.ydata = data[1]
             self.xunit = retrieve_unit(self._raw_header)
-            self.yunit = retrieve_unit(self._raw_header, unit_type='y')
+            self.yunit = retrieve_unit(self._raw_header, unit_type='yaxis')
 
         inds = self.xdata.argsort()
         self.ydata = self.ydata[inds]
         self.xdata = self.xdata[inds]
 
     def read_fits(self):
+        # TODO : distinguish cube fits from single spectrum fits
         with fits.open(self.filepath) as hdu:
             self.header = hdu[1].header
             data = hdu[1].data
@@ -103,7 +104,7 @@ class DataFile:
             except KeyError:
                 print(f"Vlsr not found, using {self.vlsr} km/s")
 
-    def get_beam(self):
+    def read_beam(self):
         try:
             beam_info = self.header['beam size']
             elts = beam_info.split()
@@ -124,23 +125,29 @@ class DataFile:
             except KeyError:
                 pass
 
+    def xy_data(self):
+        return self.xdata, self.ydata
+
+    def beam(self):
+        return self.bmaj, self.bmin
+
 
 def open_data_file(filepath):
     data = DataFile(filepath)
     return data.xdata, data.ydata, data.vlsr
 
 
-def retrieve_unit(infos: str | list, unit_type='x') -> str:
+def retrieve_unit(infos: str | list, unit_type='xaxis') -> str:
     """
 
     :param infos: string or list of strings containing a unit
-    :param unit_type: whether x or y unit
+    :param unit_type: choose between xaxis or yaxis
     :return: the unit
     """
-    units = ['GHz', 'MHz']
-    if unit_type == 'y':
-        units = ['Jy', 'Jy/beam']
-    # TODO : complete above lists
+    try:
+        units = UNITS[unit_type]
+    except KeyError:
+        raise KeyError("unit_type can only be xaxis or yaxis")
 
     if not isinstance(infos, list):
         infos = [infos]
@@ -356,7 +363,7 @@ def read_telescope_file(telescope_file):
     with open(telescope_file, 'r') as f:
         col_names = ['Frequency (MHz)', 'Beff/Feff']
         tel_data = f.readlines()
-        tel_diam = float(tel_data[1])
+        tel_diam = int(tel_data[1])
         if tel_diam == 0:
             col_names += ['Bmaj (arcsec)', 'Bmin (arcsec)']
         # get column names:
@@ -401,6 +408,12 @@ def get_tmb2ta_factor(freq_mhz: float | int, tel_data: pd.DataFrame) -> float:
 
 
 def get_beam(freq_mhz: float | int, tel_data: pd.DataFrame):
+    """
+    Determine the beam at a given frequency
+    :param freq_mhz:
+    :param tel_data:
+    :return:
+    """
     tel_data_f = tel_data.iloc[(tel_data['Frequency (MHz)'] - freq_mhz).abs().argmin()]  # index of the closest freq
     if tel_data_f['Diameter (m)'] == 0:
         return tel_data_f['Bmaj (arcsec)'], tel_data_f['Bmin (arcsec)']
@@ -420,18 +433,48 @@ def get_beam_size(freq_mhz: float | int | np.ndarray, tel_diam: float):
     return (1.22 * C_LIGHT / (freq_mhz * 1.e6)) / tel_diam * 3600. * 180. / np.pi
 
 
-def dilution_factor(source_size, beam, geometry='gaussian'):
+def dilution_factors(source_size: float | int,
+                     beam: tuple | list | np.ndarray,
+                     geometry: str = 'gaussian') -> float | np.ndarray:
+    """
+    Compute the dilution factors for a given source size and a list or array of beam sizes.
+    :param source_size:
+    :param beam:
+    :param geometry:
+    :return:
+    """
+    if isinstance(beam, tuple):
+        return dilution_factor(source_size, beam, geometry)
+    else:
+        return np.array([dilution_factor(source_size, b, geometry) for b in beam])
+
+
+def dilution_factor(source_size: float | int, beam: tuple, geometry: str = 'gaussian') -> float:
+    """
+    Compute the dilution factor for the given source and beam sizes, depending on the geometry
+    :param source_size: in arcsec
+    :param beam: in arcsec
+    :param geometry: gaussian (default) or disc
+    :return: the dilution factor
+    """
     # dilution_factor = tr.mol_size ** 2 / (tr.mol_size**2 + get_beam_size(model.telescope,freq)**2)
     # dilution_factor = (1. - np.cos(cpt.size/3600./180.*np.pi)) / ( (1. - np.cos(cpt.size/3600./180.*np.pi))
     #                    + (1. - np.cos(get_beam_size(self.telescope,self.frequencies)/3600./180.*np.pi)) )
-    beam_size_sq = beam[0]**2 + beam[1]**2
+    geometries = ['gaussian', 'disc']
+
+    beam_size_sq = beam[0] ** 2 + beam[1] ** 2
+
     if geometry == 'disc':
-        return 1. - np.exp(-np.log(2.) * (source_size**2 / beam_size_sq))
-    else:
+        return 1. - np.exp(-np.log(2.) * (source_size ** 2 / beam_size_sq))
+
+    if geometry == 'gaussian':
         return source_size ** 2 / (source_size ** 2 + beam_size_sq)
 
+    raise TypeError(f"Unsupported geometry, can only be {', '.join(geometries[:-1])} or {geometries[-1]}.")
 
-def compute_jypb2k(freq_mhz, bmaj_arcsec, bmin_arcsec):
+
+def compute_jypb2k(freq_mhz: float | int | list | np.ndarray,
+                   beam_arcsec: tuple | list | np.ndarray) -> float | np.ndarray:
     """
     Compute the conversion factor from Jansky per beam to Kelvin.
     T = (conv_fact / nu^2) * I , with :
@@ -439,10 +482,19 @@ def compute_jypb2k(freq_mhz, bmaj_arcsec, bmin_arcsec):
     omega = pi*bmaj*bmin/(4*ln2)
 
     :param freq_mhz:
-    :param bmaj_arcsec:
-    :param bmin_arcsec:
+    :param beam_arcsec:
     :return:
     """
+    if isinstance(freq_mhz, list):
+        freq_mhz = np.array(freq_mhz)
+
+    if isinstance(beam_arcsec, list):
+        beam_arcsec = np.array(beam_arcsec)
+
+    try:
+        bmaj_arcsec, bmin_arcsec = beam_arcsec[:, 0], beam_arcsec[:, 1]
+    except (IndexError, TypeError):
+        bmaj_arcsec, bmin_arcsec = beam_arcsec[0], beam_arcsec[1]
     omega = (bmaj_arcsec * u.Unit('arcsec')).to('rad').value * (bmin_arcsec * u.Unit('arcsec')).to('rad').value
     omega *= np.pi / (4 * np.log(2))
     conv_fact = C_LIGHT ** 2 / (2 * K_B * omega) * 1.e-26

@@ -12,6 +12,13 @@ H = const.h.value
 
 FWHM2SIGMA = 1. / (2. * np.sqrt(2. * np.log(2.)))  # to convert the FWHM of a Gaussian to sigma
 
+UNITS = {'flux': ['Jy/beam', 'Jy beam-1', 'beam-1 Jy'],
+         'frequency': ['GHz', 'MHz'],
+         'wavelength': ['nm', 'micron', 'um', 'A', 'angstrom']}
+UNITS['xaxis'] = UNITS['frequency'] + UNITS['wavelength']
+UNITS['yaxis'] = UNITS['flux'] + ['K', 'Jy']
+# TODO : complete these lists
+
 TEL_DIAM = {'iram': 30.,
             'apex': 12.,
             'jcmt': 15.,
@@ -20,7 +27,7 @@ TEL_DIAM = {'iram': 30.,
             'alma_170m': 170.}
 
 CPT_COLORS = ['blue', 'magenta', 'cyan', 'green', 'darkorange', 'darkviolet']
-COLOR_RESIDUAL = 'gold'  # 'lightskyblue'
+COLOR_RESIDUAL = 'moccasin'  # 'lightskyblue'
 
 # CPT_COLORS = ['blue', 'orange', 'purple', 'brown', 'pink']
 # CPT_COLORS = ['blue', 'green', 'mediumorchid']

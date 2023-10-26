@@ -2,7 +2,7 @@ from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SQLITE_FILE
-from cassis_lte_python.utils.constants import TEL_DIAM, PLOT_COLORS, CPT_COLORS
+from cassis_lte_python.utils.constants import TEL_DIAM, PLOT_COLORS, CPT_COLORS, UNITS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 import numpy as np
@@ -75,7 +75,7 @@ def generate_lte_model_func(config):
                     else:
                         sum_tau += tau0 * np.exp(-0.5 * (num / den) ** 2)
 
-            ff = np.array([utils.dilution_factor(size, bs) for bs in beam_sizes])
+            ff = utils.dilution_factors(size, beam_sizes)
             if not cpt.isInteracting:
                 intensity_cpt = utils.jnu(fmhz_mod, tex) * (1. - np.exp(-sum_tau)) - \
                                 intensity_before * (1. - np.exp(-sum_tau))
@@ -255,17 +255,37 @@ class ModelSpectrum(object):
             cpt.update_parameters(pars)
 
     def model_info(self, x_mod, line_list=None, cpt_list=None, line_center_only=False):
-        tel = utils.get_telescope(x_mod, self.tuning_info)
-        tel_diam = np.array([TEL_DIAM[t] for t in tel])
+        # get telescope at each frequency
+        if len(self.tuning_info) == 1:
+            tel = [self.tuning_info['telescope'][0] for _ in range(len(x_mod))]
+        else:
+            tel = utils.get_telescope(x_mod, self.tuning_info)
+
+        bmaj_data, bmin_data = self.data_file_obj.bmaj, self.data_file_obj.bmin
+        if bmaj_data is not None and bmin_data is not None:  # if beam info is present in data
+            bs = (bmaj_data, bmin_data)
+            if any([TEL_DIAM[t] == 0. for t in self.tuning_info['telescope']]):
+                # if at least one telescope contains beam values, check if beam from file equals beam from telescope
+                for t in self.tuning_info['telescope']:
+                    try:
+                        if (self._telescope_data[t]['Bmaj (arcsec)'].ne(bmaj_data)
+                                or self._telescope_data[t]['Bmin (arcsec)'].ne(bmin_data)):
+                            raise ValueError("Beam information from data and from telescope file do not match.")
+                    except KeyError:
+                        continue
+        else:
+            bs = [utils.get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)]
+
         return {
             'tc': self.get_tc(x_mod),
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
-            'beam_sizes': [utils.get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)],
+            'beam_sizes': bs,
             'tmb2ta': [utils.get_tmb2ta_factor(f_i, self._telescope_data[t])
                        for f_i, t in zip(x_mod, tel)] if self.t_a_star else np.ones(len(x_mod)),
-            'jypb2k': np.interp(x_mod, self.x_file, self.jypb) if self.jypb is not None else np.ones(len(x_mod)),
+            'jypb2k': utils.compute_jypb2k(x_mod, bs) if self.data_file_obj.yunit in UNITS['flux']
+            else np.ones(len(x_mod)),
             'line_list': self.line_list_all if line_list is None else line_list,
             'cpt_list': self.cpt_list if cpt_list is None else cpt_list,
             'noise': self.noise,

@@ -31,6 +31,7 @@ class ModelConfiguration:
         self.base_name = configuration.get('base_name', 'lte_model')
 
         self.data_file = None
+        self.data_file_obj = None
         self.x_file = None
         self.y_file = None
         self.vlsr_file = None
@@ -135,7 +136,9 @@ class ModelConfiguration:
         self.y_file = config.get('y_obs', None)
         self.vlsr_file = config.get('vlsr_obs', 0.)
         if self.data_file is not None and self.x_file is None:
-            self.x_file, self.y_file, self.vlsr_file = utils.open_data_file(self.data_file)
+            self.data_file_obj = utils.DataFile(self.data_file)
+            self.x_file, self.y_file = self.data_file_obj.xdata_mhz, self.data_file_obj.ydata
+            self.vlsr_file = self.data_file_obj.vlsr
         self.vlsr_plot = self.vlsr_file
         if self.vlsr_plot == 0.:
             self.vlsr_plot = self.cpt_list[0].vlsr
@@ -209,7 +212,7 @@ class ModelConfiguration:
             # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
             for tel in config['tuning_info'].keys():
                 tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
-                TEL_DIAM[tel] = tel_info['Diameter (m)'].unique()
+                TEL_DIAM[tel] = tel_info['Diameter (m)'][0]  # values should all be the same
                 self._telescope_data[tel] = tel_info
 
             if check_tel_range:  # check telescope ranges cover all data / all model values:
