@@ -1,4 +1,5 @@
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
+from cassis_lte_python.utils.settings import TELESCOPE_DIR
 from cassis_lte_python.database.species import get_partition_function
 
 import numpy as np
@@ -11,23 +12,31 @@ from astropy.wcs import WCS
 
 
 class DataFile:
-    def __init__(self, filepath):
+    def __init__(self, filepath, telescope=None):
         self.filepath = filepath
         self._ext = os.path.splitext(filepath)[-1]
         self._raw_header = None
         self.header = None
-        self.xdata = None
-        self.ydata = None
-        self.xunit = None
-        self.yunit = None
+        self._xdata_mhz = None
+        self._xdata = None
+        self._ydata = None
+        self._xunit = None
+        self._yunit = None
         self.vlsr = 0.
         self.bmaj = None
         self.bmin = None
+        self._telescope = telescope
 
-        self.open_data_file()
+        self.open_data_file()  # read header, x and y data, and set the units
         self.get_vlsr()
-        if self.xunit is not None:
-            self.xdata = (self.xdata * u.Unit(self.xunit)).to('MHz').value
+        if self.xunit is None:
+            print(f"X-axis unit not found, setting to MHz.")
+            self._xunit = 'MHz'
+
+        if self.xunit != 'MHz':
+            self._xdata_mhz = (self.xdata * u.Unit(self.xunit)).to('MHz').value
+        else:
+            self._xdata_mhz = self.xdata
 
         if self.yunit in UNITS['flux']:
             self.read_beam()
@@ -46,14 +55,14 @@ class DataFile:
             data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), usecols=[0, 1], unpack=True)
             data = data[~np.isnan(data).any(axis=1)]  # TODO : check this line is working correctly
 
-            self.xdata = data[0]
-            self.ydata = data[1]
-            self.xunit = retrieve_unit(self._raw_header)
-            self.yunit = retrieve_unit(self._raw_header, unit_type='yaxis')
+            self._xdata = data[0]
+            self._ydata = data[1]
+            self._xunit = retrieve_unit(self._raw_header)
+            self._yunit = retrieve_unit(self._raw_header, unit_type='yaxis')
 
         inds = self.xdata.argsort()
-        self.ydata = self.ydata[inds]
-        self.xdata = self.xdata[inds]
+        self._ydata = self.ydata[inds]
+        self._xdata = self.xdata[inds]
 
     def read_fits(self):
         # TODO : distinguish cube fits from single spectrum fits
@@ -62,11 +71,11 @@ class DataFile:
             data = hdu[1].data
 
             if isinstance(hdu[1], fits.BinTableHDU):
-                self.xunit = hdu[1].columns.columns[0].unit
-                self.yunit = hdu[1].columns.columns[1].unit
+                self._xunit = hdu[1].columns.columns[0].unit
+                self._yunit = hdu[1].columns.columns[1].unit
                 # do the following to be able to use in a DataFrame
-                self.xdata = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()
-                self.ydata = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
+                self._xdata = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()
+                self._ydata = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
             else:
                 raise TypeError("Cannot open this fits file.")
 
@@ -74,11 +83,15 @@ class DataFile:
         self.get_header(comment='//')
 
         data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), names=True)
-        self.xdata = data['FreqLsb']
+        self._xdata = data['FreqLsb']
         try:
-            self.ydata = data['Intensity']
+            self._ydata = data['Intensity']
         except ValueError:
-            self.ydata = data['Int']
+            self._ydata = data['Int']
+
+    def write(self, fileout, sep='/t'):
+        if self._ext == '.txt':
+            pass
 
     def get_header(self, comment='#'):
         with open(self.filepath) as f:
@@ -125,16 +138,68 @@ class DataFile:
             except KeyError:
                 pass
 
-    def xy_data(self):
-        return self.xdata, self.ydata
-
     def beam(self):
         return self.bmaj, self.bmin
 
+    @property
+    def xdata(self):
+        return self._xdata
+
+    @property
+    def xdata_mhz(self):
+        return self._xdata_mhz
+
+    @property
+    def ydata(self):
+        return self._ydata
+
+    @property
+    def xunit(self):
+        return self._xunit
+
+    @xunit.setter
+    def xunit(self, value):
+        if value != self._xunit:
+            # convert x-axis
+            self._xdata = self._xdata * u.Unit(self._xunit).to(value).value
+            # set new unit
+            self._xunit = value
+
+    @property
+    def yunit(self):
+        return self._yunit
+
+    @yunit.setter
+    def yunit(self, value: str):
+        if value != self._yunit:
+            if value in UNITS['flux']:
+                bmaj, bmin = None, None
+                if self._telescope is not None:
+                    try:
+                        read_telescope_file(os.path.join(TELESCOPE_DIR, self._telescope))
+                    except FileNotFoundError:
+                        try:
+                            read_telescope_file(self._telescope)
+                        except FileNotFoundError:
+                            raise FileNotFoundError(f"None of the following telescope files were found : "
+                                                    f"./{self._telescope}, {os.path.join(TELESCOPE_DIR, self._telescope)}")
+
+                elif self.bmaj is not None and self.bmin is not None:
+                    pass
+                else:
+                    raise ValueError("No beam information found - cannot perform conversion.")
+                # convert y-axis from jy/beam to K
+                self._ydata = self.ydata * compute_jypb2k(self._xdata_mhz, (bmaj, bmin))
+                # set new unit
+                self._yunit = value
+            else:
+                print(f"Cannot convert to {value}, nothing done.")
+
 
 def open_data_file(filepath):
+    """Deprecated - for backward compatibility"""
     data = DataFile(filepath)
-    return data.xdata, data.ydata, data.vlsr
+    return data.xdata_mhz, data.ydata, data.vlsr
 
 
 def retrieve_unit(infos: str | list, unit_type='xaxis') -> str:
