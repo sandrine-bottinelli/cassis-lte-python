@@ -64,20 +64,20 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     for f_range in win.f_ranges_nofit:
         ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.1)
 
-    # Plot data and/or model
-    if win.x_file is not None:  # data and model
-        ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1.5)
-        ax.step(win.x_mod_plot, win.y_mod, where='mid', color='r', linewidth=1.5)
-        if win.y_res is not None:
-            ax.step(win.x_file_plot, win.y_res, where='mid', color=COLOR_RESIDUAL, linewidth=1)
-    else:  # model only
-        ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
-
     #  Plot components if more than one
     if len(lte_model.cpt_list) > 1:
         for icpt, _ in enumerate(lte_model.cpt_list):
             ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
                     color=lte_model.cpt_cols[icpt], linewidth=1)
+
+    # Plot data and/or model
+    if win.x_file is not None:  # data and model
+        if win.y_res is not None:
+            ax.step(win.x_file_plot, win.y_res, where='mid', color=COLOR_RESIDUAL, linewidth=1)
+        ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1.5)
+        ax.step(win.x_mod_plot, win.y_mod, where='mid', color='r', linewidth=1.5)
+    else:  # model only
+        ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
 
     # Define and set limits
     ymax, ymin = win.y_max, win.y_min
