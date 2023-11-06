@@ -40,6 +40,8 @@ def generate_lte_model_func(config):
         intensity = 0.
         for icpt, cpt in enumerate(config['cpt_list']):
             tex = params['{}_tex'.format(cpt.name)] * norm_factors['{}_tex'.format(cpt.name)]
+            if config['log']:
+                tex = 10. ** tex
             vlsr = params['{}_vlsr'.format(cpt.name)] * norm_factors['{}_vlsr'.format(cpt.name)]
             size = params['{}_size'.format(cpt.name)] * norm_factors['{}_size'.format(cpt.name)]
 
@@ -51,6 +53,8 @@ def generate_lte_model_func(config):
                 else:  # assume it is a DataFrame
                     tran_list = list(line_list.loc[line_list['tag'] == tag].transition)
                 ntot = params['{}_ntot_{}'.format(cpt.name, tag)] * norm_factors['{}_ntot_{}'.format(cpt.name, tag)]
+                if config['log']:
+                    ntot = 10. ** ntot
                 fwhm = params['{}_fwhm_{}'.format(cpt.name, tag)] * norm_factors['{}_fwhm_{}'.format(cpt.name, tag)]
                 qtex = cpt.species_list[isp].get_partition_function(tex)
                 for tran in tran_list:
@@ -139,6 +143,7 @@ class ModelSpectrum(object):
         self.params2fit = None
         self.norm_factors = None
         self.model = None
+        self.log = False
         if self.x_file is not None:
             self.model = self.generate_lte_model()
         self.best_params = None
@@ -152,6 +157,8 @@ class ModelSpectrum(object):
         self.cpt_cols = None
 
         if self.minimize:
+            self.log = True
+            self.get_params2fit()
             t_start = process_time()
             self.generate_lte_model()
             # Perform the fit
@@ -281,6 +288,7 @@ class ModelSpectrum(object):
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
+            'log': self.log,
             'beam_sizes': bs,
             'tmb2ta': [utils.get_tmb2ta_factor(f_i, self._telescope_data[t])
                        for f_i, t in zip(x_mod, tel)] if self.t_a_star else np.ones(len(x_mod)),
@@ -329,10 +337,14 @@ class ModelSpectrum(object):
                 if 'tex' in par.name:
                     par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
                             max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
+                    if self.log:
+                        par.set(value=np.log10(par.value), min=np.log10(par.min), max=np.log10(par.max))
                 params2fit[par.name] = par
 
             for isp, sp in enumerate(cpt.species_list):
                 for par in sp.parameters:
+                    if 'ntot' in par.name and self.log:
+                        par.set(value=np.log10(par.value), min=np.log10(par.min), max=np.log10(par.max))
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                     params2fit[par.name] = par
 
@@ -406,7 +418,7 @@ class ModelSpectrum(object):
             report_kws = {}
 
         if self.normalize:
-            report_kws['modelpars'] = self.best_pars()
+            report_kws['modelpars'] = self.best_params
 
         if 'show_correl' not in report_kws:
             report_kws['show_correl'] = False
@@ -485,15 +497,29 @@ class ModelSpectrum(object):
     def best_pars(self):
         if self.model_fit is not None and self.best_params is None:
             params = self.model_fit.params
+            cpt_indices = {cpt.name: index for index, cpt in enumerate(self.cpt_list)}
             for par in params:
                 p = params[par]
                 nf = self.norm_factors[p.name]
                 p.set(min=p.min * nf, max=p.max * nf, value=p.value * nf, is_init_value=False)
+                if self.log and ('tex' in p.name or 'ntot' in p.name):
+                    if p.stderr is not None:
+                        p.stderr = (10**(p.value + p.stderr) - 10**(p.value - p.stderr)) / 2
+                    if 'tex' in p.name:
+                        icpt = cpt_indices[p.name.split('_')[0]]
+                        pmax = min(10 ** p.max, self.cpt_list[icpt].tmax)
+                        pmin = max(10 ** p.min, self.cpt_list[icpt].tmin)
+                    else:
+                        pmax = 10 ** p.max
+                        pmin = 10 ** p.min
+                    p.set(min=pmin, max=pmax, value=10 ** p.value, is_init_value=False)
+                    p.init_value = 10 ** p.init_value
                 if p.stderr is not None:
                     p.stderr *= nf
             self.best_params = params
-            # reset norm factors
+            # reset norm factors and log scale
             self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
+            self.log = False
 
         return self.best_params
         # parnames = list(self.model_fit.params.keys())
