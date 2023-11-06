@@ -1199,7 +1199,7 @@ class ModelSpectrum(object):
         else:  # it is a file
             cont_type = 'FILE'
             cont_size = '0.0'  # default
-            cont = self.model_config.cont_info
+            cont = os.path.abspath(self.model_config.cont_info)
 
         components = {
             '# Component parameters 1': {
@@ -1214,8 +1214,8 @@ class ModelSpectrum(object):
 
         # Define other components
         params = self.params2fit
-        if self.best_params is None and ext == 'lam':
-            params = self.best_pars()
+        if self.best_params is not None and ext == 'lam':
+            params = self.best_params
 
         for ic, cpt in enumerate(self.cpt_list):
             c_id = ic + 1
