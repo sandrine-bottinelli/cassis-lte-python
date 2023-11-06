@@ -30,8 +30,11 @@ class DataFile:
         self.open_data_file()  # read header, x and y data, and set the units
         self.get_vlsr()
         if self.xunit is None:
-            print(f"X-axis unit not found, setting to MHz.")
-            self._xunit = 'MHz'
+            xunit = input(f"X-axis unit not found, please provide it : ")
+            self._xunit = xunit
+        if self.yunit is None:
+            yunit = input(f"Y-axis unit not found, please provide it : ")
+            self._yunit = yunit
 
         if self.xunit != 'MHz':
             self._xdata_mhz = (self.xdata * u.Unit(self.xunit)).to('MHz').value
@@ -89,9 +92,21 @@ class DataFile:
         except ValueError:
             self._ydata = data['Int']
 
-    def write(self, fileout, sep='/t'):
+    def write(self, fileout, sep='\t'):
         if self._ext == '.txt':
-            pass
+            hdr = [f'{key}: {val}\n' for key, val in self.header]
+            np.savetxt(fileout, sep=sep, header=hdr)
+        elif self._ext == '.fits':
+            tab_hdu_out = fits.BinTableHDU.from_columns(
+                [fits.Column(name='wave', format='D', array=self.xdata, unit=self.xunit),
+                 fits.Column(name='flux', format='D', array=self.ydata, unit=self.yunit)],
+                header=self.header
+            )
+            with fits.open(self.filepath) as hdu:
+                hdu[1] = tab_hdu_out
+                hdu.writeto(fileout, overwrite=True)
+        else:
+            print("Unknown extension.")
 
     def get_header(self, comment='#'):
         with open(self.filepath) as f:
@@ -131,8 +146,12 @@ class DataFile:
             self.bmin = min(beam)
         except KeyError:
             try:
-                bmaj_unit = self.header['CUNIT1']
-                bmin_unit = self.header['CUNIT2']
+                if 'CUNIT1' in self.header:
+                    bmaj_unit = self.header['CUNIT1']
+                    bmin_unit = self.header['CUNIT2']
+                else:
+                    bmaj_unit = self.header['TUNIT1']
+                    bmin_unit = self.header['TUNIT2']
                 self.bmaj = (self.header['BMAJ'] * u.Unit(bmaj_unit)).to('arcsec').value
                 self.bmin = (self.header['BMIN'] * u.Unit(bmin_unit)).to('arcsec').value
             except KeyError:
@@ -162,6 +181,19 @@ class DataFile:
         if value != self._xunit:
             # convert x-axis
             self._xdata = self._xdata * u.Unit(self._xunit).to(value).value
+            # update header
+            if self.header is not None:
+                if isinstance(self.header, dict):
+                    self.header['xLabel'].replace(self._xunit, value)
+                else:  # assume header from fits
+                    if 'CUNIT1' in self.header:
+                        self.header['CUNIT1'] = value
+                    else:
+                        self.header['TUNIT1'] = value
+            try:
+                self.header['WAVE'] = (self.header['WAVE'], f'[{value}]')
+            except KeyError:
+                pass
             # set new unit
             self._xunit = value
 
@@ -172,28 +204,47 @@ class DataFile:
     @yunit.setter
     def yunit(self, value: str):
         if value != self._yunit:
-            if value in UNITS['flux']:
+            if ((self._yunit in UNITS['flux'] and value == 'K')
+                    or (self._yunit == 'K' and value in UNITS['flux'])):
                 bmaj, bmin = None, None
                 if self._telescope is not None:
-                    try:
-                        read_telescope_file(os.path.join(TELESCOPE_DIR, self._telescope))
-                    except FileNotFoundError:
+                    locations = [self._telescope, os.path.join(TELESCOPE_DIR, self._telescope)]
+                    tel_info = None
+                    for loc in locations:
                         try:
-                            read_telescope_file(self._telescope)
+                            tel_info = read_telescope_file(loc)
                         except FileNotFoundError:
-                            raise FileNotFoundError(f"None of the following telescope files were found : "
-                                                    f"./{self._telescope}, {os.path.join(TELESCOPE_DIR, self._telescope)}")
-
+                            continue
+                    if tel_info is None:
+                        raise FileNotFoundError(f"None of the following telescope files were found : "
+                                                f"{', '.join([loc for loc in locations])}")
+                    jypb2k = compute_jypb2k(self._xdata_mhz, [get_beam(f_i, tel_info) for f_i in self.xdata_mhz])
                 elif self.bmaj is not None and self.bmin is not None:
-                    pass
+                    jypb2k = compute_jypb2k(self._xdata_mhz, (bmaj, bmin))
                 else:
                     raise ValueError("No beam information found - cannot perform conversion.")
-                # convert y-axis from jy/beam to K
-                self._ydata = self.ydata * compute_jypb2k(self._xdata_mhz, (bmaj, bmin))
+                # convert y-axis
+                if value == 'K':  # from K to jy/beam
+                    self._ydata = self.ydata * jypb2k
+                else:  # from jy/beam to K
+                    self._ydata = self.ydata / jypb2k
+                # update header
+                if self.header is not None:
+                    if isinstance(self.header, dict):
+                        self.header['yLabel'].replace(self._yunit, value)
+                    else:  # assume header from fits
+                        if 'CUNIT2' in self.header:
+                            self.header['CUNIT2'] = value
+                        else:
+                            self.header['TUNIT2'] = value
+                        try:
+                            self.header['FLUX'] = (self.header['FLUX'], f'[{value}]')
+                        except KeyError:
+                            pass
                 # set new unit
                 self._yunit = value
             else:
-                print(f"Cannot convert to {value}, nothing done.")
+                print(f"Cannot convert from {self._yunit} to {value}, nothing done.")
 
 
 def open_data_file(filepath):
