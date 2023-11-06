@@ -27,7 +27,7 @@ class ModelConfiguration:
 
         self.output_dir = configuration.get('output_dir', os.path.curdir)
         if not os.path.isdir(self.output_dir):
-            os.mkdir(self.output_dir)
+            os.makedirs(self.output_dir)
         self.base_name = configuration.get('base_name', 'lte_model')
 
         self.data_file = None

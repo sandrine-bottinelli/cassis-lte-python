@@ -138,7 +138,7 @@ def get_species_thresholds(sp_threshold_infos: list | dict | str | os.PathLike,
             for index, row in df.iterrows():
                 sp_thresholds[str(int(row.tag))] = {c: float(row[c]) for c in col_names if '*' not in row[c]}
         except FileNotFoundError:
-            raise FileNotFoundError
+            raise FileNotFoundError(f"{sp_thresholds} not found.")
     else:
         raise TypeError("Thresholds information should be a list, a dictionary or a path to a file.")
 
