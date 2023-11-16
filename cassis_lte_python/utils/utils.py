@@ -578,7 +578,7 @@ def dilution_factor(source_size: float | int, beam: tuple, geometry: str = 'gaus
     #                    + (1. - np.cos(get_beam_size(self.telescope,self.frequencies)/3600./180.*np.pi)) )
     geometries = ['gaussian', 'disc']
 
-    beam_size_sq = beam[0] ** 2 + beam[1] ** 2
+    beam_size_sq = beam[0] * beam[1]
 
     if geometry == 'disc':
         return 1. - np.exp(-np.log(2.) * (source_size ** 2 / beam_size_sq))
