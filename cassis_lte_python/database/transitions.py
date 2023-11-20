@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pandas as pd
 from cassis_lte_python.utils.utils import delta_v_to_delta_f
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H

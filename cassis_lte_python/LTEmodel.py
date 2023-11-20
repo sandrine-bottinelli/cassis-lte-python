@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
@@ -18,7 +20,6 @@ import json
 from spectral_cube import SpectralCube
 from astropy.wcs import WCS
 from time import process_time
-from matplotlib.pyplot import get_cmap
 from warnings import warn
 
 

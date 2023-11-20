@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from cassis_lte_python.utils.constants import COLOR_RESIDUAL
 from cassis_lte_python.utils.settings import DPI_DEF
 # from cassis_lte_python.gui.basic_units import mhz, BasicUnit

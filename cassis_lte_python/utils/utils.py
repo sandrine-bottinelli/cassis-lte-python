@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
 from cassis_lte_python.utils.settings import TELESCOPE_DIR
 from cassis_lte_python.database.species import get_partition_function

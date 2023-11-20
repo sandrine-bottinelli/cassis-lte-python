@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from cassis_lte_python.utils import utils
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, TEL_DIAM
 from cassis_lte_python.utils.observer import Observable

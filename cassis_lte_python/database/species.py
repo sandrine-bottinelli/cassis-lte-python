@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from numpy import interp, power, log10, genfromtxt
 import os
 import pandas as pd
