@@ -80,6 +80,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
 
     # Define and set limits
+    ax.relim()  # recompute the axis data limits
     ymin, ymax = ax.get_ylim()
     ymin = ymin - 0.05 * (ymax - ymin)
     ymax = ymax + 0.1 * (ymax - ymin)
