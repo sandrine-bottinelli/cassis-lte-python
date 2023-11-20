@@ -162,6 +162,8 @@ class ModelConfiguration:
                 x_mod = []
                 for i, row in self.tuning_info.iterrows():
                     x_sub = self.x_file[(self.x_file >= row['fmhz_min']) & (self.x_file <= row['fmhz_max'])]
+                    if len(x_sub) == 0:
+                        continue
                     x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
                 self.x_mod = np.array(x_mod)
 

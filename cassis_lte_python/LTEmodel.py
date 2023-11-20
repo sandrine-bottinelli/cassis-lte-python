@@ -584,6 +584,8 @@ class ModelSpectrum(object):
             x_mod = []
             for i, row in self.tuning_info.iterrows():
                 x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
+                if len(x_sub) == 0:
+                    continue
                 x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
             win.x_mod = np.array(x_mod)
 
