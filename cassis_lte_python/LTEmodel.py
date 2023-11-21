@@ -377,8 +377,7 @@ class ModelSpectrum(object):
 
         return res
 
-    def fit_model(self, normalize=False, max_nfev=None, fit_kws=None, print_report=True, report_kws=None,
-                  method='leastsq'):
+    def fit_model(self, normalize=False, max_nfev=None, fit_kws=None, print_report=True, report_kws=None):
         """
         Computes weights and perform the fit.
         :param normalize: whether to normalize the parameters (default=False)
@@ -402,6 +401,11 @@ class ModelSpectrum(object):
             wt = utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
 
         # wt = None
+        method = fit_kws.get('method', 'leastsq')
+        print(f'Performing minimization with the {method} method...')
+        if 'method' in fit_kws:
+            fit_kws.pop('method')
+
         self.model_fit = self.model.fit(self.y_fit, params=self.params2fit, fmhz=self.x_fit,
                                         weights=wt,
                                         method=method,
