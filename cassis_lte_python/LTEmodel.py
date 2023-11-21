@@ -181,10 +181,10 @@ class ModelSpectrum(object):
                 self.save_config(self.name_config)
 
         if self.plot_gui:
-            self.make_plot(gui=True, **self.gui_kws)
+            self.make_plot(gui=True, **utils.concat_dict(self.plot_kws, self.gui_kws))
         if self.plot_file:
             t_start = process_time()
-            self.make_plot(gui=False, **self.file_kws)
+            self.make_plot(gui=False, **utils.concat_dict(self.plot_kws, self.file_kws))
             t_stop = process_time()
             if self.exec_time:
                 print("Execution time for saving plot : {:.2f} seconds".format(t_stop - t_start))
@@ -754,11 +754,12 @@ class ModelSpectrum(object):
 
         return lines_plot_params
 
-    def select_windows(self, tag: list | None = None, display_all=True):
+    def select_windows(self, tag: list | None = None, display_all=True, windows: dict | None = None):
         """
         Determine windows to plot
         :param tag: tag selection if do not want all the tags
         :param display_all: if False, only display windows with fitted data
+        :param windows: a dictionary of the windows to be plotted (keys=tags, vals=window numbers)
         :return:
         """
 
@@ -769,6 +770,12 @@ class ModelSpectrum(object):
 
         if tag is not None:  # user only wants one tag
             self.win_list_plot = [w for w in self.win_list_plot if w.transition.tag in tag]
+
+        if windows is not None:
+            new_dict = utils.expand_dict(windows, expand_vals=True)
+            win_names2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
+
+            self.win_list_plot = [w for w in self.win_list if w.name in win_names2plot]
 
         if self.win_list_plot == 0:
             raise LookupError("No windows to plot. Please check your tag selection.")
@@ -797,37 +804,47 @@ class ModelSpectrum(object):
         else:
             self.win_list_plot = sub_list
 
-    def make_plot(self, tag: str | list | None = None,
-                  filename: str | None = None, dirname: str | os.PathLike | None = None,
-                  gui=False, verbose=True, basic=False,
-                  other_species: list | dict | str | os.PathLike = None,
-                  other_species_plot: list | str = 'all',
-                  other_species_win_selection: str | None = None,
-                  display_all=True, dpi=None,
-                  nrows=4, ncols=3, **kwargs):
+    def make_plot(self, **kwargs):
         """
-        Prepare all data to do the plot(s)
-
-        :param tag: tag selection if do not want all the tags
-        :param filename: nome of the file to be saved
-        :param dirname: directory where to save the file
-        :param gui: interactive display
-        :param verbose:
-        :param basic: do not plot other species
-        :param other_species: list or dictionary or file with other species ;
+        Prepare all data to do the plot(s), using provided keywords.
+        Possible keywords are :
+         tag: tag selection if do not want all the tags
+         filename: nome of the file to be saved
+         dirname: directory where to save the file
+         gui: interactive display
+         verbose:
+         basic: do not plot other species
+         other_species: list or dictionary or file with other species ;
             dictionary and file can contain their thresholds
-        :param other_species_plot: list of other species to plot ; if None, other_species is used ;
+         other_species_plot: list of other species to plot ; if None, other_species is used ;
             if other_species is provided, only these species are kept
-        :param other_species_win_selection: select only windows with other lines from this tag.
-        :param display_all: if False, only display windows with fitted data
-        :param dpi:
-        :param nrows: maximum number of rows per page
-        :param ncols: maximum number of columns per page
+         other_species_win_selection: select only windows with other lines from this tag.
+         display_all: if False, only display windows with fitted data
+         dpi:
+         nrows: maximum number of rows per page
+         ncols: maximum number of columns per page
         :return:
 
         Notes :
             - other_species_selection is deprecated, use other_species_win_selection
         """
+
+        # Unpack keywords :
+        tag = kwargs.get('tag', None)
+        win2plot = kwargs.get('windows', None)
+        filename = kwargs.get('filename', None)
+        dirname = kwargs.get('dirname', None)
+        gui = kwargs.get('gui', False)
+        verbose = kwargs.get('verbose', True)
+        basic = kwargs.get('basic', False)
+        other_species = kwargs.get('other_species', None)
+        other_species_plot = kwargs.get('other_species_plot', 'all')
+        other_species_win_selection = kwargs.get('other_species_win_selection', None)
+        display_all = kwargs.get('verbose', True)
+        dpi = kwargs.get('dpi', None)
+        nrows = kwargs.get('nrows', 4)
+        ncols = kwargs.get('ncols', 3)
+
         if tag is not None:
             if not isinstance(tag, list):
                 tag = [tag]
@@ -855,7 +872,7 @@ class ModelSpectrum(object):
             self.win_list_plot = self.win_list
             self.setup_plot_fus()
         else:
-            self.select_windows(tag=tag, display_all=display_all)
+            self.select_windows(tag=tag, display_all=display_all, windows=win2plot)
             self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other)
             if other_species_win_selection is not None:
                 if isinstance(other_species_win_selection, int):

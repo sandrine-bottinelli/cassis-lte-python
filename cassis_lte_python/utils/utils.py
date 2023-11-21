@@ -356,7 +356,39 @@ def is_in_range(fmhz, list_ranges):
     return res
 
 
-def expand_dict(dic: dict, n_items=None):
+def concat_dict(d1: dict, d2: dict) -> dict:
+    """
+    Concatenate two dictionaries ; if a keyword is present in both, value from d2 is kept.
+    :param d1: a dictionary
+    :param d2: another dictionary whose keywords/values will be added to or will override those in d1
+    :return: the concatenated dictionary
+    """
+    d1_2 = d1
+    for k, v in d2.items():
+        d1_2[k] = v
+
+    return d1_2
+
+
+def expand_string(s: str) -> list:
+    """
+    Expand a string of the form '1, 3-5' into a list of integer [1, 3, 4, 5]
+    :param s:
+    :return:
+    """
+    li = []
+    for elt in s.split(','):
+        if '-' in elt:
+            nmin, nmax = elt.split('-')
+            for i in range(int(nmin), int(nmax) + 1):
+                li.append(i)
+        else:
+            li.append(int(elt))
+
+    return li
+
+
+def expand_dict(dic: dict, n_items=None, expand_vals=False):
     if '*' in dic:
         if n_items is not None:
             new_dic = {i + 1: dic['*'] for i in range(n_items)}
@@ -366,13 +398,11 @@ def expand_dict(dic: dict, n_items=None):
     else:
         new_dic = {}
         for k, v in dic.items():
-            for e in k.split(','):
-                if '-' in e:
-                    nmin, nmax = e.split('-')
-                    for i in range(int(nmin), int(nmax) + 1):
-                        new_dic[i] = v
-                else:
-                    new_dic[int(e)] = v
+            if expand_vals:
+                new_dic[k] = expand_string(v)
+            else:
+                for nb in expand_string(k):
+                    new_dic[nb] = v
 
     return new_dic
 

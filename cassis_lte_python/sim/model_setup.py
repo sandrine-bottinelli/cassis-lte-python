@@ -123,6 +123,7 @@ class ModelConfiguration:
         self.save_res_configs = configuration.get('save_res_configs', True)
         self.name_lam = configuration.get('name_lam', None)
         self.name_config = configuration.get('name_config', None)
+        self.plot_kws = configuration.get('plot_kws', {})
         self.plot_gui = configuration.get('plot_gui', True)
         self.gui_kws = configuration.get('gui_kws', {})
         self.plot_file = configuration.get('plot_file', False)
