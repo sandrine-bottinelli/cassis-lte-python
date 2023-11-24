@@ -629,7 +629,7 @@ class ModelSpectrum(object):
                                                                     line_list=self.line_list_all)
             win.y_res += self.get_tc(win.x_file)
 
-    def setup_plot_la(self, verbose=True, other_species_dict: dict | None = None):
+    def setup_plot_la(self, verbose=True, other_species_dict: dict | None = None, **kwargs):
         """
         Prepare all data to do the plots in line analysis mode
 
@@ -694,6 +694,10 @@ class ModelSpectrum(object):
             win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
                                                                     line_list=model_lines_win)
             win.y_res += self.get_tc(win.x_file)
+
+            if 'model_err' in kwargs and kwargs['model_err']:
+                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod,
+                                                                **self.model_info(win.x_mod, line_list=model_lines_win))
 
             if len(self.cpt_list) > 1:
                 for icpt in range(len(self.cpt_list)):
@@ -863,6 +867,7 @@ class ModelSpectrum(object):
         other_species_plot = kwargs.get('other_species_plot', 'all')
         other_species_win_selection = kwargs.get('other_species_win_selection', None)
         display_all = kwargs.get('verbose', True)
+        model_err = kwargs.get('model_err', True)
         dpi = kwargs.get('dpi', None)
         nrows = kwargs.get('nrows', 4)
         ncols = kwargs.get('ncols', 3)
@@ -895,7 +900,7 @@ class ModelSpectrum(object):
             self.setup_plot_fus()
         else:
             self.select_windows(tag=tag, display_all=display_all, windows=win2plot)
-            self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other)
+            self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other, model_err=model_err)
             if other_species_win_selection is not None:
                 if isinstance(other_species_win_selection, int):
                     other_species_win_selection = str(other_species_win_selection)

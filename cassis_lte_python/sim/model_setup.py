@@ -654,6 +654,7 @@ class Window:
         self._in_fit = False
         self._x_mod = None
         self._y_mod = None
+        self._y_mod_err = None
         self.y_mod_cpt = []
         self.bottom_unit = 'MHz'
         self.top_unit = 'MHz'
@@ -763,6 +764,14 @@ class Window:
         self._y_mod = value
         self.y_min = min([self._y_min, min(self._y_mod)])
         self.y_max = max([self._y_max, max(self._y_mod)])
+
+    @property
+    def y_mod_err(self):
+        return self._y_mod_err
+
+    @y_mod_err.setter
+    def y_mod_err(self, value):
+        self._y_mod_err = value
 
     @property
     def x_file(self):
