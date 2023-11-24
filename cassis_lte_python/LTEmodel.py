@@ -11,6 +11,7 @@ import numpy as np
 from numpy.random import normal
 from lmfit import Model, Parameters
 from scipy import stats, signal
+from scipy.interpolate import interp1d
 import astropy.io.fits as fits
 import astropy.units as u
 import os
@@ -26,14 +27,25 @@ from warnings import warn
 def generate_lte_model_func(config):
 
     def lte_model_func(fmhz, **params):
-        norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
-        tc = config['tc']
-        tcmb = config['tcmb']
-        vlsr_file = config['vlsr_file']
         fmhz_mod = fmhz  # config['x_mod']
-        beam_sizes = config['beam_sizes']
-        tmb2ta = config['tmb2ta']
-        jypb2k = config['jypb2k']
+        norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
+        vlsr_file = config['vlsr_file']
+        # freq_mhz = config['freq_mhz']
+        tc = config['tc'](fmhz)
+        beam_sizes = config['beam_sizes'](fmhz)
+        tmb2ta = config['tmb2ta'](fmhz)
+        jypb2k = config['jypb2k'](fmhz)
+        # bmaj = [b[0] for b in beam_sizes]
+        # bmin = [b[1] for b in beam_sizes]
+        # # nearest interpolation
+        # # tc, bmaj, bmin, tmb2ta, jypb2k = utils.nearest_interp(fmhz, freq_mhz, (tc, bmaj, bmin, tmb2ta, jypb2k))
+        # # tc = interp1d(freq_mhz, tc, kind='nearest')(fmhz)
+        # bmaj = interp1d(freq_mhz, bmaj, kind='nearest')(fmhz)
+        # bmin = interp1d(freq_mhz, bmin, kind='nearest')(fmhz)
+        # tmb2ta = interp1d(freq_mhz, tmb2ta, kind='nearest')(fmhz)
+        # jypb2k = interp1d(freq_mhz, jypb2k, kind='nearest')(fmhz)
+        # beam_sizes = [(bmaj_i, bmin_i) for bmaj_i, bmin_i in zip(bmaj, bmin)]
+        tcmb = config['tcmb']
         line_list = config['line_list']
         tau_max = config['tau_max']
         file_rejected = config['file_rejected']
@@ -262,39 +274,45 @@ class ModelSpectrum(object):
             pars = {par: value for par, value in params.items() if cpt.name in par}
             cpt.update_parameters(pars)
 
-    def model_info(self, x_mod, line_list=None, cpt_list=None, line_center_only=False):
-        # get telescope at each frequency
-        if len(self.tuning_info) == 1:
-            tel = [self.tuning_info['telescope'][0] for _ in range(len(x_mod))]
-        else:
-            tel = utils.get_telescope(x_mod, self.tuning_info)
+    def model_info(self, x_mod=None, line_list=None, cpt_list=None, line_center_only=False):
+        x_mod = self.x_file
+        if x_mod is None:
+            if self.x_file is not None:
+                x_mod = self.x_file
+            else:
+                raise ValueError("Missing x values to compute model information.")
 
-        bmaj_data, bmin_data = self.data_file_obj.bmaj, self.data_file_obj.bmin
-        if bmaj_data is not None and bmin_data is not None:  # if beam info is present in data
-            bs = (bmaj_data, bmin_data)
-            if any([TEL_DIAM[t] == 0. for t in self.tuning_info['telescope']]):
-                # if at least one telescope contains beam values, check if beam from file equals beam from telescope
-                for t in self.tuning_info['telescope']:
-                    try:
-                        if (self._telescope_data[t]['Bmaj (arcsec)'].ne(bmaj_data)
-                                or self._telescope_data[t]['Bmin (arcsec)'].ne(bmin_data)):
-                            raise ValueError("Beam information from data and from telescope file do not match.")
-                    except KeyError:
-                        continue
-        else:
-            bs = [utils.get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)]
+        # # get telescope at each frequency
+        # if len(self.tuning_info) == 1:
+        #     tel = [self.tuning_info['telescope'][0] for _ in range(len(x_mod))]
+        # else:
+        #     tel = utils.get_telescope(x_mod, self.tuning_info)
+        #
+        # bmaj_data, bmin_data = self.data_file_obj.bmaj, self.data_file_obj.bmin
+        # if bmaj_data is not None and bmin_data is not None:  # if beam info is present in data
+        #     bs = (bmaj_data, bmin_data)
+        #     if any([TEL_DIAM[t] == 0. for t in self.tuning_info['telescope']]):
+        #         # if at least one telescope contains beam values, check if beam from file equals beam from telescope
+        #         for t in self.tuning_info['telescope']:
+        #             try:
+        #                 if (self._telescope_data[t]['Bmaj (arcsec)'].ne(bmaj_data)
+        #                         or self._telescope_data[t]['Bmin (arcsec)'].ne(bmin_data)):
+        #                     raise ValueError("Beam information from data and from telescope file do not match.")
+        #             except KeyError:
+        #                 continue
+        # else:
+        #     bs = [utils.get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)]
 
         return {
-            'tc': self.get_tc(x_mod),
+            'freq_mhz': x_mod,
+            'tc': self.tc,
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
             'norm_factors': self.norm_factors,
             'log': self.log,
-            'beam_sizes': bs,
-            'tmb2ta': [utils.get_tmb2ta_factor(f_i, self._telescope_data[t])
-                       for f_i, t in zip(x_mod, tel)] if self.t_a_star else np.ones(len(x_mod)),
-            'jypb2k': utils.compute_jypb2k(x_mod, bs) if self.data_file_obj.yunit in UNITS['flux']
-            else np.ones(len(x_mod)),
+            'beam_sizes': self.beam,
+            'tmb2ta': self.tmb2ta,
+            'jypb2k': self.jypb,
             'line_list': self.line_list_all if line_list is None else line_list,
             'cpt_list': self.cpt_list if cpt_list is None else cpt_list,
             'noise': self.noise,
@@ -304,17 +322,17 @@ class ModelSpectrum(object):
         }
 
     def get_tc(self, x_mod):
-        if isinstance(self.tc, (int, float)):
-            tc = self.tc
-        else:  # assume it is a structured array with fields frequency, continuum
-            # if all([x1 == x2 for x1, x2 in zip(x_mod, self.tc[0])])
-            names = self.tc.dtype.names
-            tc = []
-            for x in x_mod:
-                id = utils.find_nearest_id(self.tc[names[0]], x)
-                tc.append(self.tc[names[1]][id])
-            tc = np.array(tc)
-        return tc
+        # if isinstance(self.tc, (int, float)):
+        #     tc = self.tc
+        # else:  # assume it is a structured array with fields frequency, continuum
+        #     # if all([x1 == x2 for x1, x2 in zip(x_mod, self.tc[0])])
+        #     names = self.tc.dtype.names
+        #     tc = []
+        #     for x in x_mod:
+        #         id = utils.find_nearest_id(self.tc[names[0]], x)
+        #         tc.append(self.tc[names[1]][id])
+        #     tc = np.array(tc)
+        return self.tc(x_mod)
 
     def get_rms(self, fmhz):
         if type(fmhz) == float:
@@ -501,7 +519,7 @@ class ModelSpectrum(object):
 
     def best_pars(self):
         if self.model_fit is not None and self.best_params is None:
-            params = self.model_fit.params
+            params = self.model_fit.params.copy()
             cpt_indices = {cpt.name: index for index, cpt in enumerate(self.cpt_list)}
             for par in params:
                 p = params[par]

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Literal
 
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
 from cassis_lte_python.utils.settings import TELESCOPE_DIR
@@ -318,6 +319,33 @@ def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
     return x_new, y_new if y_values is not None else x_new
 
 
+def nearest_interp(xi: int | float | list | np.ndarray,
+                   x: list | np.ndarray,
+                   y: list | np.ndarray | tuple):
+    """
+    Find y values corresponding to the x value closest to xi.
+    :param xi: new x values ; must be within x values
+    :param x: reference values
+    :param y: values to be interpolated ; if want to interpolate several arrays, must be given as a tuple
+    :return: interpolated values
+    """
+    # Shift x points to centers
+    spacing = np.diff(x) / 2
+    x = x + np.hstack([spacing, spacing[-1]])
+
+    if isinstance(y, tuple):
+        y_out = []
+        for yarr in y:
+            # Append the last point in y twice for ease of use
+            yarr2 = np.hstack([yarr, yarr[-1]])
+            y_out.append(yarr2[np.searchsorted(x, xi)])
+        return tuple(y_out)
+
+    # Append the last point in y twice for ease of use
+    y = np.hstack([y, y[-1]])
+    return y[np.searchsorted(x, xi)]
+
+
 def find_nearest(arr, value):
     """
     Find the value in "arr" that is closest to "value".
@@ -583,7 +611,7 @@ def get_beam_size(freq_mhz: float | int | np.ndarray, tel_diam: float):
 
 def dilution_factors(source_size: float | int,
                      beam: tuple | list | np.ndarray,
-                     geometry: str = 'gaussian') -> float | np.ndarray:
+                     geometry: Literal['gaussian', 'disc'] = 'gaussian') -> float | np.ndarray:
     """
     Compute the dilution factors for a given source size and a list or array of beam sizes.
     :param source_size:
@@ -597,7 +625,8 @@ def dilution_factors(source_size: float | int,
         return np.array([dilution_factor(source_size, b, geometry) for b in beam])
 
 
-def dilution_factor(source_size: float | int, beam: tuple, geometry: str = 'gaussian') -> float:
+def dilution_factor(source_size: float | int, beam: int | float | tuple,
+                    geometry: Literal['gaussian', 'disc'] = 'gaussian') -> float:
     """
     Compute the dilution factor for the given source and beam sizes, depending on the geometry
     :param source_size: in arcsec
@@ -610,7 +639,10 @@ def dilution_factor(source_size: float | int, beam: tuple, geometry: str = 'gaus
     #                    + (1. - np.cos(get_beam_size(self.telescope,self.frequencies)/3600./180.*np.pi)) )
     geometries = ['gaussian', 'disc']
 
-    beam_size_sq = beam[0] * beam[1]
+    if isinstance(beam, (int, float)):
+        beam_size_sq = beam ** 2
+    else:
+        beam_size_sq = beam[0] * beam[1]
 
     if geometry == 'disc':
         return 1. - np.exp(-np.log(2.) * (source_size ** 2 / beam_size_sq))

@@ -11,6 +11,7 @@ from cassis_lte_python.utils.settings import TELESCOPE_DIR, VLSR_DEF, SIZE_DEF
 import os
 import pandas as pd
 import numpy as np
+from scipy.interpolate import interp1d
 
 
 class ModelConfiguration:
@@ -40,7 +41,10 @@ class ModelConfiguration:
         self.vlsr_plot = None
         self.cont_info = None
         self.tc = None
-        self.jypb = None  # keep?
+        self.tmb2ta = None
+        self.jypb = None
+        self.bmaj = None
+        self.bmin = None
         self.beam = {'bmaj': 0, 'bmin': 0}
         self._fit_freq_except_user = configuration.get('fit_freq_except', None)
         if self._fit_freq_except_user is not None:
@@ -186,28 +190,22 @@ class ModelConfiguration:
         self.cont_info = config.get('tc', 0.)
 
         if isinstance(self.cont_info, (float, int)):
-            self.tc = self.cont_info
+            self.tc = lambda x: self.cont_info
         elif isinstance(self.cont_info, str) and os.path.isfile(self.cont_info):
             # cont_info is a CASSIS continuum file : MHz [tab] K
             f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', unpack=True)
-            self.tc = np.array([np.interp(x, f_cont, t_cont) for x in self.x_file])
-        elif isinstance(self.cont_info, dict):  # to compute continuum over ranges given by the user
-            tc = []
-            for freqs, fluxes, franges in zip(self.x_file, self.y_file, self.cont_info.values()):
-                cont_data = []
-                for frange in franges:
-                    cont_data.append(fluxes[(freqs >= min(frange)) & (freqs <= max(frange))])
-                tc.append([np.mean(cont_data) for _ in freqs])
-            self.tc = np.concatenate(tc)
+            self.tc = interp1d(f_cont, t_cont, kind='nearest')
+        elif isinstance(self.cont_info, dict):
+            # to compute continuum over ranges given by the user : { '[fmin, fmax]': value, ...}
+            f_cont, t_cont = [], []
+            for frange, val in self.cont_info.items():
+                frange = frange.replace('[', ' ').replace('[', ' ')
+                frange = [float(f) for f in frange.split(sep=',')]
+                f_cont.extend(frange)
+                t_cont.extend([val, val])
+            self.tc = interp1d(f_cont, t_cont, kind='nearest')
         else:
             raise TypeError("Continuum must be a float, an integer or a 2-column tab-separated file (MHz K).")
-        # else:  # HDU
-        #     pass
-            # tc = cont_info[datafile].data.squeeze()[j, i]
-
-        if not isinstance(self.tc, (float, int)):
-            self.tc = np.array([(f, t) for f, t in zip(self.x_file, self.tc)],
-                               dtype=[('f_mhz', np.float32), ('tc', np.float32)])
 
     def get_tuning_info(self, config=None, check_tel_range=False):
         if config is None:
@@ -266,6 +264,37 @@ class ModelConfiguration:
                     tuning_info['fmhz_min'].append(r_min)
                     tuning_info['fmhz_max'].append(r_max)
             self.tuning_info = pd.DataFrame(tuning_info)
+
+            tuning_data = pd.DataFrame()
+
+            for i, row in self.tuning_info.iterrows():
+                tel_data = self._telescope_data[row['telescope']]
+                index_min = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_min']) - 1
+                # NB: searchsorted returns the index where value could be inserted and maintain order
+                index_max = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_max'])
+                tel_data_sub = tel_data.loc[index_min: index_max]
+                if tuning_data.empty:
+                    tuning_data = tel_data_sub
+                else:
+                    tuning_data = pd.concat([tuning_data, tel_data_sub])
+
+            if self.t_a_star:
+                self.tmb2ta = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Beff/Feff'])
+            else:
+                self.tmb2ta = lambda x: 1.
+
+            if 'Bmin (arcsec)' in tuning_data.columns:
+                self.bmin = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Bmin (arcsec)'])
+            if 'Bmaj (arcsec)' in tuning_data.columns:
+                self.bmaj = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Bmaj (arcsec)'])
+            if self.bmin is not None and self.bmaj is not None:  # explicit beam major and minor axes
+                self.beam = lambda f: np.sqrt(self.bmin(f) * self.bmaj(f))
+            else:  # beam size from telescope diameter
+                self.beam = lambda f: utils.get_beam_size(f, interp1d(tuning_data['Frequency (MHz)'],
+                                                                      tuning_data['Diameter (m)'])(f))
+
+            self.jypb = lambda f: 1.  # utils.compute_jypb2k(f, )
+            pass
 
     def get_linelist(self, config=None):
         # if config is None:
