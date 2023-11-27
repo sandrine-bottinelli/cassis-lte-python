@@ -62,9 +62,9 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     # plot range used (or not) for chi2 calculation
     v_range = win.v_range_fit
     if v_range is not None:
-        ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.1)
+        ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.05)
     for f_range in win.f_ranges_nofit:
-        ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.1)
+        ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.05)
 
     #  Plot components if more than one
     if len(lte_model.cpt_list) > 1:
@@ -82,7 +82,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
 
     if win.y_mod_err is not None:
-        ax.fill_between(win.x_mod_plot, win.y_mod - win.y_mod_err, win.y_mod + win.y_mod_err, color='#888888')
+        ax.fill_between(win.x_mod_plot, win.y_mod - win.y_mod_err, win.y_mod + win.y_mod_err, color='red', alpha=0.1)
 
     # Define and set limits
     ax.relim()  # recompute the axis data limits

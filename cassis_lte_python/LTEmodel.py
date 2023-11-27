@@ -11,7 +11,6 @@ import numpy as np
 from numpy.random import normal
 from lmfit import Model, Parameters
 from scipy import stats, signal
-from scipy.interpolate import interp1d
 import astropy.io.fits as fits
 import astropy.units as u
 import os
@@ -26,34 +25,27 @@ from warnings import warn
 
 def generate_lte_model_func(config):
 
-    def lte_model_func(fmhz, **params):
-        fmhz_mod = fmhz  # config['x_mod']
+    def lte_model_func(fmhz, log=False, cpt=None, line_center_only=False, **params):
         norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
         vlsr_file = config['vlsr_file']
-        # freq_mhz = config['freq_mhz']
         tc = config['tc'](fmhz)
         beam_sizes = config['beam_sizes'](fmhz)
         tmb2ta = config['tmb2ta'](fmhz)
         jypb2k = config['jypb2k'](fmhz)
-        # bmaj = [b[0] for b in beam_sizes]
-        # bmin = [b[1] for b in beam_sizes]
-        # # nearest interpolation
-        # # tc, bmaj, bmin, tmb2ta, jypb2k = utils.nearest_interp(fmhz, freq_mhz, (tc, bmaj, bmin, tmb2ta, jypb2k))
-        # # tc = interp1d(freq_mhz, tc, kind='nearest')(fmhz)
-        # bmaj = interp1d(freq_mhz, bmaj, kind='nearest')(fmhz)
-        # bmin = interp1d(freq_mhz, bmin, kind='nearest')(fmhz)
-        # tmb2ta = interp1d(freq_mhz, tmb2ta, kind='nearest')(fmhz)
-        # jypb2k = interp1d(freq_mhz, jypb2k, kind='nearest')(fmhz)
-        # beam_sizes = [(bmaj_i, bmin_i) for bmaj_i, bmin_i in zip(bmaj, bmin)]
         tcmb = config['tcmb']
         line_list = config['line_list']
+        cpt_list = config['cpt_list']
+        if not isinstance(cpt_list, list):
+            cpt_list = [cpt_list]
+        if cpt is not None:
+            cpt_list = [cpt]
         tau_max = config['tau_max']
         file_rejected = config['file_rejected']
-        intensity_before = tc + utils.jnu(fmhz_mod, tcmb)
+        intensity_before = tc + utils.jnu(fmhz, tcmb)
         intensity = 0.
-        for icpt, cpt in enumerate(config['cpt_list']):
+        for icpt, cpt in enumerate(cpt_list):
             tex = params['{}_tex'.format(cpt.name)] * norm_factors['{}_tex'.format(cpt.name)]
-            if config['log']:
+            if log:
                 tex = 10. ** tex
             vlsr = params['{}_vlsr'.format(cpt.name)] * norm_factors['{}_vlsr'.format(cpt.name)]
             size = params['{}_size'.format(cpt.name)] * norm_factors['{}_size'.format(cpt.name)]
@@ -66,7 +58,7 @@ def generate_lte_model_func(config):
                 else:  # assume it is a DataFrame
                     tran_list = list(line_list.loc[line_list['tag'] == tag].transition)
                 ntot = params['{}_ntot_{}'.format(cpt.name, tag)] * norm_factors['{}_ntot_{}'.format(cpt.name, tag)]
-                if config['log']:
+                if log:
                     ntot = 10. ** ntot
                 fwhm = params['{}_fwhm_{}'.format(cpt.name, tag)] * norm_factors['{}_fwhm_{}'.format(cpt.name, tag)]
                 qtex = cpt.species_list[isp].get_partition_function(tex)
@@ -82,33 +74,32 @@ def generate_lte_model_func(config):
                                                utils.format_float(tau0)]))
                         continue
 
-                    num = fmhz_mod - utils.velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file)
+                    num = fmhz - utils.velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file)
                     den = utils.fwhm_to_sigma(utils.delta_v_to_delta_f(fwhm, tran.f_trans_mhz))
-                    if config['line_center_only']:
+                    if line_center_only:
                         offset = utils.find_nearest_id(
-                            fmhz_mod, utils.velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file))
-                        pulse = signal.unit_impulse(len(fmhz_mod), offset)
+                            fmhz, utils.velocity_to_frequency(vlsr, tran.f_trans_mhz, vref_kms=vlsr_file))
+                        pulse = signal.unit_impulse(len(fmhz), offset)
                         sum_tau += tau0 * pulse
                     else:
                         sum_tau += tau0 * np.exp(-0.5 * (num / den) ** 2)
 
             ff = utils.dilution_factors(size, beam_sizes)
             if not cpt.isInteracting:
-                intensity_cpt = utils.jnu(fmhz_mod, tex) * (1. - np.exp(-sum_tau)) - \
+                intensity_cpt = utils.jnu(fmhz, tex) * (1. - np.exp(-sum_tau)) - \
                                 intensity_before * (1. - np.exp(-sum_tau))
                 intensity += ff * intensity_cpt
             else:
                 intensity_before += intensity
-                intensity_cpt = utils.jnu(fmhz_mod, tex) * (1. - np.exp(-sum_tau)) - \
+                intensity_cpt = utils.jnu(fmhz, tex) * (1. - np.exp(-sum_tau)) - \
                                 intensity_before * (1. - np.exp(-sum_tau))
                 intensity = ff * intensity_cpt
 
-        intensity = intensity + intensity_before - utils.jnu(fmhz_mod, tcmb)
+        intensity = intensity + intensity_before - utils.jnu(fmhz, tcmb)
         intensity += normal(0., config['noise'], len(intensity))  # add gaussian noise
         intensity *= tmb2ta  # convert to Ta
         intensity /= jypb2k  # convert to Jy/beam
 
-        # return np.interp(fmhz, fmhz_mod, intensity)
         return intensity
 
     return lte_model_func
@@ -153,14 +144,14 @@ class ModelSpectrum(object):
 
         self.model_config = model_config
 
-        self.params2fit = None
+        # self.params_user = None
+        self.params = None
         self.norm_factors = None
         self.model = None
         self.log = False
         if self.x_file is not None:
-            self.model = self.generate_lte_model()
+            self.generate_lte_model()
         self.best_params = None
-        self.best_model = None
         self.model_fit = None
         self.normalize = False
         self.figure = None
@@ -171,7 +162,7 @@ class ModelSpectrum(object):
 
         if self.minimize:
             self.log = True
-            self.get_params2fit()
+            self.get_params()
             t_start = process_time()
             self.generate_lte_model()
             # Perform the fit
@@ -259,52 +250,22 @@ class ModelSpectrum(object):
             cname = cpt
             for par, pval in cpt_info.items():
                 if par != 'species':
-                    self.params2fit[cname+'_'+par].value = pval
+                    self.params[cname+'_'+par].value = pval
                 else:
                     for sp in pval:
-                        self.params2fit[f"{cname}_ntot_{sp.tag}"].value = sp.ntot
-                        self.params2fit[f"{cname}_fwhm_{sp.tag}"].value = sp.fwhm
+                        self.params[f"{cname}_ntot_{sp.tag}"].value = sp.ntot
+                        self.params[f"{cname}_fwhm_{sp.tag}"].value = sp.fwhm
 
-        self.y_mod = self.compute_model_intensities(params=self.params2fit, x_values=self.x_mod)
+        # self.y_mod = self.compute_model_intensities(params=self.params, x_values=self.x_mod)
 
-    def update_parameters(self, params=None):
-        if params is None:
-            params = self.best_pars()
+    def update_parameters(self, params):
         for cpt in self.cpt_list:
             pars = {par: value for par, value in params.items() if cpt.name in par}
             cpt.update_parameters(pars)
 
-    def model_info(self, x_mod=None, line_list=None, cpt_list=None, line_center_only=False):
-        x_mod = self.x_file
-        if x_mod is None:
-            if self.x_file is not None:
-                x_mod = self.x_file
-            else:
-                raise ValueError("Missing x values to compute model information.")
-
-        # # get telescope at each frequency
-        # if len(self.tuning_info) == 1:
-        #     tel = [self.tuning_info['telescope'][0] for _ in range(len(x_mod))]
-        # else:
-        #     tel = utils.get_telescope(x_mod, self.tuning_info)
-        #
-        # bmaj_data, bmin_data = self.data_file_obj.bmaj, self.data_file_obj.bmin
-        # if bmaj_data is not None and bmin_data is not None:  # if beam info is present in data
-        #     bs = (bmaj_data, bmin_data)
-        #     if any([TEL_DIAM[t] == 0. for t in self.tuning_info['telescope']]):
-        #         # if at least one telescope contains beam values, check if beam from file equals beam from telescope
-        #         for t in self.tuning_info['telescope']:
-        #             try:
-        #                 if (self._telescope_data[t]['Bmaj (arcsec)'].ne(bmaj_data)
-        #                         or self._telescope_data[t]['Bmin (arcsec)'].ne(bmin_data)):
-        #                     raise ValueError("Beam information from data and from telescope file do not match.")
-        #             except KeyError:
-        #                 continue
-        # else:
-        #     bs = [utils.get_beam(f_i, self._telescope_data[t]) for f_i, t in zip(x_mod, tel)]
+    def model_info(self):
 
         return {
-            'freq_mhz': x_mod,
             'tc': self.tc,
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
@@ -313,12 +274,11 @@ class ModelSpectrum(object):
             'beam_sizes': self.beam,
             'tmb2ta': self.tmb2ta,
             'jypb2k': self.jypb,
-            'line_list': self.line_list_all if line_list is None else line_list,
-            'cpt_list': self.cpt_list if cpt_list is None else cpt_list,
+            'line_list': self.line_list_all,
+            'cpt_list': self.cpt_list,
             'noise': self.noise,
             'tau_max': self.tau_max,
-            'file_rejected': self.file_rejected,
-            'line_center_only': line_center_only
+            'file_rejected': self.file_rejected
         }
 
     def get_tc(self, x_mod):
@@ -346,8 +306,8 @@ class ModelSpectrum(object):
 
         return rms if len(rms) > 1 else rms[0]
 
-    def get_params2fit(self, normalize=False):
-        params2fit = Parameters()
+    def get_params(self, normalize=False):
+        params = Parameters()
 
         for icpt, cpt in enumerate(self.cpt_list):
             for par in cpt.parameters:
@@ -358,21 +318,21 @@ class ModelSpectrum(object):
                             max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
                     if self.log:
                         par.set(value=np.log10(par.value), min=np.log10(par.min), max=np.log10(par.max))
-                params2fit[par.name] = par
+                params[par.name] = par
 
             for isp, sp in enumerate(cpt.species_list):
                 for par in sp.parameters:
                     if 'ntot' in par.name and self.log:
                         par.set(value=np.log10(par.value), min=np.log10(par.min), max=np.log10(par.max))
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
-                    params2fit[par.name] = par
+                    params[par.name] = par
 
-        self.params2fit = params2fit
+        self.params = params
 
-        norm_factors = {self.params2fit[parname].name: 1. for parname in self.params2fit}
+        norm_factors = {self.params[parname].name: 1. for parname in self.params}
         if normalize:
-            for parname in self.params2fit:
-                param = self.params2fit[parname]
+            for parname in self.params:
+                param = self.params[parname]
                 nf = abs(param.value) if param.value != 0. else 1.
                 norm_factors[param.name] = nf
                 if param.expr is None:
@@ -380,20 +340,12 @@ class ModelSpectrum(object):
         self.norm_factors = norm_factors
 
     def generate_lte_model(self, normalize=False):
-        if self.params2fit is None:
-            self.get_params2fit(normalize=normalize)
+        if self.params is None:
+            self.get_params(normalize=normalize)
 
-        if self.x_fit is not None:
-            lte_model_func = generate_lte_model_func(self.model_info(self.x_fit))
-        else:
-            self.x_mod = np.linspace(self.fmin_mhz, self.fmax_mhz,
-                                     num=int((self.fmax_mhz - self.fmin_mhz) / self.dfmhz) + 1)
-            lte_model_func = generate_lte_model_func(self.model_info(self.x_mod))
-            self.y_mod = lte_model_func(self.x_mod, **self.params2fit)
-        res = Model(lte_model_func)
-        self.model = res
-
-        return res
+        self.model = Model(generate_lte_model_func(self.model_info())
+                           # independent_vars=['fmhz', 'log', 'cpt', 'line_center_only']
+                           )
 
     def fit_model(self, normalize=False, max_nfev=None, fit_kws=None, print_report=True, report_kws=None):
         """
@@ -424,14 +376,17 @@ class ModelSpectrum(object):
         if 'method' in fit_kws:
             fit_kws.pop('method')
 
-        self.model_fit = self.model.fit(self.y_fit, params=self.params2fit, fmhz=self.x_fit,
+        self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=True,
                                         weights=wt,
                                         method=method,
                                         max_nfev=max_nfev, fit_kws=fit_kws)
 
-        self.best_model = self.model_fit.model
+        self.model = self.model_fit.model
         self.best_pars()
-        self.update_parameters()
+        # if self.log:
+        #     self.params
+        #     self.log = False
+        self.update_parameters(self.best_params)
 
         if print_report:
             print(self.fit_report(report_kws=report_kws))
@@ -467,7 +422,7 @@ class ModelSpectrum(object):
 
             elif "fixed" in line:  # keep if expr is None, else ignore
                 par = line.split(sep=":")[0].strip()
-                if self.params2fit[par].expr is None:
+                if self.params[par].expr is None:
                     new_lines.append(line)
 
             else:  # keep
@@ -477,28 +432,38 @@ class ModelSpectrum(object):
 
     def compute_model_intensities(self, params=None, x_values=None, line_list=None, line_center_only=False,
                                   cpt=None):
-        if self.model is None:
-            self.generate_lte_model()
-        if params is None:
-            params = self.best_params if self.best_params is not None else self.params2fit
         if x_values is None:
             x_values = self.x_mod
-        elif type(x_values) is list:
+
+        if type(x_values) is list:
             x_values = np.array(x_values)
 
-        if cpt is not None:
-            c_best_pars = {}
-            for pname, par in params.items():
-                if cpt.name in pname:
-                    c_best_pars[pname] = par.value
-            params = c_best_pars
-            lte_func = generate_lte_model_func(self.model_info(x_values, line_list=line_list,
-                                                               cpt_list=[cpt]))
-        else:
-            lte_func = generate_lte_model_func(self.model_info(x_values, line_list=line_list,
-                                                               line_center_only=line_center_only))
+        if self.model is None:
+            self.generate_lte_model()
 
-        return lte_func(x_values, **params)
+        if params is None:
+            params = self.best_params if self.best_params is not None else self.params
+
+        return self.model.func(x_values, log=False, cpt=cpt, line_list=line_list, line_center_only=line_center_only,
+                               **params)
+        # if cpt is not None:
+        #     c_best_pars = {}
+        #     for pname, par in params.items():
+        #         if cpt.name in pname:
+        #             c_best_pars[pname] = par.value
+        #     params = c_best_pars
+        #     return self.model_cpt[cpt.name].func(x_values, log=False, **params)
+        # else:
+        #     return self.model.func(x_values, log=False, **params)
+
+        # if cpt is not None:
+        #     lte_func = generate_lte_model_func(self.model_info(x_values, line_list=line_list,
+        #                                                        cpt=[cpt]))
+        # else:
+        #     lte_func = generate_lte_model_func(self.model_info(x_values, line_list=line_list,
+        #                                                        line_center_only=line_center_only))
+        #
+        # return lte_func(x_values, **params)
 
     def compute_model(self, params=None, x_values=None, line_list=None, line_center_only=False):
         """
@@ -513,8 +478,8 @@ class ModelSpectrum(object):
                                               line_center_only=line_center_only)
 
     # def get_best_pars(self):
-    #     for parname in self.params2fit:
-    #         self.best_params[parname] = self.params2fit[parname] * self.config['norm_factors'][parname]
+    #     for parname in self.params:
+    #         self.best_params[parname] = self.params[parname] * self.config['norm_factors'][parname]
     #     return self.best_params
 
     def best_pars(self):
@@ -544,7 +509,7 @@ class ModelSpectrum(object):
             self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
             self.log = False
 
-        return self.best_params
+        # return self.best_params
         # parnames = list(self.model_fit.params.keys())
         # namelen = max(len(n) for n in parnames)
         # output = []
@@ -556,10 +521,10 @@ class ModelSpectrum(object):
         # return '\n'.join(output)
 
     def plot_pars(self):
-        return self.best_params if self.best_params is not None else self.params2fit
+        return self.best_params if self.best_params is not None else self.params
 
     def integrated_intensities(self):
-        best_pars = self.best_params if self.best_params is not None else self.params2fit
+        best_pars = self.best_params if self.best_params is not None else self.params
         res = {}
         for cpt in self.cpt_list:
             fluxes = []
@@ -643,7 +608,7 @@ class ModelSpectrum(object):
         vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
         fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
 
-        self.update_parameters(params=plot_pars)
+        # self.update_parameters(params=plot_pars)
 
         if other_species_dict is not None:  # list of tags for which the user wants line positions
             thresholds_other = other_species_dict
@@ -689,6 +654,7 @@ class ModelSpectrum(object):
             # compute the model :
             # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
             win.x_mod = np.linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
+            # win.y_mod = self.model.eval(fmhz=win.x_mod)
             win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
                                                        line_list=model_lines_win)
             win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
@@ -696,8 +662,18 @@ class ModelSpectrum(object):
             win.y_res += self.get_tc(win.x_file)
 
             if 'model_err' in kwargs and kwargs['model_err']:
-                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod,
-                                                                **self.model_info(win.x_mod, line_list=model_lines_win))
+                # c_par = Parameters()
+                # for par in self.model_fit.params:
+                #     if self.cpt_list[0].name in par:
+                #         c_par[par] = self.model_fit.params[par]
+                # # self.model_fit.params = c_par
+                # self.model_fit.var_names = [par for par in c_par]
+                # self.model_fit.nvarys = len(c_par)
+                # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
+                # # self.model_fit.params = plot_pars
+                # self.model_fit.var_names = [par for par in plot_pars]
+                # self.model_fit.nvarys = len(plot_pars)
+                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
 
             if len(self.cpt_list) > 1:
                 for icpt in range(len(self.cpt_list)):
@@ -938,7 +914,7 @@ class ModelSpectrum(object):
 
     def save_model(self, filename, dirname=None, ext='txt', full_spectrum=True):
         """
-        Save the model spectrum from self.best_model if it exists, else from self.model.
+        Save the model spectrum from self.model.
         :param filename: the name of the file
         :param dirname: the directory where to save the file
         :param ext: extension of the file : txt (default) or fits
@@ -946,7 +922,7 @@ class ModelSpectrum(object):
         if false, only save the model spectrum for the windows in self.win_list
         :return: None
         """
-        params = self.best_params if self.best_params is not None else self.params2fit
+        params = self.best_params if self.best_params is not None else self.params
         if self.x_file is None:  # model only -> full spectrum
             full_spectrum = True
             x_values = self.x_mod
@@ -1260,7 +1236,7 @@ class ModelSpectrum(object):
         }
 
         # Define other components
-        params = self.params2fit
+        params = self.params
         if self.best_params is not None and ext == 'lam':
             params = self.best_params
 
