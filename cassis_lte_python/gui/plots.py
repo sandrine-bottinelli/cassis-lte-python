@@ -71,6 +71,10 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         for icpt, _ in enumerate(lte_model.cpt_list):
             ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
                     color=lte_model.cpt_cols[icpt], linewidth=1)
+            if len(win.y_mod_err_cpt) > 0:
+                ax.fill_between(win.x_mod_plot, win.y_mod_cpt[icpt] - win.y_mod_err_cpt[icpt],
+                                win.y_mod_cpt[icpt] + win.y_mod_err_cpt[icpt],
+                                color=lte_model.cpt_cols[icpt], alpha=0.1)
 
     # Plot data and/or model
     if win.x_file is not None:  # data and model

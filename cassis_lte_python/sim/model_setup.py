@@ -318,6 +318,10 @@ class ModelConfiguration:
         if all([len(t_list) == 0 for t_list in self.tr_list_by_tag.values()]):
             raise LookupError("No transition found within the thresholds.")
 
+        for cpt in self.cpt_list:
+            # cpt.transition_list = self.line_list_all[self.line_list_all['tag'].isin(cpt.tag_list)]
+            cpt.transition_list = {key: val for key, val in self.tr_list_by_tag.items() if key in cpt.tag_list}
+
     def get_v_range_info(self):
         # extract v_range info
         if self._v_range_user is not None:
@@ -656,6 +660,7 @@ class Window:
         self._y_mod = None
         self._y_mod_err = None
         self.y_mod_cpt = []
+        self.y_mod_err_cpt = []
         self.bottom_unit = 'MHz'
         self.top_unit = 'MHz'
         self.bottom_lim = None

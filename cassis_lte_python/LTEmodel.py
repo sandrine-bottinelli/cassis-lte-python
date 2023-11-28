@@ -11,6 +11,8 @@ import numpy as np
 from numpy.random import normal
 from lmfit import Model, Parameters
 from scipy import stats, signal
+from scipy.special import erf
+from scipy.stats import t
 import astropy.io.fits as fits
 import astropy.units as u
 import os
@@ -21,6 +23,7 @@ from spectral_cube import SpectralCube
 from astropy.wcs import WCS
 from time import process_time
 from warnings import warn
+import copy
 
 
 def generate_lte_model_func(config):
@@ -153,6 +156,7 @@ class ModelSpectrum(object):
             self.generate_lte_model()
         self.best_params = None
         self.model_fit = None
+        self.model_fit_cpt = []
         self.normalize = False
         self.figure = None
 
@@ -263,7 +267,7 @@ class ModelSpectrum(object):
             pars = {par: value for par, value in params.items() if cpt.name in par}
             cpt.update_parameters(pars)
 
-    def model_info(self):
+    def model_info(self, cpt=None):
 
         return {
             'tc': self.tc,
@@ -275,7 +279,7 @@ class ModelSpectrum(object):
             'tmb2ta': self.tmb2ta,
             'jypb2k': self.jypb,
             'line_list': self.line_list_all,
-            'cpt_list': self.cpt_list,
+            'cpt_list': self.cpt_list if cpt is None else [cpt],
             'noise': self.noise,
             'tau_max': self.tau_max,
             'file_rejected': self.file_rejected
@@ -343,8 +347,8 @@ class ModelSpectrum(object):
         if self.params is None:
             self.get_params(normalize=normalize)
 
-        self.model = Model(generate_lte_model_func(self.model_info())
-                           # independent_vars=['fmhz', 'log', 'cpt', 'line_center_only']
+        self.model = Model(generate_lte_model_func(self.model_info()),
+                           independent_vars=['fmhz', 'log', 'cpt', 'line_center_only']
                            )
 
     def fit_model(self, normalize=False, max_nfev=None, fit_kws=None, print_report=True, report_kws=None):
@@ -377,9 +381,31 @@ class ModelSpectrum(object):
             fit_kws.pop('method')
 
         self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=True,
+                                        cpt=None, line_center_only=False,
                                         weights=wt,
                                         method=method,
                                         max_nfev=max_nfev, fit_kws=fit_kws)
+
+        if len(self.cpt_list) > 1:
+            for cpt in self.cpt_list:
+                model_fit_cpt = copy.deepcopy(self.model_fit)
+                c_par = Parameters()
+                for par in model_fit_cpt.params:
+                    if cpt.name in par:
+                        c_par[par] = self.model_fit.params[par]
+                model_fit_cpt.params = c_par
+                indices = [i for i, var_name in enumerate(model_fit_cpt.var_names) if cpt.name in var_name]
+                nvarys = len(indices)
+                model_fit_cpt.var_names = [model_fit_cpt.var_names[i] for i in indices]
+                model_fit_cpt.best_values = {k: v for k, v in model_fit_cpt.best_values.items() if cpt.name in k}
+                model_fit_cpt.nvarys = nvarys
+                covar = np.zeros((nvarys, nvarys))
+                for i in range(nvarys):
+                    for j in range(nvarys):
+                        covar[i, j] = model_fit_cpt.covar[indices[i], indices[j]]
+                model_fit_cpt.covar = covar
+                model_fit_cpt.model.func = generate_lte_model_func(self.model_info(cpt=cpt))
+                self.model_fit_cpt.append(model_fit_cpt)
 
         self.model = self.model_fit.model
         self.best_pars()
@@ -430,6 +456,64 @@ class ModelSpectrum(object):
 
         return '\n'.join(new_lines[:9] + [pvalue] + new_lines[9:])
 
+    def eval_uncertainties_components(self, fmhz, sigma=1):
+        """From lmfit.model"""
+        res = []
+
+        for cpt in self.cpt_list:
+            params = Parameters()
+            for par in self.model_fit.params:
+                if cpt.name in par:
+                    params[par] = self.model_fit.params[par]
+            indices = [i for i, var_name in enumerate(self.model_fit.var_names) if cpt.name in var_name]
+            var_names = [self.model_fit.var_names[i] for i in indices]
+            nvarys = len(var_names)
+            cpt_model_func = generate_lte_model_func(self.model_info(cpt=cpt))
+
+            # ensure fjac and df2 are correct size if independent var updated by kwargs
+            feval = cpt_model_func(fmhz=fmhz, log=True, **params)
+            ndata = len(feval.view('float64'))        # allows feval to be complex
+            covar = np.zeros((nvarys, nvarys))
+            for i in range(nvarys):
+                for j in range(nvarys):
+                    covar[i, j] = self.model_fit.covar[indices[i], indices[j]]
+            if any(p.stderr is None for p in params.values()):
+                res.append(np.zeros(ndata))
+                continue
+
+            fjac = np.zeros((nvarys, ndata), dtype='float64')
+            df2 = np.zeros(ndata, dtype='float64')
+
+            # find derivative by hand!
+            pars = params.copy()
+            for i in range(nvarys):
+                pname = var_names[i]
+                val0 = pars[pname].value
+                dval = pars[pname].stderr/3.0
+                pars[pname].value = val0 + dval
+                res1 = cpt_model_func(fmhz=fmhz, log=True, **pars)
+
+                pars[pname].value = val0 - dval
+                res2 = cpt_model_func(fmhz=fmhz, log=True, **pars)
+
+                pars[pname].value = val0
+                fjac[i] = (res1.view('float64') - res2.view('float64')) / (2*dval)
+
+            for i in range(nvarys):
+                for j in range(nvarys):
+                    df2 += fjac[i] * fjac[j] * covar[i, j]
+
+            if sigma < 1.0:
+                prob = sigma
+            else:
+                prob = erf(sigma/np.sqrt(2))
+
+            scale = t.ppf((prob+1)/2.0, self.model_fit.ndata-nvarys)
+
+            res.append(scale * np.sqrt(df2))
+
+        return res
+
     def compute_model_intensities(self, params=None, x_values=None, line_list=None, line_center_only=False,
                                   cpt=None):
         if x_values is None:
@@ -444,7 +528,7 @@ class ModelSpectrum(object):
         if params is None:
             params = self.best_params if self.best_params is not None else self.params
 
-        return self.model.func(x_values, log=False, cpt=cpt, line_list=line_list, line_center_only=line_center_only,
+        return self.model.func(x_values, log=False, cpt=cpt, line_center_only=line_center_only,
                                **params)
         # if cpt is not None:
         #     c_best_pars = {}
@@ -654,11 +738,8 @@ class ModelSpectrum(object):
             # compute the model :
             # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
             win.x_mod = np.linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
-            # win.y_mod = self.model.eval(fmhz=win.x_mod)
-            win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
-                                                       line_list=model_lines_win)
-            win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
-                                                                    line_list=model_lines_win)
+            win.y_mod = self.model_fit.eval(fmhz=win.x_mod)
+            win.y_res = win.y_file - self.model_fit.eval(fmhz=win.x_file)
             win.y_res += self.get_tc(win.x_file)
 
             if 'model_err' in kwargs and kwargs['model_err']:
@@ -673,6 +754,9 @@ class ModelSpectrum(object):
                 # # self.model_fit.params = plot_pars
                 # self.model_fit.var_names = [par for par in plot_pars]
                 # self.model_fit.nvarys = len(plot_pars)
+                # win.y_mod_err_cpt = [fit_cpt.eval_uncertainty(fmhz=win.x_mod, cpt=cpt)
+                #                      for fit_cpt, cpt in zip(self.model_fit_cpt, self.cpt_list)]
+                win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
                 win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
 
             if len(self.cpt_list) > 1:
