@@ -147,7 +147,7 @@ class ModelSpectrum(object):
 
         self.model_config = model_config
 
-        # self.params_user = None
+        self._params_user = None
         self.params = None
         self.norm_factors = None
         self.model = None
@@ -318,18 +318,30 @@ class ModelSpectrum(object):
                 if 'size' in par.name:
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                 if 'tex' in par.name:
+                    if par.min < cpt.tmin:
+                        print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin}'
+                              f'(smallest temperature for which the partition function is defined for all species).')
+                    if par.max > cpt.tmax:
+                        print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax}'
+                              f'(highest temperature for which the partition function is defined for all species).')
                     par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
                             max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
-                    if self.log:
-                        par.set(value=np.log10(par.value), min=np.log10(par.min), max=np.log10(par.max))
                 params[par.name] = par
 
             for isp, sp in enumerate(cpt.species_list):
                 for par in sp.parameters:
-                    if 'ntot' in par.name and self.log:
-                        par.set(value=np.log10(par.value), min=np.log10(par.min), max=np.log10(par.max))
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                     params[par.name] = par
+
+        # save user-defined parameters
+        self._params_user = params.copy()
+
+        if self.log:
+            for par in params:
+                if 'tex' in par or 'ntot' in par:
+                    params[par].set(value=np.log10(params[par].value),
+                                    min=np.log10(params[par].min),
+                                    max=np.log10(params[par].max))
 
         self.params = params
 
@@ -418,6 +430,9 @@ class ModelSpectrum(object):
             print(self.fit_report(report_kws=report_kws))
 
     def fit_report(self, report_kws=None):
+        fit_params = self.model_fit.params.copy()
+        self.model_fit.params = self.best_params
+
         if report_kws is None:
             report_kws = {}
 
@@ -453,6 +468,8 @@ class ModelSpectrum(object):
 
             else:  # keep
                 new_lines.append(line)
+
+        self.model_fit.params = fit_params
 
         return '\n'.join(new_lines[:9] + [pvalue] + new_lines[9:])
 
@@ -577,15 +594,17 @@ class ModelSpectrum(object):
                 if self.log and ('tex' in p.name or 'ntot' in p.name):
                     if p.stderr is not None:
                         p.stderr = (10**(p.value + p.stderr) - 10**(p.value - p.stderr)) / 2
-                    if 'tex' in p.name:
-                        icpt = cpt_indices[p.name.split('_')[0]]
-                        pmax = min(10 ** p.max, self.cpt_list[icpt].tmax)
-                        pmin = max(10 ** p.min, self.cpt_list[icpt].tmin)
-                    else:
-                        pmax = 10 ** p.max
-                        pmin = 10 ** p.min
-                    p.set(min=pmin, max=pmax, value=10 ** p.value, is_init_value=False)
-                    p.init_value = 10 ** p.init_value
+                    # if 'tex' in p.name:
+                    #     icpt = cpt_indices[p.name.split('_')[0]]
+                    #     pmax = self._params_user[par].max
+                    #     pmin = max(10 ** p.min, self.cpt_list[icpt].tmin)
+                    # else:
+                    #     pmax = 10 ** p.max
+                    #     pmin = 10 ** p.min
+                    p.init_value = self._params_user[par].init_value
+                    val = 10 ** p.value if p.vary else self._params_user[par].value
+                    p.set(min=self._params_user[par].min, max=self._params_user[par].max,
+                          value=val, is_init_value=False)
                 if p.stderr is not None:
                     p.stderr *= nf
             self.best_params = params
