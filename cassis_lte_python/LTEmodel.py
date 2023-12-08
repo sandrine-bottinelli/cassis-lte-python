@@ -762,6 +762,9 @@ class ModelSpectrum(object):
             win.y_res += self.get_tc(win.x_file)
 
             if 'model_err' in kwargs and kwargs['model_err']:
+                # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
+                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
+            if 'component_err' in kwargs and kwargs['component_err']:
                 # c_par = Parameters()
                 # for par in self.model_fit.params:
                 #     if self.cpt_list[0].name in par:
@@ -769,14 +772,13 @@ class ModelSpectrum(object):
                 # # self.model_fit.params = c_par
                 # self.model_fit.var_names = [par for par in c_par]
                 # self.model_fit.nvarys = len(c_par)
-                # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
                 # # self.model_fit.params = plot_pars
                 # self.model_fit.var_names = [par for par in plot_pars]
                 # self.model_fit.nvarys = len(plot_pars)
                 # win.y_mod_err_cpt = [fit_cpt.eval_uncertainty(fmhz=win.x_mod, cpt=cpt)
                 #                      for fit_cpt, cpt in zip(self.model_fit_cpt, self.cpt_list)]
                 win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
-                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
+
 
             if len(self.cpt_list) > 1:
                 for icpt in range(len(self.cpt_list)):
@@ -947,6 +949,7 @@ class ModelSpectrum(object):
         other_species_win_selection = kwargs.get('other_species_win_selection', None)
         display_all = kwargs.get('verbose', True)
         model_err = kwargs.get('model_err', True)
+        component_err = kwargs.get('component_err', True)
         dpi = kwargs.get('dpi', None)
         nrows = kwargs.get('nrows', 4)
         ncols = kwargs.get('ncols', 3)
@@ -979,7 +982,8 @@ class ModelSpectrum(object):
             self.setup_plot_fus()
         else:
             self.select_windows(tag=tag, display_all=display_all, windows=win2plot)
-            self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other, model_err=model_err)
+            self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other,
+                               model_err=model_err, component_err=component_err)
             if other_species_win_selection is not None:
                 if isinstance(other_species_win_selection, int):
                     other_species_win_selection = str(other_species_win_selection)
