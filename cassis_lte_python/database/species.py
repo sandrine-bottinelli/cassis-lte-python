@@ -90,10 +90,10 @@ class Species:
         self._fwhm.name = '{}_fwhm_{}'.format(comp_name, self.tag)
 
     def get_partition_function(self, tex):
-        tmp = interp(log10(tex), log10(self.pf[0]), self.pf[1])
-        # tmp = find_nearest_id(self.pf[0], tex)
-        # tmp = self.pf[1][tmp]
-        qex = power(10., tmp)
+        # tmp = interp(log10(tex), log10(self.pf[0]), self.pf[1])
+        # # tmp = find_nearest_id(self.pf[0], tex)
+        # # tmp = self.pf[1][tmp]
+        # qex = power(10., tmp)
         return get_partition_function_tex(self.pf[0], self.pf[1], tex, tag=self.tag)
 
 

@@ -90,6 +90,8 @@ class DataFile:
 
         data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), names=True)
         self._xdata = data['FreqLsb']
+        self._xunit = 'MHz'
+        self._yunit = 'K'
         try:
             self._ydata = data['Intensity']
         except ValueError:
