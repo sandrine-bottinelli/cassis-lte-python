@@ -364,7 +364,7 @@ class ModelConfiguration:
                                                   'rms': rms,
                                                   'cal': cal})
 
-                else:
+                else:  # TODO : check the following
                     if '*' in self._rms_cal_user:
                         self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
 
@@ -384,7 +384,17 @@ class ModelConfiguration:
 
             elif isinstance(self._rms_cal_user, str):
                 # TODO: TBC
-                self._rms_cal_user = utils.read_noise_info(self._rms_cal_user)
+                # self._rms_cal_user = utils.read_noise_info(self._rms_cal_user)
+                fmin, fmax, rms, cal = np.loadtxt(self._rms_cal_user, delimiter='\t', unpack=True)
+                if isinstance(fmin, float):
+                    frange = [fmin, fmax]
+                else:
+                    frange = [[fmini, fmaxi] for fmini, fmaxi in zip(fmin, fmax)]
+                self._rms_cal = pd.DataFrame({'freq_range': frange,
+                                              'fmin': fmin,
+                                              'fmax': fmax,
+                                              'rms': rms,
+                                              'cal': cal})
 
             else:
                 raise TypeError("chi2_info must be a dictionary or a path to an appropriate file.")
