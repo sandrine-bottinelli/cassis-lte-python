@@ -117,6 +117,11 @@ def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, *
         # retrieve catdir_id :
         sp_dic = get_species_info(tag)
         if sp_dic is None:
+            if isinstance(species, list):
+                try:
+                    species.remove(tag)
+                except IndexError:
+                    species.remove(int(tag))
             continue
         sp_id = sp_dic['id']
         sp_infos[sp_id] = sp_dic

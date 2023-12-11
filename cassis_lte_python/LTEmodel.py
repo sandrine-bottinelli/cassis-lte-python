@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
@@ -187,14 +189,13 @@ class ModelSpectrum(object):
             if self.name_config is not None:
                 self.save_config(self.name_config)
 
-        if self.plot_gui:
-            self.make_plot(gui=True, **utils.concat_dict(self.plot_kws, self.gui_kws))
-        if self.plot_file:
+        if self.plot_gui or self.plot_file:
             t_start = process_time()
-            self.make_plot(gui=False, **utils.concat_dict(self.plot_kws, self.file_kws))
-            t_stop = process_time()
+            self.setup_plot()
             if self.exec_time:
-                print("Execution time for saving plot : {:.2f} seconds".format(t_stop - t_start))
+                print("Execution time for preparing plot : {:.2f} seconds".format(process_time() - t_start))
+
+            self.make_plot()
 
     def __getattr__(self, item):
         # method called for the times that __getattribute__ raised an AttributeError
@@ -360,7 +361,9 @@ class ModelSpectrum(object):
             self.get_params(normalize=normalize)
 
         self.model = Model(generate_lte_model_func(self.model_info()),
-                           independent_vars=['fmhz', 'log', 'cpt', 'line_center_only']
+                           independent_vars=['fmhz', 'log', 'cpt', 'line_center_only'
+                                             # 'tc', 'beam_sizes', 'tmb2ta', 'jypb2k'
+                                             ]
                            )
 
     def fit_model(self, normalize=False, max_nfev=None, fit_kws=None, print_report=True, report_kws=None):
@@ -393,6 +396,8 @@ class ModelSpectrum(object):
             fit_kws.pop('method')
 
         self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=True,
+                                        # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
+                                        # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
                                         cpt=None, line_center_only=False,
                                         weights=wt,
                                         method=method,
@@ -661,7 +666,9 @@ class ModelSpectrum(object):
         :return:
         """
         win = self.win_list_plot[0]
-        win.f_range_plot = [min(win.x_file), max(win.x_file)]
+        win.x_mod = self.x_mod
+        # win.f_range_plot = [min(win.x_file), max(win.x_file)]
+        win.f_range_plot = [min(win.x_mod), max(win.x_mod)]
         win.bottom_unit = 'MHz'
         win.bottom_lim = utils.get_extended_limits(win.f_range_plot)
         win.top_lim = win.bottom_lim
@@ -726,8 +733,8 @@ class ModelSpectrum(object):
         # lines from other species : if many other species, more efficient to first find all transitions
         # across entire observed range, then filter in each window
         # if len(list_other_species) > 0:
-        other_species_lines = get_transition_df(list_other_species, [[min(self.x_file), max(self.x_file)]],
-                                                **thresholds_other)
+        # other_species_lines = get_transition_df(list_other_species, [[min(self.x_file), max(self.x_file)]],
+        #                                         **thresholds_other)
         # else:
         #     other_species_lines = pd.DataFrame()  # empty dataframe
 
@@ -737,6 +744,7 @@ class ModelSpectrum(object):
 
         # Compute model and line positions for each window
         for win in self.win_list_plot:
+            t_start = process_time()
             tr = win.transition
             f_ref = tr.f_trans_mhz
             win.v_range_plot = [-self.bandwidth / 2 + vlsr, self.bandwidth / 2 + vlsr]
@@ -779,7 +787,6 @@ class ModelSpectrum(object):
                 #                      for fit_cpt, cpt in zip(self.model_fit_cpt, self.cpt_list)]
                 win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
 
-
             if len(self.cpt_list) > 1:
                 for icpt in range(len(self.cpt_list)):
                     win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
@@ -806,8 +813,12 @@ class ModelSpectrum(object):
                                            model_lines_win]).drop_duplicates(subset='db_id', keep=False)
 
             # transitions from other species :
-            other_species_win_all = select_transitions(other_species_lines,
-                                                       xrange=[min(win.f_range_plot), max(win.f_range_plot)])
+            other_species_win_all = get_transition_df(list_other_species,
+                                                      [[min(win.f_range_plot), max(win.f_range_plot)]],
+                                                      **thresholds_other)
+
+            # other_species_win_all = select_transitions(other_species_lines,
+            #                                            xrange=[min(win.f_range_plot), max(win.f_range_plot)])
 
             # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
             other_species_win = pd.concat([model_lines_other,
@@ -833,6 +844,7 @@ class ModelSpectrum(object):
             if len(other_species_win) > 0:
                 win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
                                                                        tag_colors=win_colors)
+            print("Execution time for preparing window {} : {:.2f} seconds".format(win.name, process_time() - t_start))
 
         # save line list
         # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
@@ -861,7 +873,7 @@ class ModelSpectrum(object):
 
         return lines_plot_params
 
-    def select_windows(self, tag: list | None = None, display_all=True, windows: dict | None = None):
+    def select_windows(self, tag: list | None = None, display_all=True, windows: list | dict | None = None):
         """
         Determine windows to plot
         :param tag: tag selection if do not want all the tags
@@ -878,13 +890,16 @@ class ModelSpectrum(object):
         if tag is not None:  # user only wants one tag
             self.win_list_plot = [w for w in self.win_list_plot if w.transition.tag in tag]
 
-        if windows is not None:
-            new_dict = utils.expand_dict(windows, expand_vals=True)
-            win_names2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
+        if windows is not None and len(windows) > 0:
+            if isinstance(windows, dict):
+                new_dict = utils.expand_dict(windows, expand_vals=True)
+                win_names2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
+            else:
+                win_names2plot = windows
 
-            self.win_list_plot = [w for w in self.win_list if w.name in win_names2plot]
+            self.win_list_plot = [w for w in self.win_list_plot if w.name in win_names2plot]
 
-        if self.win_list_plot == 0:
+        if len(self.win_list_plot) == 0:
             raise LookupError("No windows to plot. Please check your tag selection.")
 
     def select_windows_other_lines(self, other_species_win_selection: str):
@@ -911,15 +926,11 @@ class ModelSpectrum(object):
         else:
             self.win_list_plot = sub_list
 
-    def make_plot(self, **kwargs):
+    def setup_plot(self):
         """
         Prepare all data to do the plot(s), using provided keywords.
         Possible keywords are :
          tag: tag selection if do not want all the tags
-         filename: nome of the file to be saved
-         dirname: directory where to save the file
-         gui: interactive display
-         verbose:
          basic: do not plot other species
          other_species: list or dictionary or file with other species ;
             dictionary and file can contain their thresholds
@@ -927,9 +938,6 @@ class ModelSpectrum(object):
             if other_species is provided, only these species are kept
          other_species_win_selection: select only windows with other lines from this tag.
          display_all: if False, only display windows with fitted data
-         dpi:
-         nrows: maximum number of rows per page
-         ncols: maximum number of columns per page
         :return:
 
         Notes :
@@ -937,27 +945,25 @@ class ModelSpectrum(object):
         """
 
         # Unpack keywords :
-        tag = kwargs.get('tag', None)
-        win2plot = kwargs.get('windows', None)
-        filename = kwargs.get('filename', None)
-        dirname = kwargs.get('dirname', None)
-        gui = kwargs.get('gui', False)
+        kwargs = self.plot_kws
+        tag = kwargs.get('tag')
         verbose = kwargs.get('verbose', True)
-        basic = kwargs.get('basic', False)
+        # basic = kwargs.get('basic', False)
         other_species = kwargs.get('other_species', None)
         other_species_plot = kwargs.get('other_species_plot', 'all')
         other_species_win_selection = kwargs.get('other_species_win_selection', None)
-        display_all = kwargs.get('verbose', True)
         model_err = kwargs.get('model_err', True)
         component_err = kwargs.get('component_err', True)
-        dpi = kwargs.get('dpi', None)
-        nrows = kwargs.get('nrows', 4)
-        ncols = kwargs.get('ncols', 3)
 
-        if tag is not None:
-            if not isinstance(tag, list):
-                tag = [tag]
-            tag = [str(t) for t in tag]
+        # Find all windows required by the user for gui or file :
+        display_all = self.gui_kws['display_all'] or self.file_kws['display_all']
+        win2plot = kwargs.get('windows', {})
+        win2plot.update(self.gui_kws.get('windows', {}))
+        win2plot.update(self.file_kws.get('windows', {}))
+        if len(win2plot) > 0:
+            new_dict = utils.expand_dict(win2plot, expand_vals=True)
+            win2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
+            win2plot = list(set(win2plot))
 
         # set colors for model tags and components
         self.tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
@@ -989,12 +995,47 @@ class ModelSpectrum(object):
                     other_species_win_selection = str(other_species_win_selection)
                 self.select_windows_other_lines(other_species_win_selection)
 
-        if gui:
+    def make_plot(self):
+        """
+        Do the plot(s), using provided keywords.
+        Possible keywords are :
+         filename: nome of the file to be saved
+         dirname: directory where to save the file
+         gui: interactive display
+         verbose:
+         dpi:
+         nrows: maximum number of rows per page
+         ncols: maximum number of columns per page
+        :return:
+
+        Notes :
+            - other_species_selection is deprecated, use other_species_win_selection
+        """
+
+        if self.plot_gui:
+            kwargs = self.plot_kws.copy()
+            kwargs.update(self.gui_kws)
+            self.select_windows(tag=kwargs['tag'], display_all=kwargs['display_all'], windows=kwargs['windows'])
+
             gui_plot(self)
 
-        if filename:
+        if self.plot_file:
+            kwargs = self.plot_kws.copy()
+            kwargs.update(self.file_kws)
+            filename = self.file_kws['filename']
+            dirname = kwargs.get('dirname', None)
+            verbose = kwargs.get('verbose', True)
+            dpi = kwargs.get('dpi', None)
+            nrows = kwargs.get('nrows', 4)
+            ncols = kwargs.get('ncols', 3)
+            self.select_windows(tag=kwargs['tag'], display_all=kwargs['display_all'], windows=kwargs['windows'])
+
+            t_start = process_time()
             file_plot(self, filename, dirname=dirname, verbose=verbose,
                       dpi=dpi, nrows=nrows, ncols=ncols)
+            t_stop = process_time()
+            if self.exec_time:
+                print("Execution time for saving plot : {:.2f} seconds".format(t_stop - t_start))
 
     def set_filepath(self, filename, dirname=None, ext=None):
         sub_dir = self.output_dir

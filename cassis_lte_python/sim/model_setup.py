@@ -33,10 +33,12 @@ class ModelConfiguration:
             os.makedirs(self.output_dir)
         self.base_name = configuration.get('base_name', 'lte_model')
 
-        self.data_file = None
+        self.data_file = configuration.get('data_file', None)
         self.data_file_obj = None
         self.x_file = None
         self.y_file = None
+        self.x_obs = configuration.get('x_obs', None)
+        self.y_obs = configuration.get('y_obs', None)
         self.vlsr_file = None
         self.vlsr_plot = None
         self.cont_info = None
@@ -83,6 +85,9 @@ class ModelConfiguration:
         if 'df_mhz' in configuration and configuration['df_mhz'] is not None:
             dfmhz = configuration['df_mhz']
         self.dfmhz = dfmhz
+        if self.x_mod is None and self.data_file is None:
+            self.x_mod = np.arange(self.fmin_mhz, self.fmax_mhz + self.dfmhz, self.dfmhz)
+
         self.noise = 1.e-3 * configuration.get('noise_mk', 0.)
 
         self.t_a_star = configuration.get('t_a*', False)
@@ -127,11 +132,55 @@ class ModelConfiguration:
         self.save_res_configs = configuration.get('save_res_configs', True)
         self.name_lam = configuration.get('name_lam', None)
         self.name_config = configuration.get('name_config', None)
-        self.plot_kws = configuration.get('plot_kws', {})
+
+        # Default plot keywords :
+        self.plot_kws = {
+            'tag': None,
+            'display_all': True,
+            'windows': {},
+            'verbose': True,
+            'basic': False,
+            'other_species': None,
+            'other_species_plot': 'all',
+            'other_species_win_selection': None,
+            'model_err': True,
+            'component_err': True
+        }
+        self.plot_kws.update(configuration.get('plot_kws', {}))
+        # Make sure 'tag' is a list of strings :
+        tag = self.plot_kws['tag']
+        if tag is not None:
+            if not isinstance(tag, list):
+                tag = [tag]
+            self.plot_kws['tag'] = [str(t) for t in tag]
+
         self.plot_gui = configuration.get('plot_gui', True)
-        self.gui_kws = configuration.get('gui_kws', {})
+        # Default gui keywords
+        self.gui_kws = {'display_all': True,
+                        'windows': self.plot_kws['windows']}
+        gui_kws = configuration.get('gui_kws', {})
+        for k in list(gui_kws.keys()):  # convert to list so that does not change if the dictionary changes below
+            if k not in self.gui_kws.keys():
+                print(f'N.B. : {k} in gui keywords is not used.')
+                gui_kws.pop(k)
+        self.gui_kws.update(gui_kws)
+
         self.plot_file = configuration.get('plot_file', False)
-        self.file_kws = configuration.get('file_kws', {})
+        # Default file keywords
+        self.file_kws = {'display_all': True,
+                         'windows': self.plot_kws['windows'],
+                         'filename': None,
+                         'dirname': None,
+                         'dpi': None,
+                         'nrows': 4,
+                         'ncols': 3}
+        file_kws = configuration.get('file_kws', {})
+        for k in list(file_kws.keys()):
+            if k not in self.file_kws.keys():
+                print(f'N.B. : {k} in file keywords is not used.')
+                file_kws.pop(k)
+        self.file_kws.update(file_kws)
+
         self.exec_time = configuration.get('exec_time', True)
 
     def get_data(self, config=None):
@@ -214,10 +263,13 @@ class ModelConfiguration:
         if 'tuning_info' in config:
             # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
             for tel in config['tuning_info'].keys():
-                tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
-                # if os.path.isfile(os.path.join(TELESCOPE_DIR, tel)):
-                #     tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
-                # elif os.path.isfile():
+                # tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
+                if os.path.isfile(os.path.join(TELESCOPE_DIR, tel)):
+                    tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
+                elif os.path.isfile(tel):
+                    tel_info = utils.read_telescope_file(tel)
+                else:
+                    raise FileNotFoundError(f"Telescope file {tel} not found.")
                 TEL_DIAM[tel] = tel_info['Diameter (m)'][0]  # values should all be the same
                 self._telescope_data[tel] = tel_info
 
@@ -300,14 +352,18 @@ class ModelConfiguration:
         # if config is None:
         #     config = self._configuration_dict
 
-        # search w/i min/max of data :
-        print(f"{len(get_transition_df(self.tag_list, [[min(self.x_file), max(self.x_file)]], **self.thresholds))} ",
-              f"transitions within thresholds and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
+        if self.x_file is not None:
+            x_vals = self.x_file
+            # for comparison with CASSIS look for number of transitions w/i min/max of data :
+            print(f"{len(get_transition_df(self.tag_list, [[min(self.x_file), max(self.x_file)]], **self.thresholds))} ",
+                  f"transitions within thresholds and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
+        else:
+            x_vals = self.x_mod
 
         # search only in data within telescope ranges
         f_range_search = []
         for f_range in self.tuning_info['fmhz_range']:
-            x_sub = self.x_file[(self.x_file >= min(f_range)) & (self.x_file <= max(f_range))]
+            x_sub = x_vals[(x_vals >= min(f_range)) & (x_vals <= max(f_range))]
             f_range_search.append([min(x_sub), max(x_sub)])
         self.line_list_all = get_transition_df(self.tag_list, f_range_search)
         tr_list_tresh = select_transitions(self.line_list_all, thresholds=self.thresholds)
