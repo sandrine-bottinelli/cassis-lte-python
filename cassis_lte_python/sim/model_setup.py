@@ -126,10 +126,13 @@ class ModelConfiguration:
                               '\t'.join(['# Tag ', 'Ntot', 'Tex', 'FWHM', 'f_mhz', 'Eup', 'Aij', 'gup', 'tau'])
                               ])
 
+        self.modeling = configuration.get('modeling', False)
+
         self.minimize = configuration.get('minimize', False)
         self.max_iter = configuration.get('max_iter', None)
         self.fit_kws = configuration.get('fit_kws', None)
-        self.save_res_configs = configuration.get('save_res_configs', True)
+        self.save_configs = configuration.get('save_configs', True) or configuration.get('save_res_configs', True)
+        self.save_results = configuration.get('save_results', True) or configuration.get('save_res_configs', True)
         self.name_lam = configuration.get('name_lam', None)
         self.name_config = configuration.get('name_config', None)
 
@@ -538,43 +541,48 @@ class ModelConfiguration:
                     for iw, w in enumerate(win_list_tag):
                         print('  {}. {}'.format(iw + 1, w.transition))
 
-                # find windows with data to be fitted
-                if self._v_range_user is not None and (tag in self._v_range_user or '*' in self._v_range_user):
-                    v_range = utils.expand_dict(self._v_range_user[tag], nt)
-                    for win in win_list_tag:
-                        win_num = win.plot_nb
-
-                        if win_num in v_range:  # window has data to be fitted
-                            win.v_range_fit = v_range[win_num]
-                            f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
-                                                                   vref_kms=self.vlsr_file)
-                                       for v in v_range[win_num]]
-                            f_range.sort()
-                            win.f_range_fit = f_range
-                            if self.x_file is not None:
-                                win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, f_range,
-                                                                                y_values=self.y_file)
-
-                            # get rms and cal for windows to be fitted
-                            try:
-                                if 'freq_range' in self._rms_cal.columns:
-                                    rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
-                                                            & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
-                                else:
-                                    rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
-                                    if len(rms_cal) == 0:
-                                        rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
-                                if len(rms_cal) == 0:
-                                    raise IndexError(f"rms/cal info not found for {win.transition}.")
-                                win.rms = rms_cal['rms'].values[0]
-                                # if self.jypb is not None:
-                                #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
-                                win.cal = rms_cal['cal'].values[0]
-                            except KeyError:
-                                raise KeyError(f"rms/cal info not found.")
-
                 self.win_list.extend(win_list_tag)
 
+        return
+
+    def get_data_to_fit(self):
+        # find windows with data to be fitted
+        for tag in self.tag_list:
+            win_list_tag = [win for win in self.win_list if tag in win.name]
+            nt = len(win_list_tag)
+            if self._v_range_user is not None and (tag in self._v_range_user or '*' in self._v_range_user):
+                v_range = utils.expand_dict(self._v_range_user[tag], nt)
+                for win in win_list_tag:
+                    win_num = win.plot_nb
+
+                    if win_num in v_range:  # window has data to be fitted
+                        win.v_range_fit = v_range[win_num]
+                        f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
+                                                               vref_kms=self.vlsr_file)
+                                   for v in v_range[win_num]]
+                        f_range.sort()
+                        win.f_range_fit = f_range
+                        if self.x_file is not None:
+                            win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, f_range,
+                                                                            y_values=self.y_file)
+
+                        # get rms and cal for windows to be fitted
+                        try:
+                            if 'freq_range' in self._rms_cal.columns:
+                                rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
+                                                        & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
+                            else:
+                                rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
+                                if len(rms_cal) == 0:
+                                    rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
+                            if len(rms_cal) == 0:
+                                raise IndexError(f"rms/cal info not found for {win.transition}.")
+                            win.rms = rms_cal['rms'].values[0]
+                            # if self.jypb is not None:
+                            #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
+                            win.cal = rms_cal['cal'].values[0]
+                        except KeyError:
+                            raise KeyError(f"rms/cal info not found.")
         self.win_list_fit = [w for w in self.win_list if w.in_fit]
 
         if self.x_file is not None:
@@ -584,8 +592,6 @@ class ModelConfiguration:
             # self.x_mod = x_mod[0]  # TODO: why do I have to do this?
         else:
             self.x_fit = None
-
-        return
 
 
 class Component:

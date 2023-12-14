@@ -167,8 +167,8 @@ def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, *
     # else:
     #     tran_df = pd.concat([tran_df, df])
 
-    if len(tran_df) == 0:
-        raise IndexError('No transitions found. Please check your thresholds.')
+    # if len(tran_df) == 0:
+    #     raise IndexError('No transitions found. Please check your thresholds.')
 
     return tran_df
 

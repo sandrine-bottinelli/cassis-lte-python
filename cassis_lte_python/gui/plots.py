@@ -67,7 +67,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.05)
 
     #  Plot components if more than one
-    if len(lte_model.cpt_list) > 1:
+    if (lte_model.minimize or lte_model.modeling) and (len(lte_model.cpt_list) > 1):
         for icpt, _ in enumerate(lte_model.cpt_list):
             ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
                     color=lte_model.cpt_cols[icpt], linewidth=1)
@@ -77,13 +77,19 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                                 color=lte_model.cpt_cols[icpt], alpha=0.1)
 
     # Plot data and/or model
-    if win.x_file is not None:  # data and model
+    if win.x_file is not None:  # data
         if win.y_res is not None:
             ax.step(win.x_file_plot, win.y_res, where='mid', color=COLOR_RESIDUAL, linewidth=1)
         ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1.5)
-        ax.step(win.x_mod_plot, win.y_mod, where='mid', color='r', linewidth=1.5)
-    else:  # model only
-        ax.step(win.x_mod_plot, win.y_mod, where='mid', color='k', linewidth=1)
+
+    if lte_model.minimize or lte_model.modeling:  # model
+        if win.x_file is not None:  # model on top of data -> red
+            col = 'r'
+            lw = 1.5
+        else:  # model only -> black
+            col = 'k'
+            lw = 1
+        ax.step(win.x_mod_plot, win.y_mod, where='mid', color=col, linewidth=lw)
 
     if win.y_mod_err is not None:
         ax.fill_between(win.x_mod_plot, win.y_mod - win.y_mod_err, win.y_mod + win.y_mod_err, color='red', alpha=0.1)

@@ -166,7 +166,11 @@ class ModelSpectrum(object):
         self.tag_other_sp_colors = None
         self.cpt_cols = None
 
+        if self.modeling:
+            self.generate_lte_model()
+
         if self.minimize:
+            self.model_config.get_data_to_fit()
             self.log = True
             self.get_params()
             t_start = process_time()
@@ -176,14 +180,14 @@ class ModelSpectrum(object):
             t_stop = process_time()
             if self.exec_time:
                 print("Execution time for minimization : {:.2f} seconds".format(t_stop - t_start))
-            if self.save_res_configs:
+            if self.save_results:
                 filename = ''
                 if self.name_lam is not None:
                     filename = self.name_lam + '_'
                 filename = filename + 'fit_res'
                 self.save_fit_results(filename)
 
-        if self.save_res_configs:
+        if self.save_configs:
             if self.name_lam is not None:
                 self.write_lam(self.name_lam)
             if self.name_config is not None:
@@ -743,7 +747,7 @@ class ModelSpectrum(object):
         #                                             line_list=self.line_list_all)
 
         # Compute model and line positions for each window
-        for win in self.win_list_plot:
+        for iwin, win in enumerate(self.win_list_plot):
             t_start = process_time()
             tr = win.transition
             f_ref = tr.f_trans_mhz
@@ -757,48 +761,58 @@ class ModelSpectrum(object):
 
             # all transitions in the window (no thresholds) :
             fwhm_mhz = utils.delta_v_to_delta_f(fwhm, f_ref)
-            model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 0.5 * fwhm_mhz,
-                                                                max(win.f_range_plot) + 0.5 * fwhm_mhz])
-            # all_lines_win = select_transitions(self.line_list_all, xrange=[min(win.f_range_plot) - 2 * fwhm_mhz,
-            #                                                                max(win.f_range_plot) + 2 * fwhm_mhz])
+            # model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 0.5 * fwhm_mhz,
+            #                                                     max(win.f_range_plot) + 0.5 * fwhm_mhz])
+            model_lines_win = select_transitions(self.line_list_all, xrange=[min(win.f_range_plot) - 0.5 * fwhm_mhz,
+                                                                             max(win.f_range_plot) + 0.5 * fwhm_mhz])
 
             # compute the model :
             # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
-            win.x_mod = np.linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
-            win.y_mod = self.model_fit.eval(fmhz=win.x_mod)
-            win.y_res = win.y_file - self.model_fit.eval(fmhz=win.x_file)
-            win.y_res += self.get_tc(win.x_file)
+            if self.modeling or self.minimize:
+                win.x_mod = np.linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
+                if self.vlsr_file == 0.:
+                    win.x_mod_plot = utils.frequency_to_velocity(win.x_mod, f_ref, vref_kms=self.vlsr_file)
+                else:
+                    win.x_mod_plot = utils.frequency_to_velocity(win.x_mod, f_ref, vref_kms=vlsr)
 
-            if 'model_err' in kwargs and kwargs['model_err']:
-                # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
-                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
-            if 'component_err' in kwargs and kwargs['component_err']:
-                # c_par = Parameters()
-                # for par in self.model_fit.params:
-                #     if self.cpt_list[0].name in par:
-                #         c_par[par] = self.model_fit.params[par]
-                # # self.model_fit.params = c_par
-                # self.model_fit.var_names = [par for par in c_par]
-                # self.model_fit.nvarys = len(c_par)
-                # # self.model_fit.params = plot_pars
-                # self.model_fit.var_names = [par for par in plot_pars]
-                # self.model_fit.nvarys = len(plot_pars)
-                # win.y_mod_err_cpt = [fit_cpt.eval_uncertainty(fmhz=win.x_mod, cpt=cpt)
-                #                      for fit_cpt, cpt in zip(self.model_fit_cpt, self.cpt_list)]
-                win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
+            if win.x_file is not None:
+                if self.vlsr_file == 0.:
+                    win.x_file_plot = utils.frequency_to_velocity(win.x_file, f_ref, vref_kms=self.vlsr_file)
+                else:
+                    win.x_file_plot = utils.frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
 
-            if len(self.cpt_list) > 1:
+            if self.modeling:
+                win.y_mod = self.model.eval(fmhz=win.x_mod, **self.params)
+                win.y_res = win.y_file - self.model.eval(fmhz=win.x_file, **self.params)
+                win.y_res += self.get_tc(win.x_file)
+
+            if self.minimize:
+                win.y_mod = self.model_fit.eval(fmhz=win.x_mod)
+                win.y_res = win.y_file - self.model_fit.eval(fmhz=win.x_file)
+                win.y_res += self.get_tc(win.x_file)
+                if 'model_err' in kwargs and kwargs['model_err']:
+                    # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
+                    win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
+                if 'component_err' in kwargs and kwargs['component_err']:
+                    # c_par = Parameters()
+                    # for par in self.model_fit.params:
+                    #     if self.cpt_list[0].name in par:
+                    #         c_par[par] = self.model_fit.params[par]
+                    # # self.model_fit.params = c_par
+                    # self.model_fit.var_names = [par for par in c_par]
+                    # self.model_fit.nvarys = len(c_par)
+                    # # self.model_fit.params = plot_pars
+                    # self.model_fit.var_names = [par for par in plot_pars]
+                    # self.model_fit.nvarys = len(plot_pars)
+                    # win.y_mod_err_cpt = [fit_cpt.eval_uncertainty(fmhz=win.x_mod, cpt=cpt)
+                    #                      for fit_cpt, cpt in zip(self.model_fit_cpt, self.cpt_list)]
+                    win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
+
+            if (self.modeling or self.minimize) and (len(self.cpt_list) > 1):
                 for icpt in range(len(self.cpt_list)):
                     win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
                                                                         line_list=model_lines_win,
                                                                         cpt=self.cpt_list[icpt]))
-
-            if self.vlsr_file == 0.:
-                win.x_mod_plot = utils.frequency_to_velocity(win.x_mod, f_ref, vref_kms=self.vlsr_file)
-                win.x_file_plot = utils.frequency_to_velocity(win.x_file, f_ref, vref_kms=self.vlsr_file)
-            else:
-                win.x_mod_plot = utils.frequency_to_velocity(win.x_mod, f_ref, vref_kms=vlsr)
-                win.x_file_plot = utils.frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
 
             # transitions from model species, w/i thresholds :
             model_lines_user = select_transitions(model_lines_win,
@@ -844,7 +858,9 @@ class ModelSpectrum(object):
             if len(other_species_win) > 0:
                 win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
                                                                        tag_colors=win_colors)
-            print("Execution time for preparing window {} : {:.2f} seconds".format(win.name, process_time() - t_start))
+            if iwin == 0:
+                prep_time = (process_time() - t_start) * len(self.win_list_plot)
+                print(f"Expected time for preparing windows : {round(prep_time)} seconds")
 
         # save line list
         # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
@@ -957,13 +973,16 @@ class ModelSpectrum(object):
 
         # Find all windows required by the user for gui or file :
         display_all = self.gui_kws['display_all'] or self.file_kws['display_all']
-        win2plot = kwargs.get('windows', {})
-        win2plot.update(self.gui_kws.get('windows', {}))
-        win2plot.update(self.file_kws.get('windows', {}))
-        if len(win2plot) > 0:
-            new_dict = utils.expand_dict(win2plot, expand_vals=True)
-            win2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
-            win2plot = list(set(win2plot))
+        if display_all:
+            win2plot = None
+        else:
+            win2plot = kwargs.get('windows', {})
+            win2plot.update(self.gui_kws.get('windows', {}))
+            win2plot.update(self.file_kws.get('windows', {}))
+            if len(win2plot) > 0:
+                new_dict = utils.expand_dict(win2plot, expand_vals=True)
+                win2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
+                win2plot = list(set(win2plot))
 
         # set colors for model tags and components
         self.tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
