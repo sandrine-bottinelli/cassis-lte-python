@@ -149,12 +149,10 @@ class ModelSpectrum(object):
 
         self.model_config = model_config
 
-        self._params_user = None
         self.params = None
         self.norm_factors = None
         self.model = None
         self.log = False
-        self.best_params = None
         self.model_fit = None
         self.model_fit_cpt = []
         self.normalize = False
@@ -164,14 +162,14 @@ class ModelSpectrum(object):
         self.tag_other_sp_colors = None
         self.cpt_cols = None
 
-        self.get_params()
+        if self.minimize:
+            self.log = True
+        self.make_params()
 
         if self.modeling:
             self.generate_lte_model()
 
         if self.minimize:
-            # self.model_config.get_data_to_fit()
-            self.log = True
             t_start = process_time()
             self.generate_lte_model()
             # Perform the fit
@@ -314,7 +312,7 @@ class ModelSpectrum(object):
 
         return rms if len(rms) > 1 else rms[0]
 
-    def get_params(self, normalize=False):
+    def make_params(self, normalize=False):
         params = Parameters()
 
         for icpt, cpt in enumerate(self.cpt_list):
@@ -337,31 +335,32 @@ class ModelSpectrum(object):
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                     params[par.name] = par
 
-        # save user-defined parameters
-        self._params_user = params.copy()
-
-        if self.log:
-            for par in params:
-                if 'tex' in par or 'ntot' in par:
-                    params[par].set(value=np.log10(params[par].value),
-                                    min=np.log10(params[par].min),
-                                    max=np.log10(params[par].max))
-
         self.params = params
 
-        norm_factors = {self.params[parname].name: 1. for parname in self.params}
-        if normalize:
-            for parname in self.params:
-                param = self.params[parname]
-                nf = abs(param.value) if param.value != 0. else 1.
-                norm_factors[param.name] = nf
-                if param.expr is None:
-                    param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
-        self.norm_factors = norm_factors
+        if self.minimize:
+            if self.log:
+                for par in self.params:
+                    if 'tex' in par or 'ntot' in par:
+                        self.params[par].user_data = {'value': params[par].value,
+                                                      'min': params[par].min,
+                                                      'max': params[par].max}
+                        self.params[par].set(value=np.log10(self.params[par].value),
+                                                  min=np.log10(self.params[par].min),
+                                                  max=np.log10(self.params[par].max))
+
+            norm_factors = {self.params[parname].name: 1. for parname in self.params}
+            if normalize:
+                for parname in self.params:
+                    param = self.params[parname]
+                    nf = abs(param.value) if param.value != 0. else 1.
+                    norm_factors[param.name] = nf
+                    if param.expr is None:
+                        param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
+            self.norm_factors = norm_factors
 
     def generate_lte_model(self, normalize=False):
         if self.params is None:
-            self.get_params(normalize=normalize)
+            self.make_params(normalize=normalize)
 
         self.model = Model(generate_lte_model_func(self.model_info()),
                            independent_vars=['fmhz', 'log', 'cpt', 'line_center_only'
@@ -428,24 +427,39 @@ class ModelSpectrum(object):
                 self.model_fit_cpt.append(model_fit_cpt)
 
         self.model = self.model_fit.model
-        self.best_pars()
-        # if self.log:
-        #     self.params
-        #     self.log = False
-        self.update_parameters(self.best_params)
+
+        # update parameters
+        for par in self.params:
+            p = self.params[par]
+            pfit = self.model_fit.params[par]
+
+            p.correl = pfit.correl
+
+            nf = self.norm_factors[p.name]
+            p.set(min=pfit.min * nf, max=pfit.max * nf, value=pfit.value * nf, is_init_value=False)
+            if p.stderr is not None:
+                p.stderr = nf * pfit.stderr
+
+            if p.user_data is not None:
+                p.init_value = p.user_data['value']
+                if pfit.stderr is not None:
+                    p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
+                val = 10 ** pfit.value if p.vary else p.user_data['value']
+                p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False)
+
+        # reset norm factors and log scale
+        self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
+        self.log = False
 
         if print_report:
             print(self.fit_report(report_kws=report_kws))
 
     def fit_report(self, report_kws=None):
         fit_params = self.model_fit.params.copy()
-        self.model_fit.params = self.best_params
+        self.model_fit.params = self.params
 
         if report_kws is None:
             report_kws = {}
-
-        if self.normalize:
-            report_kws['modelpars'] = self.best_params
 
         if 'show_correl' not in report_kws:
             report_kws['show_correl'] = False
@@ -464,6 +478,12 @@ class ModelSpectrum(object):
                 err, rest = end_line.split(maxsplit=1)
                 end_line = f"{utils.format_float(float(err), nb_signif_digits=2): <8} {rest}"
                 new_lines.append(" +/- ".join([begin_line, end_line]))
+
+            elif 'init' in line:  # no uncertainties, reformat as well
+                begin_line, end_line = line.split(sep=" (")
+                label, val = begin_line.rsplit(sep=' ', maxsplit=1)
+                begin_line = f"{label} {utils.format_float(float(val), nb_signif_digits=2): <8}"
+                new_lines.append(" (".join([begin_line, end_line]))
 
             elif "=" in line and ":" not in line and "#" not in line:  # reformat statistics if not integers
                 elts = line.rsplit(sep="=", maxsplit=1)
@@ -551,7 +571,7 @@ class ModelSpectrum(object):
             self.generate_lte_model()
 
         if params is None:
-            params = self.best_params if self.best_params is not None else self.params
+            params = self.params
 
         return self.model.func(x_values, log=False, cpt=cpt, line_center_only=line_center_only,
                                **params)
@@ -591,34 +611,34 @@ class ModelSpectrum(object):
     #         self.best_params[parname] = self.params[parname] * self.config['norm_factors'][parname]
     #     return self.best_params
 
-    def best_pars(self):
-        if self.model_fit is not None and self.best_params is None:
-            params = self.model_fit.params.copy()
-            cpt_indices = {cpt.name: index for index, cpt in enumerate(self.cpt_list)}
-            for par in params:
-                p = params[par]
-                nf = self.norm_factors[p.name]
-                p.set(min=p.min * nf, max=p.max * nf, value=p.value * nf, is_init_value=False)
-                if self.log and ('tex' in p.name or 'ntot' in p.name):
-                    if p.stderr is not None:
-                        p.stderr = (10**(p.value + p.stderr) - 10**(p.value - p.stderr)) / 2
-                    # if 'tex' in p.name:
-                    #     icpt = cpt_indices[p.name.split('_')[0]]
-                    #     pmax = self._params_user[par].max
-                    #     pmin = max(10 ** p.min, self.cpt_list[icpt].tmin)
-                    # else:
-                    #     pmax = 10 ** p.max
-                    #     pmin = 10 ** p.min
-                    p.init_value = self._params_user[par].init_value
-                    val = 10 ** p.value if p.vary else self._params_user[par].value
-                    p.set(min=self._params_user[par].min, max=self._params_user[par].max,
-                          value=val, is_init_value=False)
-                if p.stderr is not None:
-                    p.stderr *= nf
-            self.best_params = params
-            # reset norm factors and log scale
-            self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
-            self.log = False
+    # def best_pars(self):
+    #     if self.model_fit is not None and self.best_params is None:
+    #         params = self.model_fit.params  # .copy()
+    #         cpt_indices = {cpt.name: index for index, cpt in enumerate(self.cpt_list)}
+    #         for par in params:
+    #             p = params[par]
+    #             nf = self.norm_factors[p.name]
+    #             p.set(min=p.min * nf, max=p.max * nf, value=p.value * nf, is_init_value=False)
+    #             if self.log and ('tex' in p.name or 'ntot' in p.name):
+    #                 if p.stderr is not None:
+    #                     p.stderr = (10**(p.value + p.stderr) - 10**(p.value - p.stderr)) / 2
+    #                 # if 'tex' in p.name:
+    #                 #     icpt = cpt_indices[p.name.split('_')[0]]
+    #                 #     pmax = self._params_user[par].max
+    #                 #     pmin = max(10 ** p.min, self.cpt_list[icpt].tmin)
+    #                 # else:
+    #                 #     pmax = 10 ** p.max
+    #                 #     pmin = 10 ** p.min
+    #                 p.init_value = self._params_user[par].init_value
+    #                 val = 10 ** p.value if p.vary else self._params_user[par].value
+    #                 p.set(min=self._params_user[par].min, max=self._params_user[par].max,
+    #                       value=val, is_init_value=False)
+    #             if p.stderr is not None:
+    #                 p.stderr *= nf
+    #         self.best_params = params
+    #         # reset norm factors and log scale
+    #         self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
+    #         self.log = False
 
         # return self.best_params
         # parnames = list(self.model_fit.params.keys())
@@ -631,18 +651,18 @@ class ModelSpectrum(object):
         #     output.append(f"    {name}:{space} {par.value} x {norm} = {par.value*norm: .5g}")
         # return '\n'.join(output)
 
-    def plot_pars(self):
-        return self.best_params if self.best_params is not None else self.params
+    # def plot_pars(self):
+    #     return self.best_params if self.best_params is not None else self.params
 
     def integrated_intensities(self):
-        best_pars = self.best_params if self.best_params is not None else self.params
+        pars = self.params
         res = {}
         for cpt in self.cpt_list:
             fluxes = []
             for win in self.win_list:
                 f_ref = win.transition.f_trans_mhz
-                fwhm = best_pars['{}_fwhm_{}'.format(cpt.name, win.transition.tag)].value
-                vlsr = best_pars['{}_vlsr'.format(cpt.name)].value
+                fwhm = pars['{}_fwhm_{}'.format(cpt.name, win.transition.tag)].value
+                vlsr = pars['{}_vlsr'.format(cpt.name)].value
                 fmin_mod, fmax_mod = [utils.velocity_to_frequency(vlsr + v, f_ref, vref_kms=self.vlsr_file)
                                       for v in [fwhm, -fwhm]]
                 # x_file_win = self.x_file[(fmin_mod <= self.x_file) & (self.x_file <= fmax_mod)]
@@ -650,7 +670,7 @@ class ModelSpectrum(object):
                 #                     num=self.oversampling * len(x_file_win))
                 npts = 100
                 x_mod = np.linspace(fmin_mod, fmax_mod, num=npts)
-                y_mod = self.compute_model_intensities(params=best_pars, x_values=x_mod, line_list=[win.transition])
+                y_mod = self.compute_model_intensities(params=pars, x_values=x_mod, line_list=[win.transition])
 
                 dv = 2. * fwhm / (npts - 1)
                 K_kms = 0.
@@ -677,7 +697,7 @@ class ModelSpectrum(object):
         win.top_lim = win.bottom_lim
 
         # compute the model :
-        plot_pars = self.plot_pars()
+        plot_pars = self.params
         # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
         # TODO: check if following is necessary
         if win.x_file is not None:
@@ -717,7 +737,7 @@ class ModelSpectrum(object):
         """
 
         # Define some useful quantities
-        plot_pars = self.plot_pars()
+        plot_pars = self.params
         vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
         fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
 
@@ -1094,7 +1114,7 @@ class ModelSpectrum(object):
         if false, only save the model spectrum for the windows in self.win_list
         :return: None
         """
-        params = self.best_params if self.best_params is not None else self.params
+        params = self.params
         if self.x_file is None:  # model only -> full spectrum
             full_spectrum = True
             x_values = self.x_mod
@@ -1195,9 +1215,7 @@ class ModelSpectrum(object):
                 hdu.header['NOISE'] = (self.noise * 1000., '[mK]Noise added to the spectrum')
 
             if vlsr is None:
-                params = self.best_params
-                if self.best_params is None:
-                    params = self.best_pars()
+                params = self.params
                 try:
                     vlsr = params['{}_vlsr'.format(self.cpt_list[0].name)].value
                 except TypeError:
@@ -1276,10 +1294,10 @@ class ModelSpectrum(object):
                     for i, row in self.line_list_all.iterrows():
                         line = row['transition']
                         if line.tag in cpt.tag_list:
-                            tex = self.best_params[f"{cpt.name}_tex"].value
+                            tex = self.params[f"{cpt.name}_tex"].value
                             tau0 = utils.compute_tau0(line,
-                                                      self.best_params[f"{cpt.name}_ntot_{line.tag}"].value,
-                                                      self.best_params[f"{cpt.name}_fwhm_{line.tag}"].value,
+                                                      self.params[f"{cpt.name}_ntot_{line.tag}"].value,
+                                                      self.params[f"{cpt.name}_fwhm_{line.tag}"].value,
                                                       tex)
                             ind0 = utils.find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
                             f.write(f"{line.name} ({line.qn_lo}_{line.qn_hi})\t{line.tag}")
@@ -1409,8 +1427,8 @@ class ModelSpectrum(object):
 
         # Define other components
         params = self.params
-        if self.best_params is not None and ext == 'lam':
-            params = self.best_params
+        # if self.best_params is not None and ext == 'lam':
+        #     params = self.best_params
 
         for ic, cpt in enumerate(self.cpt_list):
             c_id = ic + 1
@@ -1647,8 +1665,8 @@ class ModelCube:
                             report_kws={'show_correl': False})
 
             # read out params into arrays, ensure to have for all components necessary
-            for par in model.best_params:
-                param = model.best_params[par]
+            for par in model.params:
+                param = model.params[par]
                 self._param_arrays['{}_arr'.format(param.name)][j, i] = param.value
             self._param_arrays['redchi_arr'][j, i] = model.model_fit.redchi
 

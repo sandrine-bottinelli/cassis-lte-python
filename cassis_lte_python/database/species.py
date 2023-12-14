@@ -57,11 +57,6 @@ class Species:
     def ntot(self):
         return self._ntot.value
 
-    @ntot.setter
-    def ntot(self, value):
-        if self._ntot.value != value:
-            self._ntot.value = value
-
     @property
     def tex(self):
         return self._tex
@@ -74,11 +69,6 @@ class Species:
     @property
     def fwhm(self):
         return self._fwhm.value
-
-    @fwhm.setter
-    def fwhm(self, value):
-        if self._fwhm.value != value:
-            self._fwhm.value = value
 
     @property
     def parameters(self):

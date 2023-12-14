@@ -656,42 +656,25 @@ class Component:
         }
 
     def update_parameters(self, new_pars):
-        self.vlsr = new_pars['{}_vlsr'.format(self.name)].value
-        self.size = new_pars['{}_size'.format(self.name)].value
-        self.tex = new_pars['{}_tex'.format(self.name)].value
+        self.vlsr.set(value=new_pars['{}_vlsr'.format(self.name)].value, is_init_value=False)
+        self.size.set(value=new_pars['{}_size'.format(self.name)].value, is_init_value=False)
+        self.tex.set(value=new_pars['{}_tex'.format(self.name)].value, is_init_value=False)
         for sp in self.species_list:
-            sp.ntot = new_pars['{}_ntot_{}'.format(self.name, sp.tag)].value
-            sp.fwhm = new_pars['{}_fwhm_{}'.format(self.name, sp.tag)].value
+            sp.ntot.set(value=new_pars['{}_ntot_{}'.format(self.name, sp.tag)].value, is_init_value=False)
+            sp.fwhm.set(value=new_pars['{}_fwhm_{}'.format(self.name, sp.tag)].value, is_init_value=False)
             # sp.tex = new_pars['{}_tex'.format(self.name, sp.tag)].value
 
     @property
     def vlsr(self):
         return self._vlsr.value
 
-    @vlsr.setter
-    def vlsr(self, value):
-        if self._vlsr.value != value:
-            self._vlsr.value = value
-
     @property
     def size(self):
         return self._size.value
 
-    @size.setter
-    def size(self, value):
-        if self._size.value != value:
-            self._size.value = value
-
     @property
     def tex(self):
         return self._tex.value
-
-    @tex.setter
-    def tex(self, value):
-        if self._tex.value != value:
-            self._tex.value = value
-            for sp in self.species_list:
-                sp.tex = value
 
     @property
     def tmax(self):
