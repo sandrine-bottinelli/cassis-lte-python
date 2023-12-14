@@ -186,6 +186,19 @@ class ModelConfiguration:
 
         self.exec_time = configuration.get('exec_time', True)
 
+        if 'data_file' in self._configuration_dict or 'x_obs' in self._configuration_dict:
+            self.get_data()
+
+        if 'tc' in self._configuration_dict:
+            self.get_continuum()
+
+        self.get_linelist()
+        self.get_windows()
+        if self._v_range_user is not None:
+            self.get_velocity_ranges()
+        if self.minimize:
+            self.get_data_to_fit()
+
     def get_data(self, config=None):
         if config is None:
             config = self._configuration_dict
@@ -545,8 +558,7 @@ class ModelConfiguration:
 
         return
 
-    def get_data_to_fit(self):
-        # find windows with data to be fitted
+    def get_velocity_ranges(self):
         for tag in self.tag_list:
             win_list_tag = [win for win in self.win_list if tag in win.name]
             nt = len(win_list_tag)
@@ -555,16 +567,13 @@ class ModelConfiguration:
                 for win in win_list_tag:
                     win_num = win.plot_nb
 
-                    if win_num in v_range:  # window has data to be fitted
+                    if win_num in v_range:  # window has range to be fitted
                         win.v_range_fit = v_range[win_num]
                         f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
                                                                vref_kms=self.vlsr_file)
                                    for v in v_range[win_num]]
                         f_range.sort()
                         win.f_range_fit = f_range
-                        if self.x_file is not None:
-                            win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, f_range,
-                                                                            y_values=self.y_file)
 
                         # get rms and cal for windows to be fitted
                         try:
@@ -583,15 +592,18 @@ class ModelConfiguration:
                             win.cal = rms_cal['cal'].values[0]
                         except KeyError:
                             raise KeyError(f"rms/cal info not found.")
+
+    def get_data_to_fit(self):
+        # find windows with data to be fitted
+        for win in self.win_list:
+            if win.f_range_fit is not None:
+                win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, win.f_range_fit,
+                                                                y_values=self.y_file)
+
         self.win_list_fit = [w for w in self.win_list if w.in_fit]
 
-        if self.x_file is not None:
-            self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
-            self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
-            # x_mod = select_from_ranges(self.x_file, self.line_list['fmhz_range_plot'], oversampling=self.oversampling)
-            # self.x_mod = x_mod[0]  # TODO: why do I have to do this?
-        else:
-            self.x_fit = None
+        self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
+        self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
 
 
 class Component:

@@ -131,14 +131,14 @@ class ModelSpectrum(object):
 
             model_config = ModelConfiguration(config, verbose=verbose, check_tel_range=check_tel_range)
 
-            if 'data_file' in model_config._configuration_dict or 'x_obs' in model_config._configuration_dict:
-                model_config.get_data()
+            # if 'data_file' in model_config._configuration_dict or 'x_obs' in model_config._configuration_dict:
+            #     model_config.get_data()
+            #
+            # if 'tc' in model_config._configuration_dict:
+            #     model_config.get_continuum()
 
-            if 'tc' in model_config._configuration_dict:
-                model_config.get_continuum()
-
-            model_config.get_linelist()
-            model_config.get_windows()
+            # model_config.get_linelist()
+            # model_config.get_windows()
 
         elif isinstance(configuration, ModelConfiguration):
             model_config = configuration
@@ -154,8 +154,6 @@ class ModelSpectrum(object):
         self.norm_factors = None
         self.model = None
         self.log = False
-        if self.x_file is not None:
-            self.generate_lte_model()
         self.best_params = None
         self.model_fit = None
         self.model_fit_cpt = []
@@ -166,13 +164,14 @@ class ModelSpectrum(object):
         self.tag_other_sp_colors = None
         self.cpt_cols = None
 
+        self.get_params()
+
         if self.modeling:
             self.generate_lte_model()
 
         if self.minimize:
-            self.model_config.get_data_to_fit()
+            # self.model_config.get_data_to_fit()
             self.log = True
-            self.get_params()
             t_start = process_time()
             self.generate_lte_model()
             # Perform the fit
@@ -187,11 +186,11 @@ class ModelSpectrum(object):
                 filename = filename + 'fit_res'
                 self.save_fit_results(filename)
 
-        if self.save_configs:
-            if self.name_lam is not None:
-                self.write_lam(self.name_lam)
-            if self.name_config is not None:
-                self.save_config(self.name_config)
+            if self.save_configs:
+                if self.name_lam is not None:
+                    self.write_lam(self.name_lam)
+                if self.name_config is not None:
+                    self.save_config(self.name_config)
 
         if self.plot_gui or self.plot_file:
             t_start = process_time()
@@ -769,7 +768,10 @@ class ModelSpectrum(object):
             # compute the model :
             # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
             if self.modeling or self.minimize:
-                win.x_mod = np.linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
+                if self.oversampling == 1:
+                    win.x_mod = win.x_file
+                else:
+                    win.x_mod = np.linspace(min(win.x_file), max(win.x_file), num=self.oversampling * len(win.x_file))
                 if self.vlsr_file == 0.:
                     win.x_mod_plot = utils.frequency_to_velocity(win.x_mod, f_ref, vref_kms=self.vlsr_file)
                 else:
@@ -781,15 +783,15 @@ class ModelSpectrum(object):
                 else:
                     win.x_file_plot = utils.frequency_to_velocity(win.x_file, f_ref, vref_kms=vlsr)
 
-            if self.modeling:
-                win.y_mod = self.model.eval(fmhz=win.x_mod, **self.params)
-                win.y_res = win.y_file - self.model.eval(fmhz=win.x_file, **self.params)
+            if self.modeling or self.minimize:
+                win.y_mod = self.model.eval(fmhz=win.x_mod, **plot_pars)
+                if self.oversampling == 1:  # x_mod=x_file, so no need to recompute
+                    win.y_res = win.y_file - win.y_mod
+                else:
+                    win.y_res = win.y_file - self.model.eval(fmhz=win.x_file, **plot_pars)
                 win.y_res += self.get_tc(win.x_file)
 
             if self.minimize:
-                win.y_mod = self.model_fit.eval(fmhz=win.x_mod)
-                win.y_res = win.y_file - self.model_fit.eval(fmhz=win.x_file)
-                win.y_res += self.get_tc(win.x_file)
                 if 'model_err' in kwargs and kwargs['model_err']:
                     # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
                     win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
