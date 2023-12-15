@@ -537,6 +537,15 @@ def jnu(fmhz, temp: float):
     return list(res) if type(fmhz) == list else res
 
 
+def search_telescope_file(tel):
+    if os.path.isfile(os.path.join(TELESCOPE_DIR, tel)):
+        return os.path.join(TELESCOPE_DIR, tel)
+    elif os.path.isfile(tel):
+        return tel
+    else:
+        raise FileNotFoundError(f"Telescope file {tel} not found.")
+
+
 def read_telescope_file(telescope_file):
     with open(telescope_file, 'r') as f:
         col_names = ['Frequency (MHz)', 'Beff/Feff']

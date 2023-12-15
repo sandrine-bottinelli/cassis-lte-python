@@ -279,13 +279,7 @@ class ModelConfiguration:
         if 'tuning_info' in config:
             # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
             for tel in config['tuning_info'].keys():
-                # tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
-                if os.path.isfile(os.path.join(TELESCOPE_DIR, tel)):
-                    tel_info = utils.read_telescope_file(os.path.join(TELESCOPE_DIR, tel))
-                elif os.path.isfile(tel):
-                    tel_info = utils.read_telescope_file(tel)
-                else:
-                    raise FileNotFoundError(f"Telescope file {tel} not found.")
+                tel_info = utils.read_telescope_file(utils.search_telescope_file(tel))
                 TEL_DIAM[tel] = tel_info['Diameter (m)'][0]  # values should all be the same
                 self._telescope_data[tel] = tel_info
 

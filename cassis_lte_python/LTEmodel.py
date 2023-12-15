@@ -1469,11 +1469,12 @@ class ModelSpectrum(object):
 
         for filepath, tel in zip(filepaths, tels):
             with open(filepath, 'w') as f:
+                tel_path = os.path.abspath(utils.search_telescope_file(tel))
                 if 'telescopeData' in tuning:
-                    tuning['telescopeData'] = tel
+                    tuning['telescopeData'] = tel_path
                 if 'telescope' in tuning:
-                    tuning['telescope'] = tel
-                lte_radex['telescope'] = tel
+                    tuning['telescope'] = tel_path
+                lte_radex['telescope'] = tel_path
                 f.writelines(all_lines)
                 if ext == 'ltm':
                     items = [tuning, thresholds, lte_radex]
