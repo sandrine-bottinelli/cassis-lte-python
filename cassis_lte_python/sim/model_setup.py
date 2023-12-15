@@ -17,6 +17,9 @@ from scipy.interpolate import interp1d
 class ModelConfiguration:
     def __init__(self, configuration, verbose=True, check_tel_range=False):
         self._configuration_dict = configuration
+
+        self.jparams = configuration.get('params', None)
+
         self.tag_list = []
         self.cpt_list = []
         for key, cpt_dic in configuration.get('components').items():
@@ -157,13 +160,15 @@ class ModelConfiguration:
                 tag = [tag]
             self.plot_kws['tag'] = [str(t) for t in tag]
 
+        kws_plot_only = ['other_species']
+
         self.plot_gui = configuration.get('plot_gui', True)
         # Default gui keywords
         self.gui_kws = {'display_all': True,
                         'windows': self.plot_kws['windows']}
         gui_kws = configuration.get('gui_kws', {})
-        for k in list(gui_kws.keys()):  # convert to list so that does not change if the dictionary changes below
-            if k not in self.gui_kws.keys():
+        for k in kws_plot_only:
+            if k in gui_kws.keys():
                 print(f'N.B. : {k} in gui keywords is not used.')
                 gui_kws.pop(k)
         self.gui_kws.update(gui_kws)
@@ -172,14 +177,11 @@ class ModelConfiguration:
         # Default file keywords
         self.file_kws = {'display_all': True,
                          'windows': self.plot_kws['windows'],
-                         'filename': None,
-                         'dirname': None,
-                         'dpi': None,
-                         'nrows': 4,
+                         'nrows': 8,
                          'ncols': 3}
         file_kws = configuration.get('file_kws', {})
-        for k in list(file_kws.keys()):
-            if k not in self.file_kws.keys():
+        for k in kws_plot_only:
+            if k in file_kws.keys():
                 print(f'N.B. : {k} in file keywords is not used.')
                 file_kws.pop(k)
         self.file_kws.update(file_kws)
@@ -196,7 +198,7 @@ class ModelConfiguration:
         self.get_windows()
         if self._v_range_user is not None:
             self.get_velocity_ranges()
-        if self.minimize:
+        if self.minimize or self.modeling:
             self.get_data_to_fit()
 
     def get_data(self, config=None):

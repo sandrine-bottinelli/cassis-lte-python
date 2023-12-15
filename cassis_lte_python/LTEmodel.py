@@ -125,7 +125,11 @@ class ModelSpectrum(object):
             if isinstance(configuration, str):  # string : load the file
                 config = self.load_config(configuration)
                 for key, val in kwargs.items():
-                    config[key] = val
+                    if key not in config or not isinstance(val, dict):
+                        config[key] = val
+                    else:
+                        config[key].update(val)
+
             else:  # it is a dictionary
                 config = configuration
 
@@ -164,14 +168,15 @@ class ModelSpectrum(object):
 
         if self.minimize:
             self.log = True
-        self.make_params()
 
-        if self.modeling:
+        if self.modeling or self.minimize:
+            self.make_params()
+            if self.model_config.jparams is not None:
+                self.params.loads(self.model_config.jparams)
             self.generate_lte_model()
 
         if self.minimize:
             t_start = process_time()
-            self.generate_lte_model()
             # Perform the fit
             self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
             t_stop = process_time()
@@ -228,16 +233,21 @@ class ModelSpectrum(object):
             'tau_max': self.tau_max,
             'thresholds': self.thresholds,
             'minimize': self.minimize,
+            'modeling': self.modeling,
             'max_iter': self.max_iter,
             'fit_kws': self.fit_kws,
             'name_lam': self.name_lam,
             'name_config': os.path.abspath(self.name_config) if os.path.isfile(self.name_config) else self.name_config,
+            'save_configs': self.save_configs,
+            'save_results': self.save_results,
+            'plot_kws': self.plot_kws,
             'plot_gui': self.plot_gui,
             'gui_kws': self.gui_kws,
             'plot_file': os.path.abspath(self.plot_file) if os.path.isfile(self.plot_file) else self.plot_file,
             'file_kws': self.file_kws,
             'exec_time': self.exec_time,
-            'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list}
+            'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list},
+            'params': self.params.dumps()
         }
         json_dump = json.dumps(config_save, indent=4)  # separators=(', \n', ': '))
         if dirname is not None:
@@ -321,10 +331,10 @@ class ModelSpectrum(object):
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                 if 'tex' in par.name:
                     if par.min < cpt.tmin:
-                        print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin}'
+                        print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
                               f'(smallest temperature for which the partition function is defined for all species).')
                     if par.max > cpt.tmax:
-                        print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax}'
+                        print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
                               f'(highest temperature for which the partition function is defined for all species).')
                     par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
                             max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
@@ -348,15 +358,15 @@ class ModelSpectrum(object):
                                                   min=np.log10(self.params[par].min),
                                                   max=np.log10(self.params[par].max))
 
-            norm_factors = {self.params[parname].name: 1. for parname in self.params}
-            if normalize:
-                for parname in self.params:
-                    param = self.params[parname]
-                    nf = abs(param.value) if param.value != 0. else 1.
-                    norm_factors[param.name] = nf
-                    if param.expr is None:
-                        param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
-            self.norm_factors = norm_factors
+        norm_factors = {self.params[parname].name: 1. for parname in self.params}
+        if normalize:
+            for parname in self.params:
+                param = self.params[parname]
+                nf = abs(param.value) if param.value != 0. else 1.
+                norm_factors[param.name] = nf
+                if param.expr is None:
+                    param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
+        self.norm_factors = norm_factors
 
     def generate_lte_model(self, normalize=False):
         if self.params is None:
