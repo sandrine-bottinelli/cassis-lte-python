@@ -257,7 +257,7 @@ class ModelSpectrum(object):
         with open(path, 'w') as f:
             f.write(json_dump)
 
-    def update_configuration(self, config):
+    def update_configuration(self, config):  # TODO : needs to be updated
         # update components only
         new_cpts = config["components"]
         for cpt, cpt_info in new_cpts.items():
@@ -271,11 +271,6 @@ class ModelSpectrum(object):
                         self.params[f"{cname}_fwhm_{sp.tag}"].value = sp.fwhm
 
         # self.y_mod = self.compute_model_intensities(params=self.params, x_values=self.x_mod)
-
-    def update_parameters(self, params):
-        for cpt in self.cpt_list:
-            pars = {par: value for par, value in params.items() if cpt.name in par}
-            cpt.update_parameters(pars)
 
     def model_info(self, cpt=None):
 
@@ -296,16 +291,6 @@ class ModelSpectrum(object):
         }
 
     def get_tc(self, x_mod):
-        # if isinstance(self.tc, (int, float)):
-        #     tc = self.tc
-        # else:  # assume it is a structured array with fields frequency, continuum
-        #     # if all([x1 == x2 for x1, x2 in zip(x_mod, self.tc[0])])
-        #     names = self.tc.dtype.names
-        #     tc = []
-        #     for x in x_mod:
-        #         id = utils.find_nearest_id(self.tc[names[0]], x)
-        #         tc.append(self.tc[names[1]][id])
-        #     tc = np.array(tc)
         return self.tc(x_mod)
 
     def get_rms(self, fmhz):
@@ -383,10 +368,9 @@ class ModelSpectrum(object):
                                              ]
                            )
 
-    def fit_model(self, normalize=False, max_nfev=None, fit_kws=None, print_report=True, report_kws=None):
+    def fit_model(self, max_nfev=None, fit_kws=None, print_report=True, report_kws=None):
         """
         Computes weights and perform the fit.
-        :param normalize: whether to normalize the parameters (default=False)
         :param max_nfev: maximum number of iterations (default value depends on the algorithm)
         :param fit_kws: keywords for the fit function
         :param print_report: whether to print the statistics and best values (default=True)
@@ -394,10 +378,6 @@ class ModelSpectrum(object):
         :param method: name of the fitting method
         :return:
         """
-        self.normalize = normalize
-
-        if self.model is None:
-            self.generate_lte_model(normalize=normalize)
 
         if len(self.win_list_fit) > 1:
             wt = np.concatenate([utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
@@ -620,54 +600,6 @@ class ModelSpectrum(object):
         """
         return self.compute_model_intensities(params=params, x_values=x_values, line_list=line_list,
                                               line_center_only=line_center_only)
-
-    # def get_best_pars(self):
-    #     for parname in self.params:
-    #         self.best_params[parname] = self.params[parname] * self.config['norm_factors'][parname]
-    #     return self.best_params
-
-    # def best_pars(self):
-    #     if self.model_fit is not None and self.best_params is None:
-    #         params = self.model_fit.params  # .copy()
-    #         cpt_indices = {cpt.name: index for index, cpt in enumerate(self.cpt_list)}
-    #         for par in params:
-    #             p = params[par]
-    #             nf = self.norm_factors[p.name]
-    #             p.set(min=p.min * nf, max=p.max * nf, value=p.value * nf, is_init_value=False)
-    #             if self.log and ('tex' in p.name or 'ntot' in p.name):
-    #                 if p.stderr is not None:
-    #                     p.stderr = (10**(p.value + p.stderr) - 10**(p.value - p.stderr)) / 2
-    #                 # if 'tex' in p.name:
-    #                 #     icpt = cpt_indices[p.name.split('_')[0]]
-    #                 #     pmax = self._params_user[par].max
-    #                 #     pmin = max(10 ** p.min, self.cpt_list[icpt].tmin)
-    #                 # else:
-    #                 #     pmax = 10 ** p.max
-    #                 #     pmin = 10 ** p.min
-    #                 p.init_value = self._params_user[par].init_value
-    #                 val = 10 ** p.value if p.vary else self._params_user[par].value
-    #                 p.set(min=self._params_user[par].min, max=self._params_user[par].max,
-    #                       value=val, is_init_value=False)
-    #             if p.stderr is not None:
-    #                 p.stderr *= nf
-    #         self.best_params = params
-    #         # reset norm factors and log scale
-    #         self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
-    #         self.log = False
-
-        # return self.best_params
-        # parnames = list(self.model_fit.params.keys())
-        # namelen = max(len(n) for n in parnames)
-        # output = []
-        # for name in parnames:
-        #     par = self.model_fit.params[name]
-        #     space = ' ' * (namelen - len(name))
-        #     norm = self.config['norm_factors'][name]
-        #     output.append(f"    {name}:{space} {par.value} x {norm} = {par.value*norm: .5g}")
-        # return '\n'.join(output)
-
-    # def plot_pars(self):
-    #     return self.best_params if self.best_params is not None else self.params
 
     def integrated_intensities(self):
         pars = self.params
@@ -969,14 +901,6 @@ class ModelSpectrum(object):
         for win in self.win_list_plot:  # check if window contains a transition from other_species_selection
             if other_species_win_selection in win.other_lines_display['tag']:
                 sub_list.append(win)
-                # f_ref = win.transition.f_trans_mhz
-                # delta_f = 3. * delta_v_to_delta_f(fwhm, fref_mhz=f_ref)
-                # res = select_transitions(tr_list_other_species_selection, thresholds=thresholds_other,
-                #                          xrange=[f_ref - delta_f, f_ref + delta_f],
-                #                          return_type='df')
-                # if len(res) > 0:
-                #     win.other_species_selection = res
-                #     self.win_list_plot.append(win)
         if len(sub_list) == 0:
             warn(f"No windows with transitions from {other_species_win_selection}.")
         else:
@@ -1523,7 +1447,7 @@ class ModelSpectrum(object):
         self.write_cassis_file(filename, dirname=dirname)
 
 
-class ModelCube:
+class ModelCube:  # TODO : needs to be updated
     def __init__(self, configuration):
         self._data_path = configuration.get('data_path', './')
         self._data_file = configuration.get('data_file', None)
