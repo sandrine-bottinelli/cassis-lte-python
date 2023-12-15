@@ -170,9 +170,7 @@ class ModelSpectrum(object):
             self.log = True
 
         if self.modeling or self.minimize:
-            self.make_params()
-            if self.model_config.jparams is not None:
-                self.params.loads(self.model_config.jparams)
+            self.make_params(json_params=self.model_config.jparams)
             self.generate_lte_model()
 
         if self.minimize:
@@ -232,8 +230,8 @@ class ModelSpectrum(object):
             'noise': self.noise,
             'tau_max': self.tau_max,
             'thresholds': self.thresholds,
-            'minimize': self.minimize,
-            'modeling': self.modeling,
+            'minimize': False,  # by default, do not (re-)minimize
+            'modeling': self.modeling or self.minimize,  # if minimization was done, want modeling too by default
             'max_iter': self.max_iter,
             'fit_kws': self.fit_kws,
             'name_lam': self.name_lam,
@@ -322,28 +320,35 @@ class ModelSpectrum(object):
 
         return rms if len(rms) > 1 else rms[0]
 
-    def make_params(self, normalize=False):
+    def make_params(self, json_params: str | None = None, normalize=False):
         params = Parameters()
 
         for icpt, cpt in enumerate(self.cpt_list):
             for par in cpt.parameters:
                 if 'size' in par.name:
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
-                if 'tex' in par.name:
-                    if par.min < cpt.tmin:
-                        print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
-                              f'(smallest temperature for which the partition function is defined for all species).')
-                    if par.max > cpt.tmax:
-                        print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
-                              f'(highest temperature for which the partition function is defined for all species).')
-                    par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
-                            max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
                 params[par.name] = par
 
             for isp, sp in enumerate(cpt.species_list):
                 for par in sp.parameters:
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
                     params[par.name] = par
+
+        # Update parameters if possible :
+        if json_params is not None:
+            params.loads(json_params)
+
+        # Check min/max Tex:
+        for icpt, cpt in enumerate(self.cpt_list):
+            par = params[f'{cpt.name}_tex']
+            if par.min < cpt.tmin:
+                print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
+                      f'(smallest temperature for which the partition function is defined for all species).')
+            if par.max > cpt.tmax:
+                print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
+                      f'(highest temperature for which the partition function is defined for all species).')
+            par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
+                    max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
 
         self.params = params
 
