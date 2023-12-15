@@ -161,6 +161,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                     loc='upper left',
                     alignment='left',
                     # fontsize='large',
+                    labelspacing=0.25,  # vertical space between the legend entries, in font-size units (default: 0.5)
                     facecolor='white', edgecolor='white', framealpha=0.5,
                     borderpad=0.2,
                     handlelength=0, handletextpad=0, borderaxespad=0)
@@ -180,7 +181,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                         # bbox_transform=ax.transData,
                         bbox_to_anchor=(label_right_pos, label_bottom_pos),
                         loc='lower right', alignment='right',
-                        # fontsize='large',
+                        fontsize='small',
+                        labelspacing=0.2,
                         facecolor='white', edgecolor='white', framealpha=0.5,
                         borderpad=0.2, handlelength=0, handletextpad=0, borderaxespad=0)
     for text in sat_leg.get_texts():
@@ -334,7 +336,7 @@ def gui_plot(lte_model):
 
 def file_plot(lte_model, filename, dirname=None, verbose=True,
               other_species=None, other_species_selection=None, dpi=None,
-              nrows=4, ncols=3):
+              nrows=8, ncols=3):
     """
     Produces a plot of the fit results.
     :param lte_model: an abject of class ModelSpectrum
@@ -394,9 +396,14 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if verbose:
         print("\nSaving plot to {} \n...".format(file_path))
 
-    scale = 4
-    fig, axes = plt.subplots(nx, ny, figsize=(nx * scale, ny * scale), dpi=dpi)
+    # scale = 4
+    # fig, axes = plt.subplots(nx, ny, figsize=(nx * scale, ny * scale), dpi=dpi)
+    fig, axes = plt.subplots(nx, ny, subplot_kw=dict(box_aspect=0.5), layout="constrained", dpi=dpi)
+    fig.set_size_inches(8.27, 11.69)  # portrait A4 paper (21x29.7) in inches
     axes2 = []
+
+    bbox = None
+    # bbox = 'tight'
 
     # Draw first page
     for i in range(nx * ny):
@@ -409,6 +416,8 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
             continue
         # ax2 = None
         ax2 = ax.twiny()
+        ax.set_box_aspect(0.5)
+        ax2.set_box_aspect(0.5)
         # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
         ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
         axes2.append(ax2)
@@ -420,12 +429,13 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         plot_window(lte_model, win, ax=ax, ax2=ax2)
 
     if nb_pages == 1:
-        fig.savefig(file_path, bbox_inches='tight', dpi=dpi)
+        fig.savefig(file_path, bbox_inches=bbox,
+                    dpi=dpi)
 
     else:
         with PdfPages(file_path) as pdf:
             # save first page
-            pdf.savefig(fig)
+            pdf.savefig(fig, bbox_inches=bbox)
             # plot and save pages 2+
             for p in range(1, nb_pages):
                 for i in range(nx * ny):
@@ -452,7 +462,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
                     win = lte_model.win_list_plot[plot_ind]
                     plot_window(lte_model, win, ax=ax, ax2=ax2)
 
-                pdf.savefig(fig)
+                pdf.savefig(fig, bbox_inches=bbox)
         # last page
         # pdf.savefig(fig)
         plt.close()
