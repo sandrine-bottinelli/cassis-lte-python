@@ -312,6 +312,8 @@ class ModelSpectrum(object):
             for par in cpt.parameters:
                 if 'size' in par.name:
                     par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
+                if 'tex' in par.name:
+                    par.set(min=self.tcmb if not isinstance(par.min, (float, int)) else max(par.min, self.tcmb))
                 params[par.name] = par
 
             for isp, sp in enumerate(cpt.species_list):
@@ -335,18 +337,24 @@ class ModelSpectrum(object):
             par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
                     max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
 
-        self.params = params
-
         if self.minimize:
             if self.log:
-                for par in self.params:
+                for par in params:
                     if 'tex' in par or 'ntot' in par:
-                        self.params[par].user_data = {'value': params[par].value,
+                        params[par].user_data = {'value': params[par].value,
                                                       'min': params[par].min,
                                                       'max': params[par].max}
-                        self.params[par].set(value=np.log10(self.params[par].value),
-                                                  min=np.log10(self.params[par].min),
-                                                  max=np.log10(self.params[par].max))
+                        if params[par].expr is None:
+                            params[par].set(value=np.log10(params[par].value),
+                                            min=np.log10(params[par].min),
+                                            max=np.log10(params[par].max))
+
+        # reset bounds if a parameters contains an expression to make sure it does not interfere
+        for par in params:
+            if params[par].expr is not None:
+                params[par].set(min=-np.inf, max=np.inf)
+
+        self.params = params
 
         norm_factors = {self.params[parname].name: 1. for parname in self.params}
         if normalize:
@@ -432,14 +440,14 @@ class ModelSpectrum(object):
 
             nf = self.norm_factors[p.name]
             p.set(min=pfit.min * nf, max=pfit.max * nf, value=pfit.value * nf, is_init_value=False)
-            if p.stderr is not None:
+            if pfit.stderr is not None:
                 p.stderr = nf * pfit.stderr
 
             if p.user_data is not None:
                 p.init_value = p.user_data['value']
                 if pfit.stderr is not None:
                     p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
-                val = 10 ** pfit.value if p.vary else p.user_data['value']
+                val = 10 ** pfit.value if p.vary or p.expr is not None else p.user_data['value']
                 p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False)
 
         # reset norm factors and log scale
