@@ -445,7 +445,8 @@ class ModelSpectrum(object):
             p.correl = pfit.correl
 
             nf = self.norm_factors[p.name]
-            p.set(min=pfit.min * nf, max=pfit.max * nf, value=pfit.value * nf, is_init_value=False)
+            if nf != 1.:
+                p.set(min=pfit.min * nf, max=pfit.max * nf, value=pfit.value * nf, is_init_value=False, expr=pfit.expr)
             if pfit.stderr is not None:
                 p.stderr = nf * pfit.stderr
 
@@ -454,7 +455,7 @@ class ModelSpectrum(object):
                 if pfit.stderr is not None:
                     p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
                 val = 10 ** pfit.value if p.vary or p.expr is not None else p.user_data['value']
-                p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False)
+                p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
 
         # reset norm factors and log scale
         self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
