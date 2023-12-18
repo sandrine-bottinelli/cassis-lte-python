@@ -115,7 +115,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
         ax.text(label_left_pos, label_bottom_pos, "{}".format(win.plot_nb),
                 transform=ax.transAxes,  horizontalalignment='left',
                 bbox=dict(facecolor='white', edgecolor='white', alpha=0.5),
-                fontsize='large', color=lte_model.tag_colors[win.transition.tag])
+                # fontsize='large',
+                color=lte_model.tag_colors[win.transition.tag])
 
     # plot all lines from modeled tags
     for icpt, lines_cpt in win.main_lines_display.items():
@@ -161,8 +162,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                     loc='upper left',
                     alignment='left',
                     # fontsize='large',
-                    labelspacing=0.25,  # vertical space between the legend entries, in font-size units (default: 0.5)
-                    facecolor='white', edgecolor='white', framealpha=0.5,
+                    labelspacing=0.15,  # vertical space between the legend entries, in font-size units (default: 0.5)
+                    facecolor='white', edgecolor='white', framealpha=0.75,
                     borderpad=0.2,
                     handlelength=0, handletextpad=0, borderaxespad=0)
     # leg.get_frame().set_facecolor('white')
@@ -171,7 +172,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     for text in leg.get_texts():
         col = win.tag_colors[text.get_text()]
         text.set_color(col)
-        text.set_weight('bold')
+        # text.set_weight('bold')
 
     # lower right legend
     sat_leg = ax.legend(satHandles, satLabels, labelcolor='linecolor', frameon=True,
@@ -182,15 +183,15 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                         bbox_to_anchor=(label_right_pos, label_bottom_pos),
                         loc='lower right', alignment='right',
                         fontsize='small',
-                        labelspacing=0.2,
-                        facecolor='white', edgecolor='white', framealpha=0.5,
+                        labelspacing=0.15,
+                        facecolor='white', edgecolor='white', framealpha=0.75,
                         borderpad=0.2, handlelength=0, handletextpad=0, borderaxespad=0)
     for text in sat_leg.get_texts():
         text.set_fontstyle("italic")
         col = win.tag_colors[text.get_text()]
         # col = win.other_species_display[win.other_species_display.tag == text.get_text()].color.values[0]
         text.set_color(col)
-        text.set_weight('bold')
+        # text.set_weight('bold')
 
     for item in sat_leg.legendHandles:
         item.set_visible(False)
@@ -352,11 +353,6 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
     plt.close()
     plt.ticklabel_format(style='plain')
-    fontsize = 12
-    plt.rc('font', size=fontsize)
-    plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
-    plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
     if dpi is None:
         dpi = DPI_DEF
@@ -385,6 +381,13 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         nx, ny = nrows, ncols
     # nx = 4
     # ny = 3
+    fontsize = round(7 / ny * 3)
+    plt.rcParams.update({'font.size': fontsize})  # to change font size of all items
+    # To change the size of specific items, use one or more of the following :
+    # plt.rc('font', size=fontsize)
+    # plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
+    # plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
+    # plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
     # determine if more than one page
     nb_pages = int(np.ceil(nplots / (nx * ny)))
