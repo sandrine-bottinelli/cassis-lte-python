@@ -817,8 +817,14 @@ class ModelSpectrum(object):
             #                                           [[min(win.f_range_plot), max(win.f_range_plot)]],
             #                                           **thresholds_other)
 
-            other_species_win_all = select_transitions(other_species_lines,
-                                                       xrange=[min(win.f_range_plot), max(win.f_range_plot)])
+            if win.f_range_fit is not None:
+                other_species_win_all = select_transitions(other_species_lines,
+                                                           xrange=[min(win.f_range_fit), max(win.f_range_fit)],
+                                                           vlsr=vlsr)
+            else:
+                other_species_win_all = select_transitions(other_species_lines,
+                                                           xrange=[min(win.f_range_plot), max(win.f_range_plot)],
+                                                           vlsr=vlsr)
 
             # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
             other_species_win = pd.concat([model_lines_other,
