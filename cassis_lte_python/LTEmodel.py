@@ -387,6 +387,11 @@ class ModelSpectrum(object):
         :return:
         """
 
+        def fit_callback(pars, iter, resid, *args, **kws):
+            # Function called after each iteration to print the iteration number every 100 iterations
+            if iter % 100 == 0:
+                print(f"    Iteration {int(iter // 100) * 100 + 1}...")
+
         if len(self.win_list_fit) > 1:
             wt = np.concatenate([utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
                                  for win in self.win_list_fit], axis=None)
@@ -406,7 +411,8 @@ class ModelSpectrum(object):
                                         cpt=None, line_center_only=False,
                                         weights=wt,
                                         method=method,
-                                        max_nfev=max_nfev, fit_kws=fit_kws)
+                                        max_nfev=max_nfev, fit_kws=fit_kws,
+                                        iter_cb=fit_callback)
 
         if len(self.cpt_list) > 1:
             for cpt in self.cpt_list:
