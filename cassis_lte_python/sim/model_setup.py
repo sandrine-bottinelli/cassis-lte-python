@@ -24,7 +24,8 @@ class ModelConfiguration:
         self.cpt_list = []
         for key, cpt_dic in configuration.get('components').items():
             sp_list = cpt_dic['species']
-            cpt = Component(key, sp_list, isInteracting=cpt_dic.get('interacting', False),
+            cpt = Component(key, sp_list,
+                            isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
                             vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
             self.cpt_list.append(cpt)
             for sp in cpt.species_list:
