@@ -116,7 +116,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
                 transform=ax.transAxes,  horizontalalignment='left',
                 bbox=dict(facecolor='white', edgecolor='white', alpha=0.5),
                 # fontsize='large',
-                color=lte_model.tag_colors[win.transition.tag])
+                color=win.tag_colors[win.transition.tag])
+                # color=lte_model.tag_colors[win.transition.tag])
 
     # plot all lines from modeled tags
     for icpt, lines_cpt in win.main_lines_display.items():
