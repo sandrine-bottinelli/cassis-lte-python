@@ -864,7 +864,7 @@ class ModelSpectrum(object):
                 win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
                                                                        tag_colors=win_colors)
             if iwin == 0:
-                prep_time = (process_time() - t_start) * (len(self.win_list_plot) - 1)
+                prep_time = (process_time() - t_start) * len(self.win_list_plot)
                 t_win += datetime.timedelta(seconds=prep_time)
                 print(f"Expected end time : {t_win.strftime('%H:%M:%S')}")
 
