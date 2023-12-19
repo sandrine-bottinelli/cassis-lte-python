@@ -12,6 +12,7 @@ from astropy import units as u
 import pandas as pd
 from regions import Regions, PixCoord, EllipseSkyRegion
 from astropy.wcs import WCS
+from datetime import timedelta
 
 
 class DataFile:
@@ -295,6 +296,27 @@ def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=3):
     rpst = "e" if (power < -2 or power > nb_digits) else "f"
     f = "{:." + str(nb_signif_digits) + rpst + "}"
     return f.format(value)
+
+
+def format_time(t_sec):
+    """
+    Formats a time in seconds into the appropriate shape depending on its value.
+    :param t_sec: time in seconds
+    :return:
+    """
+    delta = timedelta(seconds=t_sec)
+    if delta.days == 0:
+        if t_sec < 60:  # less than a minute, return seconds
+            return f"{t_sec:.2f} seconds"
+        else:
+            res = str(delta).split(sep=":")
+            ms = f"{int(res[1])} minutes {float(res[2]):.1f} seconds"
+            if t_sec < 3600:  # less than an hour, return minutes seconds
+                return
+            else:  # hours but less than a day
+                return f"{int(res[0])} hours {ms}"
+    else:
+        return str(delta)
 
 
 def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):

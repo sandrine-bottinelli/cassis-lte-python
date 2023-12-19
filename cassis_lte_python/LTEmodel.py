@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import time
-
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
@@ -179,7 +177,7 @@ class ModelSpectrum(object):
             self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
             t_stop = process_time()
             if self.exec_time:
-                print("Execution time for minimization : {:.2f} seconds".format(t_stop - t_start))
+                print("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
             if self.save_results:
                 filename = ''
                 if self.name_lam is not None:
@@ -197,7 +195,7 @@ class ModelSpectrum(object):
             t_start = process_time()
             self.setup_plot()
             if self.exec_time:
-                print("Execution time for preparing plot : {:.2f} seconds".format(process_time() - t_start))
+                print(f"Execution time for preparing plot : {utils.format_time(process_time() - t_start)}.")
 
             self.make_plot()
 
@@ -731,8 +729,10 @@ class ModelSpectrum(object):
         #                                             line_list=self.line_list_all)
 
         # Compute model and line positions for each window
+        t_win = datetime.datetime.now()
+        print(f"Start preparing windows : {t_win.strftime('%H:%M:%S')}", end="... ")
+        t_start = process_time()
         for iwin, win in enumerate(self.win_list_plot):
-            t_start = process_time()
             tr = win.transition
             f_ref = tr.f_trans_mhz
             win.v_range_plot = [-self.bandwidth / 2 + vlsr, self.bandwidth / 2 + vlsr]
@@ -852,8 +852,9 @@ class ModelSpectrum(object):
                 win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
                                                                        tag_colors=win_colors)
             if iwin == 0:
-                prep_time = (process_time() - t_start) * len(self.win_list_plot)
-                print(f"Expected time for preparing windows : {round(prep_time)} seconds")
+                prep_time = (process_time() - t_start) * (len(self.win_list_plot) - 1)
+                t_win += datetime.timedelta(seconds=prep_time)
+                print(f"Expected end time : {t_win.strftime('%H:%M:%S')}")
 
         # save line list
         # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
@@ -1039,7 +1040,7 @@ class ModelSpectrum(object):
                       dpi=dpi, nrows=nrows, ncols=ncols)
             t_stop = process_time()
             if self.exec_time:
-                print("Execution time for saving plot : {:.2f} seconds".format(t_stop - t_start))
+                print("Execution time for saving plot : {}.".format(utils.format_time(t_stop - t_start)))
 
     def set_filepath(self, filename, dirname=None, ext=None):
         sub_dir = self.output_dir
