@@ -747,7 +747,7 @@ class ModelSpectrum(object):
             win.top_lim = [utils.velocity_to_frequency(v, f_ref, vref_kms=vlsr)
                            for v in win.bottom_lim]
 
-            # all transitions in the window (no thresholds) :
+            # all transitions in the window (no thresholds), to compute the model :
             fwhm_mhz = utils.delta_v_to_delta_f(fwhm, f_ref)
             # model_lines_win = get_transition_df(self.tag_list, [min(win.f_range_plot) - 0.5 * fwhm_mhz,
             #                                                     max(win.f_range_plot) + 0.5 * fwhm_mhz])
@@ -805,7 +805,7 @@ class ModelSpectrum(object):
                                                                         line_list=model_lines_win,
                                                                         cpt=self.cpt_list[icpt]))
 
-            # transitions from model species, w/i thresholds :
+            # transitions from model species, w/i thresholds, for display :
             model_lines_user = select_transitions(model_lines_win,
                                                   thresholds=self.thresholds)
             # find "bright" lines (if aij_max not None and/or eup_min non-zero):
@@ -814,26 +814,34 @@ class ModelSpectrum(object):
             #                                   # bright_lines_only=True)
 
             # transitions from model species, outside thresholds :
-            model_lines_other = pd.concat([model_lines_user,
-                                           model_lines_win]).drop_duplicates(subset='db_id', keep=False)
+            # model_lines_other = pd.concat([model_lines_user,
+            #                                model_lines_win]).drop_duplicates(subset='db_id', keep=False)
 
             # transitions from other species :
             # other_species_win_all = get_transition_df(list_other_species,
             #                                           [[min(win.f_range_plot), max(win.f_range_plot)]],
             #                                           **thresholds_other)
 
-            if win.f_range_fit is not None:
-                other_species_win_all = select_transitions(other_species_lines,
-                                                           xrange=[min(win.f_range_fit), max(win.f_range_fit)],
-                                                           vlsr=vlsr if self.vlsr_file == 0 else None)
-            else:
-                other_species_win_all = select_transitions(other_species_lines,
-                                                           xrange=[min(win.f_range_plot), max(win.f_range_plot)],
-                                                           vlsr=vlsr if self.vlsr_file == 0 else None)
+            # if win.f_range_fit is not None:
+            #     other_species_win_all = select_transitions(other_species_lines,
+            #                                                xrange=[min(win.f_range_fit), max(win.f_range_fit)],
+            #                                                vlsr=vlsr if self.vlsr_file == 0 else None)
+            # else:
+            #     other_species_win_all = select_transitions(other_species_lines,
+            #                                                xrange=[min(win.f_range_plot), max(win.f_range_plot)],
+            #                                                vlsr=vlsr if self.vlsr_file == 0 else None)
+            other_species_win = select_transitions(other_species_lines,
+                                                   xrange=[min(win.f_range_plot), max(win.f_range_plot)],
+                                                   vlsr=vlsr if self.vlsr_file == 0 else None)
 
+            # if tag of fitted species in other species, concatenate with user lines, dropping duplicates
+            for tag in self.model_config.tag_list:
+                if tag in other_species_win.tag.unique():
+                    other_species_win = pd.concat([model_lines_user,
+                                                   other_species_win]).drop_duplicates(subset='db_id', keep=False)
             # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
-            other_species_win = pd.concat([model_lines_other,
-                                           other_species_win_all]).drop_duplicates(subset='db_id', keep='first')
+            # other_species_win = pd.concat([model_lines_other,
+            #                                other_species_win_all]).drop_duplicates(subset='db_id', keep='first')
 
             win_colors = {t: PLOT_COLORS[itag] for itag, t in enumerate(model_lines_user.tag.unique())}
             for icpt, cpt in enumerate(self.cpt_list):
