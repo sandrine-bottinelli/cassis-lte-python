@@ -455,6 +455,10 @@ class ModelSpectrum(object):
                 val = 10 ** pfit.value if p.vary or p.expr is not None else p.user_data['value']
                 p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
 
+        # update vlr_plot
+        if self.vlsr_file == 0:
+            self.model_config.vlsr_plot = self.cpt_list[0].vlsr
+
         # reset norm factors and log scale
         self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
         self.log = False
@@ -821,11 +825,11 @@ class ModelSpectrum(object):
             if win.f_range_fit is not None:
                 other_species_win_all = select_transitions(other_species_lines,
                                                            xrange=[min(win.f_range_fit), max(win.f_range_fit)],
-                                                           vlsr=vlsr)
+                                                           vlsr=vlsr if self.vlsr_file == 0 else None)
             else:
                 other_species_win_all = select_transitions(other_species_lines,
                                                            xrange=[min(win.f_range_plot), max(win.f_range_plot)],
-                                                           vlsr=vlsr)
+                                                           vlsr=vlsr if self.vlsr_file == 0 else None)
 
             # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
             other_species_win = pd.concat([model_lines_other,
