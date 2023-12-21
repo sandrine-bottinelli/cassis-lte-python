@@ -436,6 +436,7 @@ class ModelSpectrum(object):
         self.model = self.model_fit.model
 
         # update parameters
+        self.params = self.model_fit.params.copy()
         for par in self.params:
             p = self.params[par]
             pfit = self.model_fit.params[par]
@@ -445,8 +446,8 @@ class ModelSpectrum(object):
             nf = self.norm_factors[p.name]
             if nf != 1.:
                 p.set(min=pfit.min * nf, max=pfit.max * nf, value=pfit.value * nf, is_init_value=False, expr=pfit.expr)
-            if pfit.stderr is not None:
-                p.stderr = nf * pfit.stderr
+                if pfit.stderr is not None:
+                    p.stderr = nf * pfit.stderr
 
             if p.user_data is not None:
                 p.init_value = p.user_data['value']
