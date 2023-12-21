@@ -600,8 +600,9 @@ class ModelConfiguration:
 
         self.win_list_fit = [w for w in self.win_list if w.in_fit]
 
-        self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
-        self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
+        if len(self.win_list_fit) > 0:
+            self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
+            self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
 
 
 class Component:

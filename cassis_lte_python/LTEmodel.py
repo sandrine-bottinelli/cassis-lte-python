@@ -713,7 +713,10 @@ class ModelSpectrum(object):
         # Define some useful quantities
         plot_pars = self.params
         vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
-        fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
+        try:
+            fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
+        except TypeError:
+            fwhm = 0.
 
         # self.update_parameters(params=plot_pars)
 
@@ -790,7 +793,7 @@ class ModelSpectrum(object):
                     win.y_res = win.y_file - self.model.eval(fmhz=win.x_file, **plot_pars)
                 win.y_res += self.get_tc(win.x_file)
 
-            # if self.minimize:
+            if self.model_fit is not None:
                 if 'model_err' in kwargs and kwargs['model_err']:
                     # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
                     win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
