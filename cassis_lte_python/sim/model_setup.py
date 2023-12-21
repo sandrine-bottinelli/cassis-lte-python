@@ -19,6 +19,7 @@ class ModelConfiguration:
         self._configuration_dict = configuration
 
         self.jparams = configuration.get('params', None)
+        self.jmodel_fit = configuration.get('model_fit', None)
 
         self.tag_list = []
         self.cpt_list = []
@@ -150,8 +151,8 @@ class ModelConfiguration:
             'other_species': None,
             'other_species_plot': 'all',
             'other_species_win_selection': None,
-            'model_err': True,
-            'component_err': True
+            'model_err': False,
+            'component_err': False
         }
         self.plot_kws.update(configuration.get('plot_kws', {}))
         # Make sure 'tag' is a list of strings :

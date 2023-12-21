@@ -10,6 +10,7 @@ from cassis_lte_python.database.transitions import get_transition_df, select_tra
 import numpy as np
 from numpy.random import normal
 from lmfit import Model, Parameters
+from lmfit.model import ModelResult
 from scipy import stats, signal
 from scipy.special import erf
 from scipy.stats import t
@@ -170,6 +171,11 @@ class ModelSpectrum(object):
         if self.modeling or self.minimize:
             self.make_params(json_params=self.model_config.jparams)
             self.generate_lte_model()
+            if self.model_config.jmodel_fit is not None:
+                self.model_fit = ModelResult(self.model, self.params)
+                self.model_fit.components = self.model.components
+                self.model_fit.loads(self.model_config.jmodel_fit,
+                                     funcdefs={'lte_model_func': generate_lte_model_func(self.model_info())})
 
         if self.minimize:
             t_start = process_time()
@@ -245,6 +251,8 @@ class ModelSpectrum(object):
             'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list},
             'params': self.params.dumps()
         }
+        if self.model_fit is not None:
+            config_save['model_fit'] = self.model_fit.dumps()
         json_dump = json.dumps(config_save, indent=4)  # separators=(', \n', ': '))
         if dirname is not None:
             if not os.path.isdir(os.path.abspath(dirname)):
@@ -520,16 +528,17 @@ class ModelSpectrum(object):
 
         for cpt in self.cpt_list:
             params = Parameters()
-            for par in self.model_fit.params:
+            for par in self.params:
                 if cpt.name in par:
-                    params[par] = self.model_fit.params[par]
+                    params[par] = self.params[par]
+
             indices = [i for i, var_name in enumerate(self.model_fit.var_names) if cpt.name in var_name]
             var_names = [self.model_fit.var_names[i] for i in indices]
             nvarys = len(var_names)
             cpt_model_func = generate_lte_model_func(self.model_info(cpt=cpt))
 
             # ensure fjac and df2 are correct size if independent var updated by kwargs
-            feval = cpt_model_func(fmhz=fmhz, log=True, **params)
+            feval = cpt_model_func(fmhz=fmhz, log=False, **params)
             ndata = len(feval.view('float64'))        # allows feval to be complex
             covar = np.zeros((nvarys, nvarys))
             for i in range(nvarys):
@@ -549,10 +558,10 @@ class ModelSpectrum(object):
                 val0 = pars[pname].value
                 dval = pars[pname].stderr/3.0
                 pars[pname].value = val0 + dval
-                res1 = cpt_model_func(fmhz=fmhz, log=True, **pars)
+                res1 = cpt_model_func(fmhz=fmhz, log=False, **pars)
 
                 pars[pname].value = val0 - dval
-                res2 = cpt_model_func(fmhz=fmhz, log=True, **pars)
+                res2 = cpt_model_func(fmhz=fmhz, log=False, **pars)
 
                 pars[pname].value = val0
                 fjac[i] = (res1.view('float64') - res2.view('float64')) / (2*dval)
@@ -781,7 +790,7 @@ class ModelSpectrum(object):
                     win.y_res = win.y_file - self.model.eval(fmhz=win.x_file, **plot_pars)
                 win.y_res += self.get_tc(win.x_file)
 
-            if self.minimize:
+            # if self.minimize:
                 if 'model_err' in kwargs and kwargs['model_err']:
                     # win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod, cpt=self.cpt_list[0], params=c_par)
                     win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
@@ -967,8 +976,10 @@ class ModelSpectrum(object):
         other_species = kwargs.get('other_species', None)
         other_species_plot = kwargs.get('other_species_plot', 'all')
         other_species_win_selection = kwargs.get('other_species_win_selection', None)
-        model_err = kwargs.get('model_err', True)
-        component_err = kwargs.get('component_err', True)
+        model_err = kwargs.get('model_err', False) or self.gui_kws.get('model_err', False) \
+                    or self.file_kws.get('model_err', False)
+        component_err = kwargs.get('component_err', True) or self.gui_kws.get('component_err', False) \
+                    or self.file_kws.get('component_err', False)
 
         # Find all windows required by the user for gui or file :
         display_all = self.gui_kws['display_all'] or self.file_kws['display_all']
