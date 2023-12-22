@@ -312,7 +312,7 @@ def format_time(t_sec):
             res = str(delta).split(sep=":")
             ms = f"{int(res[1])} minutes {float(res[2]):.1f} seconds"
             if t_sec < 3600:  # less than an hour, return minutes seconds
-                return
+                return ms
             else:  # hours but less than a day
                 return f"{int(res[0])} hours {ms}"
     else:
