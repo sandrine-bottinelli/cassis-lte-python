@@ -223,7 +223,7 @@ def gui_plot(lte_model):
     plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
     plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
-    nplots = len(lte_model.win_list_plot)
+    nplots = len(lte_model.win_list_gui)
 
     root = tkinter.Tk()
     root.wm_title("LTEmodel - Results")
@@ -239,7 +239,7 @@ def gui_plot(lte_model):
     # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
     ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
 
-    plot_window(lte_model, lte_model.win_list_plot[0], ax, ax2=ax2)
+    plot_window(lte_model, lte_model.win_list_gui[0], ax, ax2=ax2)
     canvas = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
     canvas.draw()
 
@@ -260,7 +260,7 @@ def gui_plot(lte_model):
     # Create a frame for the listbox+scrollbar, attached to the root window
     win_frame = tkinter.Frame(root)
     win_names = [win.name
-                 for win in lte_model.win_list_plot] if nplots > 1 else [lte_model.win_list_plot[0].name[:-4]]
+                 for win in lte_model.win_list_gui] if nplots > 1 else [lte_model.win_list_gui[0].name[:-4]]
     # Create a Listbox and attaching it to its frame
     win_list = tkinter.Listbox(win_frame, width=10, selectmode='single', activestyle='none',
                                listvariable=tkinter.StringVar(value=win_names))
@@ -281,7 +281,7 @@ def gui_plot(lte_model):
         iwin = event.widget.curselection()[0]
         # clear axis
         ax.clear()
-        plot_window(lte_model, lte_model.win_list_plot[iwin], ax, ax2=ax2)
+        plot_window(lte_model, lte_model.win_list_gui[iwin], ax, ax2=ax2)
         canvas.draw_idle()
         # canvas.flush_events()
         toolbar.update()
@@ -358,7 +358,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if dpi is None:
         dpi = DPI_DEF
 
-    nplots = len(lte_model.win_list_plot)
+    nplots = len(lte_model.win_list_file)
 
     # if verbose:
     #     print("Tag {}, plot number {} :".format(tr.tag, line_list_plot.plot_nb.iloc[i]))
@@ -429,7 +429,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         #                          functions=(velo2freq(win.transition.f_trans_mhz, lte_model.vlsr_file),
         #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
 
-        win = lte_model.win_list_plot[i]
+        win = lte_model.win_list_file[i]
         plot_window(lte_model, win, ax=ax, ax2=ax2)
 
     if nb_pages == 1:
@@ -463,7 +463,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
                             ax2.set_yticks([])
                         continue
 
-                    win = lte_model.win_list_plot[plot_ind]
+                    win = lte_model.win_list_file[plot_ind]
                     plot_window(lte_model, win, ax=ax, ax2=ax2)
 
                 pdf.savefig(fig, bbox_inches=bbox)

@@ -701,10 +701,10 @@ class ModelSpectrum(object):
                                                                     line_list=self.line_list_all)
             win.y_res += self.get_tc(win.x_file)
 
-    def setup_plot_la(self, verbose=True, other_species_dict: dict | None = None, **kwargs):
+    def setup_plot_la(self, win_list: list, verbose=True, other_species_dict: dict | None = None, **kwargs):
         """
         Prepare all data to do the plots in line analysis mode
-
+        :param the list of windows
         :param verbose:
         :param other_species_dict: a dictionary of other species and their thresholds
         :return:
@@ -734,12 +734,16 @@ class ModelSpectrum(object):
         # across entire observed range, then filter in each window
         if len(list_other_species) > 0:
             other_species_lines = get_transition_df(list_other_species,
-                                                    [[min(win.x_file), max(win.x_file)] for win in self.win_list_plot],
+                                                    [[min(win.x_file), max(win.x_file)] for win in win_list],
                                                     **thresholds_other)
         # other_species_lines = get_transition_df(list_other_species, [[min(self.x_file), max(self.x_file)]],
         #                                         **thresholds_other)
         else:
             other_species_lines = pd.DataFrame()  # empty dataframe
+
+        # info to be saved in line list file
+        # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
+        cols = ['tag', 'sp_name', 'x_pos', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'qn']
 
         # Compute model overall model : takes longer than cycling through windows unless strong overlap of windows (TBC)
         # self.y_mod = self.compute_model_intensities(params=plot_pars, x_values=self.x_mod,
@@ -749,7 +753,7 @@ class ModelSpectrum(object):
         t_win = datetime.datetime.now()
         print(f"Start preparing windows : {t_win.strftime('%H:%M:%S')}...")
         t_start = process_time()
-        for iwin, win in enumerate(self.win_list_plot):
+        for iwin, win in enumerate(win_list):
             tr = win.transition
             f_ref = tr.f_trans_mhz
             win.v_range_plot = [-self.bandwidth / 2 + vlsr, self.bandwidth / 2 + vlsr]
@@ -879,22 +883,18 @@ class ModelSpectrum(object):
             if iwin == 0:
                 prep_time = (process_time() - t_start)
                 print(f"    Time for one window : {prep_time:.2f} seconds")
-                prep_time *= len(self.win_list_plot)
+                prep_time *= len(win_list)
                 t_win += datetime.timedelta(seconds=prep_time)
-                print(f"    Expected end time for {len(self.win_list_plot)} windows: {t_win.strftime('%H:%M:%S')}")
+                print(f"    Expected end time for {len(win_list)} windows: {t_win.strftime('%H:%M:%S')}")
 
-        # save line list
-        # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
-        cols = ['tag', 'sp_name', 'x_pos', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'qn']
-        with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
-            for win in self.win_list_plot:
-                f.write(f"{win.name} : model species within thresholds\n")
-                f.writelines(win.main_lines_display[0][cols].to_string(index=False))
-                f.write("\n\n")
-                if len(win.other_species_display) > 0:
-                    f.write(f"{win.name} : model species outside thresholds and other species within thresholds\n")
-                    f.writelines(win.other_species_display[cols].to_string(index=False))
+            with open(os.path.join(self.output_dir, 'linelist.txt'), "a") as f:
+                    f.write(f"{win.name} : model species within thresholds (top lines)\n")
+                    f.writelines(win.main_lines_display[0][cols].to_string(index=False))
                     f.write("\n\n")
+                    if len(win.other_species_display) > 0:
+                        f.write(f"{win.name} : other species within thresholds (bottom lines)\n")
+                        f.writelines(win.other_species_display[cols].to_string(index=False))
+                        f.write("\n\n")
 
     def get_lines_plot_params(self, line_list: pd.DataFrame, cpt: Component, f_ref: float,
                               tag_colors: dict):
@@ -919,13 +919,13 @@ class ModelSpectrum(object):
         :return:
         """
 
-        self.win_list_plot = self.win_list  # by default, plot everything
+        win_list_plot = self.win_list  # by default, plot everything
 
         if not display_all:  # only display windows with fitted data
-            self.win_list_plot = [w for w in self.win_list_plot if w.in_fit]
+            win_list_plot = [w for w in win_list_plot if w.in_fit]
 
         if tag is not None:  # user only wants one tag
-            self.win_list_plot = [w for w in self.win_list_plot if w.transition.tag in tag]
+            win_list_plot = [w for w in win_list_plot if w.transition.tag in tag]
 
         if windows is not None and len(windows) > 0:
             if isinstance(windows, dict):
@@ -934,10 +934,12 @@ class ModelSpectrum(object):
             else:
                 win_names2plot = windows
 
-            self.win_list_plot = [w for w in self.win_list_plot if w.name in win_names2plot]
+            win_list_plot = [w for w in win_list_plot if w.name in win_names2plot]
 
-        if len(self.win_list_plot) == 0:
+        if len(win_list_plot) == 0:
             raise LookupError("No windows to plot. Please check your tag selection.")
+
+        return win_list_plot
 
     def select_windows_other_lines(self, other_species_win_selection: str):
         """
@@ -981,23 +983,6 @@ class ModelSpectrum(object):
         other_species = kwargs.get('other_species', None)
         other_species_plot = kwargs.get('other_species_plot', 'all')
         other_species_win_selection = kwargs.get('other_species_win_selection', None)
-        model_err = kwargs.get('model_err', False) or self.gui_kws.get('model_err', False) \
-                    or self.file_kws.get('model_err', False)
-        component_err = kwargs.get('component_err', True) or self.gui_kws.get('component_err', False) \
-                    or self.file_kws.get('component_err', False)
-
-        # Find all windows required by the user for gui or file :
-        display_all = self.gui_kws['display_all'] or self.file_kws['display_all']
-        if display_all:
-            win2plot = None
-        else:
-            win2plot = kwargs.get('windows', {})
-            win2plot.update(self.gui_kws.get('windows', {}))
-            win2plot.update(self.file_kws.get('windows', {}))
-            if len(win2plot) > 0:
-                new_dict = utils.expand_dict(win2plot, expand_vals=True)
-                win2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
-                win2plot = list(set(win2plot))
 
         # set colors for model tags and components
         self.tag_colors = {t: PLOT_COLORS[itag % len(PLOT_COLORS)] for itag, t in enumerate(self.tag_list)}
@@ -1018,16 +1003,55 @@ class ModelSpectrum(object):
             thresholds_other = None
 
         if self.bandwidth is None or self.model_config.fit_freq_except is not None:
-            self.win_list_plot = self.win_list
+            self.model_config.win_list_plot = self.win_list
             self.setup_plot_fus()
         else:
-            self.select_windows(tag=tag, display_all=display_all, windows=win2plot)
-            self.setup_plot_la(verbose=verbose, other_species_dict=thresholds_other,
-                               model_err=model_err, component_err=component_err)
-            if other_species_win_selection is not None:
-                if isinstance(other_species_win_selection, int):
-                    other_species_win_selection = str(other_species_win_selection)
-                self.select_windows_other_lines(other_species_win_selection)
+            # Create file for saving the lines
+            with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+                f.write("List of plotted lines")
+
+            if self.model_config.plot_gui:
+                self.model_config.win_list_gui = self.select_windows(display_all=self.gui_kws['display_all'],
+                                                                     windows=self.gui_kws['windows'])
+                if len(self.model_config.win_list_gui) > 0:
+                    self.setup_plot_la(self.model_config.win_list_gui,
+                                       verbose=verbose, other_species_dict=thresholds_other,
+                                       model_err=self.gui_kws['model_err'],
+                                       component_err=self.gui_kws['component_err'])
+                else:
+                    print("Nothing to plot in GUI, check your selection.")
+
+            if self.model_config.plot_file:
+                if ((self.file_kws['display_all'] == self.gui_kws['display_all']) and
+                        (self.file_kws['windows'] == self.gui_kws['windows'])):
+                    # gui and file have the same info, nothing to do
+                    self.model_config.win_list_file = self.model_config.win_list_gui
+
+                else:
+                    # select windows
+                    self.model_config.win_list_file = self.select_windows(display_all=self.file_kws['display_all'],
+                                                                          windows=self.file_kws['windows'])
+                    # look for windows not already in gui
+                    if self.model_config.plot_gui:
+                        win_list = [w for w in self.model_config.win_list_file
+                                    if w not in self.model_config.win_list_gui]
+                    else:
+                        win_list = self.model_config.win_list_file
+
+                    # prepare those windows
+                    if len(win_list) > 0:
+                        self.setup_plot_la(win_list,
+                                           verbose=verbose, other_species_dict=thresholds_other,
+                                           model_err=self.file_kws['model_err'],
+                                           component_err=self.file_kws['component_err'])
+                    else:
+                        print("Nothing to plot in file, check your selection.")
+
+            # Disable for now, but needs to be re-written : TODO
+            # if other_species_win_selection is not None:
+            #     if isinstance(other_species_win_selection, int):
+            #         other_species_win_selection = str(other_species_win_selection)
+            #     self.select_windows_other_lines(other_species_win_selection)
 
     def make_plot(self):
         """
@@ -1047,22 +1071,18 @@ class ModelSpectrum(object):
         """
 
         if self.plot_gui:
-            kwargs = self.plot_kws.copy()
-            kwargs.update(self.gui_kws)
-            self.select_windows(tag=kwargs['tag'], display_all=kwargs['display_all'], windows=kwargs['windows'])
+            self.select_windows(display_all=self.gui_kws['display_all'], windows=self.gui_kws['windows'])
 
             gui_plot(self)
 
         if self.plot_file:
-            kwargs = self.plot_kws.copy()
-            kwargs.update(self.file_kws)
             filename = self.file_kws['filename']
-            dirname = kwargs.get('dirname', None)
-            verbose = kwargs.get('verbose', True)
-            dpi = kwargs.get('dpi', None)
-            nrows = kwargs.get('nrows', 4)
-            ncols = kwargs.get('ncols', 3)
-            self.select_windows(tag=kwargs['tag'], display_all=kwargs['display_all'], windows=kwargs['windows'])
+            dirname = self.file_kws.get('dirname', None)
+            verbose = self.file_kws.get('verbose', True)
+            dpi = self.file_kws.get('dpi', None)
+            nrows = self.file_kws.get('nrows', 4)
+            ncols = self.file_kws.get('ncols', 3)
+            self.select_windows(display_all=self.file_kws['display_all'], windows=self.file_kws['windows'])
 
             t_start = process_time()
             file_plot(self, filename, dirname=dirname, verbose=verbose,

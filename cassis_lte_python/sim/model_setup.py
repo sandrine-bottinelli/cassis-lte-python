@@ -72,6 +72,8 @@ class ModelConfiguration:
         self.win_list = []
         self.win_list_fit = None
         self.win_list_plot = []
+        self.win_list_gui = []
+        self.win_list_file = []
 
         self.x_fit = None
         self.y_fit = None
@@ -165,9 +167,8 @@ class ModelConfiguration:
         kws_plot_only = ['other_species']
 
         self.plot_gui = configuration.get('plot_gui', True)
-        # Default gui keywords
-        self.gui_kws = {'display_all': True,
-                        'windows': self.plot_kws['windows']}
+        # Default gui keywords = plot_kws
+        self.gui_kws = {k: v for k, v in self.plot_kws.items()}
         gui_kws = configuration.get('gui_kws', {})
         for k in kws_plot_only:
             if k in gui_kws.keys():
@@ -177,11 +178,12 @@ class ModelConfiguration:
 
         self.plot_file = configuration.get('plot_file', False)
         # Default file keywords
-        self.file_kws = {'display_all': True,
-                         'windows': self.plot_kws['windows'],
-                         'nrows': 8,
-                         'ncols': 3}
+        self.file_kws = {k: v for k, v in self.plot_kws.items()}
+        self.file_kws.update({'nrows': 8,
+                              'ncols': 3})
         file_kws = configuration.get('file_kws', {})
+        if self.plot_file and 'filename' not in file_kws:
+            raise NameError("Please provide a name for the output pdf file.")
         for k in kws_plot_only:
             if k in file_kws.keys():
                 print(f'N.B. : {k} in file keywords is not used.')
