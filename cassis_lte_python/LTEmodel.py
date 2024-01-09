@@ -164,6 +164,7 @@ class ModelSpectrum(object):
         self.tag_colors = None
         self.tag_other_sp_colors = None
         self.cpt_cols = None
+        self.thresholds_other = None
 
         if self.minimize:
             self.log = True
@@ -198,12 +199,26 @@ class ModelSpectrum(object):
                     self.save_config(self.name_config)
 
         if self.plot_gui or self.plot_file:
-            t_start = process_time()
+            print('Finding windows for gui and file plots.')
             self.setup_plot()
-            if self.exec_time:
-                print(f"Execution time for preparing plot : {utils.format_time(process_time() - t_start)}.")
+            if self.plot_gui and len(self.model_config.win_list_gui) > 0:
+                t_start = process_time()
+                print("Preparing windows for GUI plot...")
+                self.setup_plot_la(self.model_config.win_list_gui, **self.gui_kws)
+                if self.exec_time:
+                    print(f"Execution time for preparing GUI plot : {utils.format_time(process_time() - t_start)}.")
 
-            self.make_plot()
+                self.make_plot('gui')
+
+            if self.plot_file and len(self.model_config.win_list_file) > 0:
+                if self.model_config.win_list_file != self.model_config.win_list_gui:
+                    t_start = process_time()
+                    print("Preparing windows for file plot...")
+                    self.setup_plot_la(self.model_config.win_list_file, **self.file_kws)
+                    if self.exec_time:
+                        print(f"Execution time for preparing file plot : {utils.format_time(process_time() - t_start)}.")
+
+                self.make_plot('file')
 
     def __getattr__(self, item):
         # method called for the times that __getattribute__ raised an AttributeError
@@ -723,7 +738,7 @@ class ModelSpectrum(object):
         if other_species_dict is not None:  # list of tags for which the user wants line positions
             thresholds_other = other_species_dict
         else:
-            thresholds_other = {}
+            thresholds_other = self.thresholds_other if self.thresholds_other is not None else {}
 
         for t in self.tag_list:
             if t in thresholds_other:
@@ -929,6 +944,10 @@ class ModelSpectrum(object):
 
         if windows is not None and len(windows) > 0:
             if isinstance(windows, dict):
+                if '*' in windows.values():
+                    for k, v in windows.items():
+                        if v == '*':
+                            windows[k] = f'1-{len(self.model_config.tr_list_by_tag[k])}'
                 new_dict = utils.expand_dict(windows, expand_vals=True)
                 win_names2plot = [f'{key} - {val}' for key in new_dict.keys() for val in new_dict[key]]
             else:
@@ -1002,6 +1021,8 @@ class ModelSpectrum(object):
         else:
             thresholds_other = None
 
+        self.thresholds_other = thresholds_other
+
         if self.bandwidth is None or self.model_config.fit_freq_except is not None:
             self.model_config.win_list_plot = self.win_list
             self.setup_plot_fus()
@@ -1013,12 +1034,7 @@ class ModelSpectrum(object):
             if self.model_config.plot_gui:
                 self.model_config.win_list_gui = self.select_windows(display_all=self.gui_kws['display_all'],
                                                                      windows=self.gui_kws['windows'])
-                if len(self.model_config.win_list_gui) > 0:
-                    self.setup_plot_la(self.model_config.win_list_gui,
-                                       verbose=verbose, other_species_dict=thresholds_other,
-                                       model_err=self.gui_kws['model_err'],
-                                       component_err=self.gui_kws['component_err'])
-                else:
+                if len(self.model_config.win_list_gui) == 0:
                     print("Nothing to plot in GUI, check your selection.")
 
             if self.model_config.plot_file:
@@ -1038,13 +1054,8 @@ class ModelSpectrum(object):
                     else:
                         win_list = self.model_config.win_list_file
 
-                    # prepare those windows
-                    if len(win_list) > 0:
-                        self.setup_plot_la(win_list,
-                                           verbose=verbose, other_species_dict=thresholds_other,
-                                           model_err=self.file_kws['model_err'],
-                                           component_err=self.file_kws['component_err'])
-                    else:
+                    self.model_config.win_list_file = win_list
+                    if len(self.model_config.win_list_file) == 0:
                         print("Nothing to plot in file, check your selection.")
 
             # Disable for now, but needs to be re-written : TODO
@@ -1053,29 +1064,19 @@ class ModelSpectrum(object):
             #         other_species_win_selection = str(other_species_win_selection)
             #     self.select_windows_other_lines(other_species_win_selection)
 
-    def make_plot(self):
+    def make_plot(self, plot_type):
         """
-        Do the plot(s), using provided keywords.
-        Possible keywords are :
-         filename: nome of the file to be saved
-         dirname: directory where to save the file
-         gui: interactive display
-         verbose:
-         dpi:
-         nrows: maximum number of rows per page
-         ncols: maximum number of columns per page
+        Do the plot(s).
+        :param plot_type: gui or file
         :return:
-
-        Notes :
-            - other_species_selection is deprecated, use other_species_win_selection
         """
 
-        if self.plot_gui:
+        if plot_type == 'gui':
             self.select_windows(display_all=self.gui_kws['display_all'], windows=self.gui_kws['windows'])
 
             gui_plot(self)
 
-        if self.plot_file:
+        if plot_type == 'file':
             filename = self.file_kws['filename']
             dirname = self.file_kws.get('dirname', None)
             verbose = self.file_kws.get('verbose', True)
