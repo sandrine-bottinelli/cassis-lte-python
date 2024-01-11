@@ -123,11 +123,34 @@ class ModelSpectrum(object):
         if isinstance(configuration, (dict, str)):  # dictionary or string
             if isinstance(configuration, str):  # string : load the file
                 config = self.load_config(configuration)
-                for key, val in kwargs.items():
-                    if key not in config or not isinstance(val, dict):
-                        config[key] = val
-                    else:
-                        config[key].update(val)
+                # date = config.get('creation-date', datetime.datetime.now())
+                # if isinstance(date, str):
+                #     date = datetime.datetime.strptime(date.split(",")[0], "%Y-%m-%d")
+                if 'creation-date' not in config:  # old format for plot keywords
+                    config['plot_kws'] = {'gui+file': config.get('plot_kws', {}),
+                                          'gui_only': config.get('gui_kws', {}),
+                                          'file_only': config.get('file_kws', {})}
+                    config.pop('gui_kws')
+                    config.pop('file_kws')
+                if 'gui_kws' or 'file_kws' in kwargs:
+                    print('gui_kws and file_kws are deprecated keywords, please use the following instead:')
+                    print("  'plot_kws': {'gui_only':", kwargs['gui_kws'], end=",\n")
+                    print("               'file_only':", kwargs['file_kws'])
+                    print("              }")
+
+                    # update kwargs to new format
+                    kwargs['plot_kws'] = {}
+                    if 'gui_kws' in kwargs:
+                        kwargs['plot_kws']['gui_only'] = kwargs['gui_kws']
+                        kwargs.pop('gui_kws')
+                    if 'file_kws' in kwargs:
+                        kwargs['plot_kws']['file_only'] = kwargs['file_kws']
+                        kwargs.pop('file_kws')
+
+                # update configuration
+                dflat = utils.flatten_dic(config)
+                dflat.update(utils.flatten_dic(kwargs))
+                config = utils.unflatten_dic(dflat)
 
             else:  # it is a dictionary
                 config = configuration
@@ -234,6 +257,7 @@ class ModelSpectrum(object):
 
     def save_config(self, filename, dirname=None):
         config_save = {
+            'creation-date': datetime.datetime.now().strftime("%Y-%m-%d,  %H:%M:%S"),
             'data_file': os.path.abspath(self.data_file) if self.data_file is not None else None,
             'output_dir': os.path.abspath(self.output_dir) if self.output_dir is not None else None,
             'tc': os.path.abspath(self.cont_info) if isinstance(self.cont_info, (str, os.PathLike)) else self.cont_info,
@@ -257,11 +281,12 @@ class ModelSpectrum(object):
             'name_config': os.path.abspath(self.name_config) if os.path.isfile(self.name_config) else self.name_config,
             'save_configs': self.save_configs,
             'save_results': self.save_results,
-            'plot_kws': self.plot_kws,
             'plot_gui': self.plot_gui,
-            'gui_kws': self.gui_kws,
-            'plot_file': os.path.abspath(self.plot_file) if os.path.isfile(self.plot_file) else self.plot_file,
-            'file_kws': self.file_kws,
+            # 'gui_kws': self.gui_kws,
+            'plot_file': self.plot_file,
+            # 'plot_file': os.path.abspath(self.plot_file) if os.path.isfile(self.plot_file) else self.plot_file,
+            # 'file_kws': self.file_kws,
+            'plot_kws': self.user_plot_kws,
             'exec_time': self.exec_time,
             'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list},
             'params': self.params.dumps()
@@ -925,7 +950,7 @@ class ModelSpectrum(object):
 
         return lines_plot_params
 
-    def select_windows(self, tag: list | None = None, display_all=True, windows: list | dict | None = None):
+    def select_windows(self, **kwargs):
         """
         Determine windows to plot
         :param tag: tag selection if do not want all the tags
@@ -933,6 +958,9 @@ class ModelSpectrum(object):
         :param windows: a dictionary of the windows to be plotted (keys=tags, vals=window numbers)
         :return:
         """
+        tag = kwargs.get('tag', None)
+        display_all = kwargs.get('display_all', True)
+        windows = kwargs.get('windows', None).copy()
 
         win_list_plot = self.win_list  # by default, plot everything
 
@@ -1032,21 +1060,19 @@ class ModelSpectrum(object):
                 f.write("List of plotted lines")
 
             if self.model_config.plot_gui:
-                self.model_config.win_list_gui = self.select_windows(display_all=self.gui_kws['display_all'],
-                                                                     windows=self.gui_kws['windows'])
+                self.model_config.win_list_gui = self.select_windows(**self.gui_kws)
                 if len(self.model_config.win_list_gui) == 0:
                     print("Nothing to plot in GUI, check your selection.")
 
             if self.model_config.plot_file:
                 if ((self.file_kws['display_all'] == self.gui_kws['display_all']) and
-                        (self.file_kws['windows'] == self.gui_kws['windows'])):
+                        (self.file_kws['windows'] == self.gui_kws['windows']) and self.model_config.plot_gui):
                     # gui and file have the same info, nothing to do
                     self.model_config.win_list_file = self.model_config.win_list_gui
 
                 else:
                     # select windows
-                    self.model_config.win_list_file = self.select_windows(display_all=self.file_kws['display_all'],
-                                                                          windows=self.file_kws['windows'])
+                    self.model_config.win_list_file = self.select_windows(**self.file_kws)
                     # look for windows not already in gui
                     if self.model_config.plot_gui:
                         win_list = [w for w in self.model_config.win_list_file
@@ -1072,8 +1098,6 @@ class ModelSpectrum(object):
         """
 
         if plot_type == 'gui':
-            self.select_windows(display_all=self.gui_kws['display_all'], windows=self.gui_kws['windows'])
-
             gui_plot(self)
 
         if plot_type == 'file':
@@ -1083,7 +1107,6 @@ class ModelSpectrum(object):
             dpi = self.file_kws.get('dpi', None)
             nrows = self.file_kws.get('nrows', 4)
             ncols = self.file_kws.get('ncols', 3)
-            self.select_windows(display_all=self.file_kws['display_all'], windows=self.file_kws['windows'])
 
             t_start = process_time()
             file_plot(self, filename, dirname=dirname, verbose=verbose,

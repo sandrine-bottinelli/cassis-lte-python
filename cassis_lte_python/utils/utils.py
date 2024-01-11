@@ -459,6 +459,35 @@ def expand_dict(dic: dict, n_items=None, expand_vals=False):
     return new_dic
 
 
+def flatten_dic(d, sep=";"):
+    if all([not isinstance(v, dict) for v in d.values()]):
+        return d
+    else:
+        dflat = {}
+        for k, v in d.items():
+            if isinstance(v, dict):
+                for k2, v2 in v.items():
+                    dflat[f'{k}{sep}{k2}'] = v2
+            else:
+                dflat[k] = v
+        return flatten_dic(dflat)
+
+
+def unflatten_dic(dic, sep=";"):
+    d_unflat = dict()
+    for k, v in dic.items():
+        keys = k.split(sep)
+        d = d_unflat
+        for key in keys[:-1]:
+            if key not in d:
+                d[key] = dict()
+            d = d[key]
+
+        d[keys[-1]] = v
+
+    return d_unflat
+
+
 def get_extended_limits(values, padding=0.05):
     dx = max(values) - min(values)
     return [min(values) - padding * dx, max(values) + padding * dx]

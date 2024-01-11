@@ -26,6 +26,8 @@ SIZE_DEF = config.getfloat('MODEL', 'SIZE')
 VLSR_DEF = config.getfloat('MODEL', 'VLSR')
 FWHM_DEF = config.getfloat('MODEL', 'FWHM')
 DPI_DEF = config.getint('PLOT', 'DPI')
+NROWS_DEF = config.getint('PLOT', 'NROWS', fallback=8)
+NCOLS_DEF = config.getint('PLOT', 'NCOLS', fallback=3)
 
 if not os.path.isfile(SQLITE_FILE):
     parent_dir = os.path.dirname(SQLITE_FILE)

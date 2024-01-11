@@ -7,7 +7,7 @@ from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from cassis_lte_python.sim.parameters import create_parameter
-from cassis_lte_python.utils.settings import TELESCOPE_DIR, VLSR_DEF, SIZE_DEF
+from cassis_lte_python.utils.settings import TELESCOPE_DIR, VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF
 import os
 import pandas as pd
 import numpy as np
@@ -156,7 +156,13 @@ class ModelConfiguration:
             'model_err': False,
             'component_err': False
         }
-        self.plot_kws.update(configuration.get('plot_kws', {}))
+        self.user_plot_kws = configuration.get('plot_kws', {})
+        new_plot_kws = {}
+        if 'gui+file' in self.user_plot_kws:
+            self.plot_kws.update(self.user_plot_kws.get('gui+file', {}))
+        else:
+            self.plot_kws.update(self.user_plot_kws)  # old config
+            new_plot_kws = {'gui+file': self.user_plot_kws.copy()}
         # Make sure 'tag' is a list of strings :
         tag = self.plot_kws['tag']
         if tag is not None:
@@ -166,29 +172,35 @@ class ModelConfiguration:
 
         kws_plot_only = ['other_species']
 
-        self.plot_gui = configuration.get('plot_gui', True)
-        # Default gui keywords = plot_kws
-        self.gui_kws = {k: v for k, v in self.plot_kws.items()}
-        gui_kws = configuration.get('gui_kws', {})
+        self.plot_gui = configuration.get('plot_gui', True)  # do gui plot by default
+        self.gui_kws = self.plot_kws.copy()  # Default gui keywords = plot_kws
+        gui_kws = self.user_plot_kws.get('gui_only', {})
+        if 'gui_kws' in configuration:
+            gui_kws = configuration.get('gui_kws')
+            new_plot_kws['gui_only'] = gui_kws
         for k in kws_plot_only:
             if k in gui_kws.keys():
-                print(f'N.B. : {k} in gui keywords is not used.')
+                # print(f'N.B. : {k} in gui keywords is not used.')
                 gui_kws.pop(k)
         self.gui_kws.update(gui_kws)
 
         self.plot_file = configuration.get('plot_file', False)
-        # Default file keywords
-        self.file_kws = {k: v for k, v in self.plot_kws.items()}
-        self.file_kws.update({'nrows': 8,
-                              'ncols': 3})
-        file_kws = configuration.get('file_kws', {})
+        self.file_kws = self.plot_kws.copy()  # Default file keywords = plot_kws
+        self.file_kws.update({'nrows': NROWS_DEF, 'ncols': NCOLS_DEF})
+        file_kws = self.user_plot_kws.get('file_only', {})
+        if 'file_kws' in configuration:
+            file_kws = configuration.get('file_kws')
+            new_plot_kws['file_only'] = file_kws
         if self.plot_file and 'filename' not in file_kws:
             raise NameError("Please provide a name for the output pdf file.")
         for k in kws_plot_only:
             if k in file_kws.keys():
-                print(f'N.B. : {k} in file keywords is not used.')
+                # print(f'N.B. : {k} in file keywords is not used.')
                 file_kws.pop(k)
         self.file_kws.update(file_kws)
+
+        if len(new_plot_kws) > 0:
+            self.user_plot_kws = new_plot_kws
 
         self.exec_time = configuration.get('exec_time', True)
 
