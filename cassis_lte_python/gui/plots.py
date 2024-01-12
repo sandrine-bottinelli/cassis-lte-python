@@ -39,7 +39,7 @@ matplotlib.rcParams['axes.formatter.useoffset'] = False  # No offset for tick la
                                      # digits from tick labels.
 
 
-def plot_window(lte_model, win, ax, ax2=None, number=True):
+def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True):
     """
     Plots a given window : overall model, individual components, line positions.
     :param lte_model: an object of class ModelSpectrum
@@ -47,6 +47,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
     :param ax: the Axis on which to plot the Window
     :param ax2
     :param number: annotate the plot with the window's number at the bottom center
+    :param auto: automatic ticks for top axis
     :return:
     """
 
@@ -109,6 +110,26 @@ def plot_window(lte_model, win, ax, ax2=None, number=True):
 
     if ax2 is not None:
         ax2.set_xlim(win.top_lim)
+        if not auto:
+            nMajTicks = 3
+            dfreqWinMHz = (max(win.top_lim) - min(win.top_lim))  # window size in MHz
+            df = dfreqWinMHz / (nMajTicks + 1)  # separation between ticks in MHz
+            if df >= 0.5:
+                base = 1
+                if df >= 5:
+                    base = 5
+            else:
+                base = 5 / 10 ** np.ceil(abs(np.log10(df)) + 1)
+            dfreqTickMHz = base * np.ceil(df / base)
+            # print(dfreqWinMHz, df, dfreqTickMHz)
+            # print(win.top_lim)
+
+            steps = [1, 2, 3, 4, 5, 10]
+
+            ax2.xaxis.set_major_locator(plt.MaxNLocator(nbins=nMajTicks+1, steps=steps))
+            # ax2.xaxis.set_major_locator(ticker.MultipleLocator(dfreqTickMHz))
+            # if (dfreqTickMHz % 5 == 0) and (dfreqTickMHz % 10 != 0):
+            #     ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
 
     # write transition number (left, bottom)
     if number and win.plot_nb > 0:
@@ -430,7 +451,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
 
         win = lte_model.win_list_file[i]
-        plot_window(lte_model, win, ax=ax, ax2=ax2)
+        plot_window(lte_model, win, ax=ax, ax2=ax2, auto=False)
 
     if nb_pages == 1:
         fig.savefig(file_path, bbox_inches=bbox,
