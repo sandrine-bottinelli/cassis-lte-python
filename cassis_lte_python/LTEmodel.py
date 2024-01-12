@@ -132,11 +132,15 @@ class ModelSpectrum(object):
                                           'file_only': config.get('file_kws', {})}
                     config.pop('gui_kws')
                     config.pop('file_kws')
-                if 'gui_kws' or 'file_kws' in kwargs:
+                if ('gui_kws' in kwargs) or ('file_kws' in kwargs):
                     print('gui_kws and file_kws are deprecated keywords, please use the following instead:')
-                    print("  'plot_kws': {'gui_only':", kwargs['gui_kws'], end=",\n")
-                    print("               'file_only':", kwargs['file_kws'])
-                    print("              }")
+                    comment = "  # N.B. : can be also be removed/commented"
+                    info_gui = "" if 'gui_kws' in kwargs else comment
+                    info_file = "" if 'file_kws' in kwargs else comment
+                    print("  'plot_kws': {")
+                    print("       'gui_only':", kwargs.get('gui_kws', {}), info_gui, end=",\n")
+                    print("       'file_only':", kwargs.get('file_kws', {}), info_file)
+                    print("  }")
 
                     # update kwargs to new format
                     kwargs['plot_kws'] = {}
