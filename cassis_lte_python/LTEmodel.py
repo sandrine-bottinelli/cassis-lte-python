@@ -237,7 +237,14 @@ class ModelSpectrum(object):
                 if self.model_config.win_list_file != self.model_config.win_list_gui:
                     t_start = process_time()
                     print("Preparing windows for file plot...")
-                    self.setup_plot_la(self.model_config.win_list_file, **self.file_kws)
+                    # look for windows not already in gui
+                    if self.model_config.plot_gui:
+                        win_list = [w for w in self.model_config.win_list_file
+                                    if w not in self.model_config.win_list_gui]
+                    else:
+                        win_list = self.model_config.win_list_file
+
+                    self.setup_plot_la(win_list, **self.file_kws)
                     if self.exec_time:
                         print(f"Execution time for preparing file plot : {utils.format_time(process_time() - t_start)}.")
 
@@ -1073,14 +1080,6 @@ class ModelSpectrum(object):
                 else:
                     # select windows
                     self.model_config.win_list_file = self.select_windows(**self.file_kws)
-                    # look for windows not already in gui
-                    if self.model_config.plot_gui:
-                        win_list = [w for w in self.model_config.win_list_file
-                                    if w not in self.model_config.win_list_gui]
-                    else:
-                        win_list = self.model_config.win_list_file
-
-                    self.model_config.win_list_file = win_list
                     if len(self.model_config.win_list_file) == 0:
                         print("Nothing to plot in file, check your selection.")
 
