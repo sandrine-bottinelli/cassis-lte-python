@@ -3,8 +3,8 @@ from __future__ import annotations
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
-from cassis_lte_python.utils.settings import SQLITE_FILE
-from cassis_lte_python.utils.constants import TEL_DIAM, PLOT_COLORS, CPT_COLORS, UNITS
+from cassis_lte_python.utils.settings import SQLITE_FILE, NCOLS_DEF, NROWS_DEF, DPI_DEF
+from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 import numpy as np
@@ -1107,9 +1107,9 @@ class ModelSpectrum(object):
             filename = self.file_kws['filename']
             dirname = self.file_kws.get('dirname', None)
             verbose = self.file_kws.get('verbose', True)
-            dpi = self.file_kws.get('dpi', None)
-            nrows = self.file_kws.get('nrows', 4)
-            ncols = self.file_kws.get('ncols', 3)
+            dpi = self.file_kws.get('dpi', DPI_DEF)
+            nrows = self.file_kws.get('nrows', NROWS_DEF)
+            ncols = self.file_kws.get('ncols', NCOLS_DEF)
 
             t_start = process_time()
             file_plot(self, filename, dirname=dirname, verbose=verbose,
