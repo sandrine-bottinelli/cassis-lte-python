@@ -21,6 +21,7 @@ class ModelConfiguration:
         self.jparams = configuration.get('params', None)
         self.jmodel_fit = configuration.get('model_fit', None)
 
+        self.fwhm_max = 0.
         self.tag_list = []
         self.cpt_list = []
         for key, cpt_dic in configuration.get('components').items():
@@ -30,6 +31,8 @@ class ModelConfiguration:
                             vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
             self.cpt_list.append(cpt)
             for sp in cpt.species_list:
+                if sp.parameters[1].max is not None and sp.parameters[1].max != np.inf:
+                    self.fwhm_max = max(self.fwhm_max, sp.parameters[1].max)
                 if sp.tag not in self.tag_list:
                     self.tag_list.append(sp.tag)
 
@@ -382,21 +385,28 @@ class ModelConfiguration:
 
         if self.x_file is not None:
             x_vals = self.x_file
-            # for comparison with CASSIS look for number of transitions w/i min/max of data :
-            print(f"{len(get_transition_df(self.tag_list, [[min(self.x_file), max(self.x_file)]], **self.thresholds))} ",
-                  f"transitions within thresholds and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
         else:
             x_vals = self.x_mod
 
-        # search only in data within telescope ranges
-        f_range_search = []
-        for f_range in self.tuning_info['fmhz_range']:
-            x_sub = x_vals[(x_vals >= min(f_range)) & (x_vals <= max(f_range))]
-            f_range_search.append([min(x_sub), max(x_sub)])
-        self.line_list_all = get_transition_df(self.tag_list, f_range_search)
-        tr_list_tresh = select_transitions(self.line_list_all, thresholds=self.thresholds)
-        print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
-              f"{self.tuning_info['fmhz_range'].tolist()}")
+        tr_list_tresh = get_transition_df(self.tag_list, [[min(x_vals), max(x_vals)]], **self.thresholds)
+        # for comparison with CASSIS look for number of transitions w/i min/max of data :
+        if self.x_file is not None:
+            print(f"{len(tr_list_tresh)} transitions within thresholds ",
+                  f"and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
+        else:
+            self.line_list_all = tr_list_tresh
+
+        if len(self.tuning_info) > 1:
+            # more than one telescope range => search only in data within telescope ranges
+            # NB : this assumes that if only one range, it encompasses the data's min/max
+            f_range_search = []
+            for f_range in self.tuning_info['fmhz_range']:
+                x_sub = x_vals[(x_vals >= min(f_range)) & (x_vals <= max(f_range))]
+                f_range_search.append([min(x_sub), max(x_sub)])
+            tr_list_tresh = select_transitions(tr_list_tresh)
+            print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
+                  f"{self.tuning_info['fmhz_range'].tolist()}")
+
         # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
         self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
         if all([len(t_list) == 0 for t_list in self.tr_list_by_tag.values()]):
@@ -538,10 +548,12 @@ class ModelConfiguration:
             win.cal = cal
             self.win_list = [win]
             self.win_list_fit = [w for w in self.win_list if w.in_fit]
+            self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=[min(self.x_file), max(self.x_file)])
 
         else:
             self.get_v_range_info()
 
+            win_list_limits = []
             for tag, tr_list in self.tr_list_by_tag.items():
                 win_list_tag = []  # first find all windows with enough data
                 for i, tr in enumerate(tr_list):
@@ -557,6 +569,8 @@ class ModelConfiguration:
                     win = Window(tr, len(win_list_tag) + 1)
                     win.x_file, win.y_file = x_win, y_win
                     win_list_tag.append(win)
+                    fwhm_mhz = utils.delta_v_to_delta_f(self.fwhm_max, tr.f_trans_mhz)
+                    win_list_limits.append([min(f_range_plot) - 0.5 * fwhm_mhz, max(f_range_plot + 0.5 * fwhm_mhz)])
 
                 nt = len(win_list_tag)
                 if verbose or verbose == 2:
@@ -567,6 +581,10 @@ class ModelConfiguration:
                         print('  {}. {}'.format(iw + 1, w.transition))
 
                 self.win_list.extend(win_list_tag)
+
+            # Find transitions in win_list:
+            self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=win_list_limits)
+            self.line_list_all = self.line_list_all.drop_duplicates(subset='db_id', keep='first')
 
         return
 

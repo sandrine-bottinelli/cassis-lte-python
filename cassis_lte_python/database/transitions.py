@@ -204,14 +204,21 @@ def select_transitions(tran_df: pd.DataFrame, thresholds: dict | None = None, xr
     if tran_df.empty:
         return tran_df
 
+    if xrange is not None:
+        if not isinstance(xrange[0], list):  # only one range
+            xrange = [xrange]
+
     if vlsr is not None:
         if xrange is not None:
-            xrange = [x + delta_v_to_delta_f(vlsr, sum(xrange)/len(xrange)) for x in xrange]
+            xrange = [[x + delta_v_to_delta_f(vlsr, sum(xr)/len(xr)) for x in xr] for xr in xrange]
         else:
             print("INFO - No frequency range specified, ignoring the vlsr keyword.")
 
+    df_sub = pd.DataFrame()
     if xrange is not None:
-        tran_df = tran_df[(min(xrange) <= tran_df.fMHz) & (tran_df.fMHz <= max(xrange))]
+        for xr in xrange:
+            df_sub = pd.concat([df_sub, tran_df[(min(xr) <= tran_df.fMHz) & (tran_df.fMHz <= max(xr))]])
+        tran_df = df_sub.drop_duplicates(subset='db_id', keep='first')
 
     if thresholds is None:
         thresholds = {}
