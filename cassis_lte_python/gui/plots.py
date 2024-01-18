@@ -431,9 +431,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
     fig, axes = plt.subplots(nrows, ncols,
                              figsize=(fig_w, fig_h),
-                             dpi=dpi)
-
-    axes2 = []
+                             dpi=dpi, layout="constrained")
 
     bbox = None
     # bbox = 'tight'
@@ -468,7 +466,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     # fig.text(0.5, t+(1-t)*2/3, "Frequency [MHz]", ha='center', va='top')
     # fig.text(0.5, b/3, "Velocity [km/s]", ha='center', va='bottom')
     # fig.text(l/2, 0.5, "Intensity [K]", ha='center', va='center', rotation='vertical')
-    fig.tight_layout()
+    # fig.tight_layout()
     # adjust : left, bottom, right, top are the positions of the edges of the subplots
     # as a fraction of figure width (l, r) or height (b, t) ;
     # w/hspace is the width/height of the padding between subplots as a fraction of avg Axes width/height
