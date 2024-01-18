@@ -238,7 +238,9 @@ class ModelSpectrum(object):
                 self.make_plot('gui')
 
             if self.plot_file and len(self.model_config.win_list_file) > 0:
-                if self.model_config.win_list_file != self.model_config.win_list_gui:
+                if ((self.model_config.win_list_file != self.model_config.win_list_gui) or
+                        (self.file_kws['model_err'] and not self.gui_kws['model_err']) or
+                        (self.file_kws['component_err'] and not self.gui_kws['component_err'])):
                     t_start = process_time()
                     print("Preparing windows for file plot...")
                     # look for windows not already in gui
@@ -248,7 +250,15 @@ class ModelSpectrum(object):
                     else:
                         win_list = self.model_config.win_list_file
 
-                    self.setup_plot_la(win_list, **self.file_kws)
+                    if len(win_list) > 0:
+                        self.setup_plot_la(win_list, **self.file_kws)
+                    # Compute errors if necessary
+                    for win in self.model_config.win_list_file:
+                        if win.y_mod_err is None and self.file_kws['model_err']:
+                            win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
+                        if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
+                            win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
+
                     if self.exec_time:
                         print(f"Execution time for preparing file plot : {utils.format_time(process_time() - t_start)}.")
 
@@ -755,7 +765,7 @@ class ModelSpectrum(object):
     def setup_plot_la(self, win_list: list, verbose=True, other_species_dict: dict | None = None, **kwargs):
         """
         Prepare all data to do the plots in line analysis mode
-        :param the list of windows
+        :param win_list: the list of windows
         :param verbose:
         :param other_species_dict: a dictionary of other species and their thresholds
         :return:
