@@ -39,7 +39,7 @@ matplotlib.rcParams['axes.formatter.useoffset'] = False  # No offset for tick la
                                      # digits from tick labels.
 
 
-def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True):
+def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1):
     """
     Plots a given window : overall model, individual components, line positions.
     :param lte_model: an object of class ModelSpectrum
@@ -48,6 +48,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True):
     :param ax2
     :param number: annotate the plot with the window's number at the bottom center
     :param auto: automatic ticks for top axis
+    :param lw: linewidth in points
     :return:
     """
 
@@ -71,7 +72,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True):
     if (lte_model.minimize or lte_model.modeling) and (len(lte_model.cpt_list) > 1):
         for icpt, _ in enumerate(lte_model.cpt_list):
             ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
-                    color=lte_model.cpt_cols[icpt], linewidth=1)
+                    color=lte_model.cpt_cols[icpt], linewidth=lw)
             if len(win.y_mod_err_cpt) > 0:
                 ax.fill_between(win.x_mod_plot, win.y_mod_cpt[icpt] - win.y_mod_err_cpt[icpt],
                                 win.y_mod_cpt[icpt] + win.y_mod_err_cpt[icpt],
@@ -80,17 +81,17 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True):
     # Plot data and/or model
     if win.x_file is not None:  # data
         if win.y_res is not None:
-            ax.step(win.x_file_plot, win.y_res, where='mid', color=COLOR_RESIDUAL, linewidth=1)
-        ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1.5)
+            ax.step(win.x_file_plot, win.y_res, where='mid', color=COLOR_RESIDUAL, linewidth=lw)
+        ax.step(win.x_file_plot, win.y_file, where='mid', color='k', linewidth=1.5 * lw)
 
     if lte_model.minimize or lte_model.modeling:  # model
         if win.x_file is not None:  # model on top of data -> red
             col = 'r'
-            lw = 1.5
+            lw_m = 1.5 * lw
         else:  # model only -> black
             col = 'k'
-            lw = 1
-        ax.step(win.x_mod_plot, win.y_mod, where='mid', color=col, linewidth=lw)
+            lw_m = lw
+        ax.step(win.x_mod_plot, win.y_mod, where='mid', color=col, linewidth=lw_m)
 
     if win.y_mod_err is not None:
         ax.fill_between(win.x_mod_plot, win.y_mod - win.y_mod_err, win.y_mod + win.y_mod_err, color='red', alpha=0.1)
@@ -144,21 +145,19 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True):
     for icpt, lines_cpt in win.main_lines_display.items():
         # main lines : compute vertical positions, shifting down for each component
         y_pos = ymax - dy * np.array([0, 0.075]) - 0.025 * icpt * dy
-        lw = 1.5
         for irow, row in lines_cpt.iterrows():
             plot_line_position(ax, row.x_pos, y_pos, row.x_pos_err,
-                               color=row.color, label=row.label, linewidth=lw)
+                               color=row.color, label=row.label, linewidth=lw * 1.5)
 
     # store labels and handles for main lines
     mainHandles, mainLabels = ax.get_legend_handles_labels()
 
     # other species :
     y_pos_other = ymin + (ymax - ymin) * np.array([0., 0.075])
-    lw = 1.5
     ls = '-'
     for irow, row in win.other_species_display.iterrows():
         plot_line_position(ax, row.x_pos, y_pos_other, row.x_pos_err,
-                           color=row.color, label=row.label, linewidth=lw, linestyle=ls)
+                           color=row.color, label=row.label, linewidth=lw * 1.25, linestyle=ls)
 
     # store labels and handles for all lines and keep only those corresponding to the other species
     handles_all, labels_all = ax.get_legend_handles_labels()
@@ -451,7 +450,6 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         # ax2.set_box_aspect(0.5)
         # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
         ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        axes2.append(ax2)
         # ax2 = ax.secondary_xaxis('top',
         #                          functions=(velo2freq(win.transition.f_trans_mhz, lte_model.vlsr_file),
         #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
@@ -492,7 +490,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
                 for i in range(nrows * ncols):
                     ax = fig.axes[i]
-                    ax2 = axes2[i]
+                    ax2 = fig.axes[axes.size + i]
                     # Clear elements from the selected axis :
                     ax.clear()  # takes longer than clearing individual elements but
                     # clearing individual elements produces an error in some environments??? - TBC
@@ -502,10 +500,14 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
                     plot_ind = p * nrows * ncols + i
                     if plot_ind >= nplots:
+                        # for j in range(i, nrows * ncols):
+                        #     fig.delaxes(fig.axes[-1])  # delete twin axis
+                        #     fig.delaxes(fig.axes[i])  # delete main axis
                         ax.set_frame_on(False)
                         ax.set_xticks([])
                         ax.set_yticks([])
                         if ax2 is not None:
+                            # fig.delaxes(axes2[i])
                             ax2.set_frame_on(False)
                             ax2.set_xticks([])
                             ax2.set_yticks([])
