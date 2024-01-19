@@ -495,7 +495,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
                 for i in range(nrows * ncols):
                     ax = fig.axes[i]
                     try:
-                        ax2 = fig.axes[axes.size + i]
+                        ax2 = fig.axes[nrows * ncols + i]
                     except IndexError:
                         ax2 = ax.twiny()
                         ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
