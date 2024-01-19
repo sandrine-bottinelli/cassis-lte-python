@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from cassis_lte_python.utils.constants import COLOR_RESIDUAL
-from cassis_lte_python.utils.settings import DPI_DEF, NCOLS_DEF, NROWS_DEF
+from cassis_lte_python.utils.settings import DPI_DEF, NCOLS_DEF, NROWS_DEF, FONT_DEF
 # from cassis_lte_python.gui.basic_units import mhz, BasicUnit
 import numpy as np
 import matplotlib.pyplot as plt
@@ -37,6 +37,9 @@ matplotlib.rcParams['axes.formatter.useoffset'] = False  # No offset for tick la
                                      # will be used when it can remove
                                      # at least this number of significant
                                      # digits from tick labels.
+# matplotlib.rc('font', **{'family': 'sans-serif', 'sans-serif': ['Helvetica']})
+# matplotlib.rc('font', **{'family': 'serif', 'serif': ['Times']})
+plt.rcParams["font.family"] = FONT_DEF
 
 
 def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, axes_labels=True):

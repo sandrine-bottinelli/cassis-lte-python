@@ -28,6 +28,7 @@ FWHM_DEF = config.getfloat('MODEL', 'FWHM')
 DPI_DEF = config.getint('PLOT', 'DPI')
 NROWS_DEF = config.getint('PLOT', 'NROWS', fallback=8)
 NCOLS_DEF = config.getint('PLOT', 'NCOLS', fallback=3)
+FONT_DEF = config.get('PLOT', 'FONT', fallback='DejaVu Sans')
 
 if not os.path.isfile(SQLITE_FILE):
     parent_dir = os.path.dirname(SQLITE_FILE)
