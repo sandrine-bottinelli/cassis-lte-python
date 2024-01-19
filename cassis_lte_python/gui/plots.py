@@ -39,7 +39,7 @@ matplotlib.rcParams['axes.formatter.useoffset'] = False  # No offset for tick la
                                      # digits from tick labels.
 
 
-def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1):
+def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, axes_labels=True):
     """
     Plots a given window : overall model, individual components, line positions.
     :param lte_model: an object of class ModelSpectrum
@@ -49,6 +49,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1):
     :param number: annotate the plot with the window's number at the bottom center
     :param auto: automatic ticks for top axis
     :param lw: linewidth in points
+    :param axes_labels: whether to add labels for the axes
     :return:
     """
 
@@ -60,6 +61,13 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1):
     # ax.xaxis.set_major_locator(plt.MaxNLocator(4))
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+
+    if axes_labels:
+        xlabel = 'Velocity' if win.bottom_unit == 'km/s' else 'Frequency'
+        ax.set_xlabel(f'{xlabel} [{win.bottom_unit}]')
+        ax.set_ylabel(f'Intensity [{lte_model.model_config.data_file_obj.yunit}]')
+        if win.bottom_unit != win.top_unit:
+            ax2.set_xlabel(f'Frequency [{win.top_unit}]')
 
     # plot range used (or not) for chi2 calculation
     v_range = win.v_range_fit
@@ -203,7 +211,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1):
                         # bbox_transform=ax.transData,
                         bbox_to_anchor=(label_right_pos, label_bottom_pos),
                         loc='lower right', alignment='right',
-                        fontsize='small',
+                        # fontsize='small',
                         labelspacing=0.15,
                         facecolor='white', edgecolor='white', framealpha=0.75,
                         borderpad=0.2, handlelength=0, handletextpad=0, borderaxespad=0)
@@ -253,7 +261,7 @@ def gui_plot(lte_model):
     # root.rowconfigure(0, weight=3)
     # root.rowconfigure(1, weight=1)
 
-    fig, ax = plt.subplots(1, 1, figsize=(5, 4))
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
 
     ax2 = ax.twiny()
     # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
@@ -384,7 +392,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         if nplots < ncols:
             nrows, ncols = 1, nplots
 
-    fontsize = round(20 / ncols)
+    fontsize = 6  # round(20 / ncols)
     plt.rcParams.update({'font.size': fontsize})  # to change font size of all items : does not work for axes/ticks??
     # To change the size of specific items, use one or more of the following :
     plt.rc('font', size=fontsize)
@@ -402,31 +410,14 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if verbose:
         print("\nSaving plot to {} \n...".format(file_path))
 
-    width_a4 = 8.27  # 8.27 inches = 21 cm
-    height_a4 = 11.69  # 11.69 inches = 29.7 cm
+    margins = {
+        'left': 0.5,  # left margin
+        'right': 0.2,  # right margin
+        'top': 0.4,  # top margin
+        'bottom': 0.4  # bottom margin
+    }
 
-    aspect_a4 = width_a4 / height_a4  # height/width of a subplot
-    aspect = nrows / ncols  # height/width of a subplot
-    if aspect > aspect_a4:
-        aspect = aspect_a4
-    if aspect < 0.5:
-        aspect = 0.5
-    aspect = 0.5
-    wspace = 0.2  # space size in width
-    hspace = wspace / aspect * 1.2  # space size in height
-    l_marg = 0.5  # left margin
-    r_marg = 0.2  # right margin
-    t_marg = 0.4  # top margin
-    b_marg = 0.4  # bottom margin
-
-    fig_w_norm = ncols + (ncols - 1) * wspace
-    fig_h_norm = nrows + (nrows - 1) * hspace  # + b_marg + t_marg
-    sub_w = (width_a4 - l_marg - r_marg) / fig_w_norm  # width of one subplot
-    sub_h = sub_w * aspect  # height of one supblot
-    plot_w = sub_w * fig_w_norm
-    plot_h = sub_h * fig_h_norm
-    fig_w = plot_w + l_marg + r_marg
-    fig_h = plot_h + t_marg + b_marg
+    fig_w, fig_h = file_fig_size(nrows, ncols, **margins)
 
     fig, axes = plt.subplots(nrows, ncols,
                              figsize=(fig_w, fig_h),
@@ -436,6 +427,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     # bbox = 'tight'
 
     # Draw first page
+    plot_ind = 0
     for i in range(nrows * ncols):
         ax = fig.axes[i]
         if i >= nplots:
@@ -455,7 +447,8 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
 
         win = lte_model.win_list_file[i]
-        plot_window(lte_model, win, ax=ax, ax2=ax2, auto=False)
+        plot_window(lte_model, win, ax=ax, ax2=ax2, auto=False, lw=0.5, axes_labels=False)
+        plot_ind += 1
 
     # Set common labels
     fig.suptitle("Frequency [MHz]")
@@ -468,10 +461,10 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     # adjust : left, bottom, right, top are the positions of the edges of the subplots
     # as a fraction of figure width (l, r) or height (b, t) ;
     # w/hspace is the width/height of the padding between subplots as a fraction of avg Axes width/height
-    b = 0.125  # b_marg/fig_h
-    t = 0.875  # (b_marg + plot_h)/fig_h
-    l = 0.1  # l_marg/fig_w
-    r = 0.95  # (l_marg + plot_w)/fig_w
+    # b = 0.125  # b_marg/fig_h
+    # t = 0.875  # (b_marg + plot_h)/fig_h
+    # l = 0.1  # l_marg/fig_w
+    # r = 0.95  # (l_marg + plot_w)/fig_w
     # fig.subplots_adjust(bottom=b, top=t,
     #                     left=l, right=r,
     #                     wspace=wspace, hspace=hspace)
@@ -486,11 +479,24 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
             pdf.savefig(fig, bbox_inches=bbox)
             # plot and save pages 2+
             for p in range(1, nb_pages):
-                # if p == (nb_pages - 1):  # last page
+                if p == (nb_pages - 1):  # last page : redefine the figure
+                    nrows = (nplots - (nb_pages - 1) * nrows * ncols) / ncols
+                    nrows = int(np.ceil(nrows))
+                    fig, axes = plt.subplots(nrows, ncols,
+                                             figsize=(file_fig_size(nrows, ncols, **margins)),
+                                             dpi=dpi, layout="constrained")
+                    fig.suptitle("Frequency [MHz]")
+                    fig.supxlabel("Velocity [km/s]")
+                    fig.supylabel("Intensity [K]")
 
                 for i in range(nrows * ncols):
                     ax = fig.axes[i]
-                    ax2 = fig.axes[axes.size + i]
+                    try:
+                        ax2 = fig.axes[axes.size + i]
+                    except IndexError:
+                        ax2 = ax.twiny()
+                        ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+
                     # Clear elements from the selected axis :
                     ax.clear()  # takes longer than clearing individual elements but
                     # clearing individual elements produces an error in some environments??? - TBC
@@ -498,23 +504,20 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
                     # ax.texts.clear()
                     # ax.patches.clear()
 
-                    plot_ind = p * nrows * ncols + i
+                    # plot_ind = p * nrows * ncols + i
                     if plot_ind >= nplots:
-                        # for j in range(i, nrows * ncols):
-                        #     fig.delaxes(fig.axes[-1])  # delete twin axis
-                        #     fig.delaxes(fig.axes[i])  # delete main axis
                         ax.set_frame_on(False)
                         ax.set_xticks([])
                         ax.set_yticks([])
                         if ax2 is not None:
-                            # fig.delaxes(axes2[i])
                             ax2.set_frame_on(False)
                             ax2.set_xticks([])
                             ax2.set_yticks([])
                         continue
 
                     win = lte_model.win_list_file[plot_ind]
-                    plot_window(lte_model, win, ax=ax, ax2=ax2)
+                    plot_window(lte_model, win, ax=ax, ax2=ax2, lw=0.5, axes_labels=False)
+                    plot_ind += 1
 
                 pdf.savefig(fig, bbox_inches=bbox)
         # last page
@@ -524,3 +527,29 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
     if verbose:
         print("Done\n")
+
+
+def file_fig_size(nrows, ncols, **kwargs):
+    # width_a4 = 8.27  # 8.27 inches = 21 cm
+    # height_a4 = 11.69  # 11.69 inches = 29.7 cm
+    # aspect_a4 = width_a4 / height_a4  # height/width of a subplot
+    aspect = 0.5
+
+    sub_w = 2
+    sub_h = 2 * aspect
+
+    wspace = 0.2  # space size in width
+    hspace = wspace / aspect * 1.2  # space size in height
+    l_marg = kwargs.get('left', 0.5)  # left margin
+    r_marg = kwargs.get('right', 0.2)  # right margin
+    t_marg = kwargs.get('top', 0.4)  # top margin
+    b_marg = kwargs.get('bottom', 0.4)  # bottom margin
+
+    fig_w_norm = ncols + (ncols - 1) * wspace
+    fig_h_norm = nrows + (nrows - 1) * hspace  # + b_marg + t_marg
+    plot_w = sub_w * fig_w_norm
+    plot_h = sub_h * fig_h_norm
+    fig_w = plot_w + l_marg + r_marg
+    fig_h = plot_h + t_marg + b_marg
+
+    return fig_w, fig_h
