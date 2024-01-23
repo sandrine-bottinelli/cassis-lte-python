@@ -41,6 +41,9 @@ matplotlib.rcParams['axes.formatter.useoffset'] = False  # No offset for tick la
 # matplotlib.rc('font', **{'family': 'serif', 'serif': ['Times']})
 plt.rcParams["font.family"] = FONT_DEF
 
+# arbitrary plot width:
+PLOT_WIDTH = 2.0  # inches
+
 
 def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, axes_labels=True):
     """
@@ -79,6 +82,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
     for f_range in win.f_ranges_nofit:
         ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.05)
 
+    ymin_plot, ymax_plot = np.inf, -np.inf
     #  Plot components if more than one
     if (lte_model.minimize or lte_model.modeling) and (len(lte_model.cpt_list) > 1):
         for icpt, _ in enumerate(lte_model.cpt_list):
@@ -88,6 +92,8 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
                 ax.fill_between(win.x_mod_plot, win.y_mod_cpt[icpt] - win.y_mod_err_cpt[icpt],
                                 win.y_mod_cpt[icpt] + win.y_mod_err_cpt[icpt],
                                 color=lte_model.cpt_cols[icpt], alpha=0.1)
+                ymin_plot = min(ymin_plot, min(win.y_mod_cpt[icpt] - win.y_mod_err_cpt[icpt]))
+                ymax_plot = max(ymin_plot, max(win.y_mod_cpt[icpt] + win.y_mod_err_cpt[icpt]))
 
     # Plot data and/or model
     if win.x_file is not None:  # data
@@ -106,10 +112,14 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
 
     if win.y_mod_err is not None:
         ax.fill_between(win.x_mod_plot, win.y_mod - win.y_mod_err, win.y_mod + win.y_mod_err, color='red', alpha=0.1)
+        ymin_plot = min(ymin_plot, min(win.y_mod - win.y_mod_err))
+        ymax_plot = max(ymax_plot, max(win.y_mod + win.y_mod_err))
 
     # Define and set limits
-    ax.relim()  # recompute the axis data limits
+    ax.relim()  # recompute the axis data limits -> does not work on fill_between???
     ymin, ymax = ax.get_ylim()
+    ymin = min(ymin, ymin_plot)
+    ymax = max(ymax, ymax_plot)
     ymin = ymin - 0.05 * (ymax - ymin)
     ymax = ymax + 0.1 * (ymax - ymin)
     if ymin == ymax:
