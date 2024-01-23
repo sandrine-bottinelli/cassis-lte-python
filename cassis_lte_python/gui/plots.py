@@ -380,7 +380,7 @@ def gui_plot(lte_model):
 def file_plot(lte_model, filename, dirname=None, verbose=True,
               dpi=DPI_DEF, nrows=NROWS_DEF, ncols=NCOLS_DEF):
     """
-    Produces a plot of the fit results.
+    Produces a plot of the fit results. If several species, change page when plotting the next species.
     :param lte_model: an abject of class ModelSpectrum
     :param filename: name of output file.
     :param dirname: path to an output directory.
@@ -398,6 +398,9 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if nplots == 0:
         raise IndexError("Nothing to plot.")
 
+    win_per_sp = {sp: [win for win in lte_model.win_list_file if sp in win.name] for sp in lte_model.tag_list}
+    win_per_sp = {k: v for k, v in win_per_sp.items() if len(v) > 0}
+
     if nplots == 1:
         nrows, ncols = 1, 1
     if nplots < (nrows * ncols):
@@ -414,8 +417,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
     # determine if more than one page
-    nb_pages = int(np.ceil(nplots / (nrows * ncols)))
-    if nb_pages == 1:  # one page : keep user's extension
+    if len(win_per_sp) == 1 and nplots <= (nrows * ncols):  # one page : keep user's extension
         file_path = lte_model.set_filepath(filename, dirname=dirname)
     else:
         file_path = lte_model.set_filepath(filename, dirname=dirname, ext='pdf')
@@ -435,20 +437,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     fig, axes = plt.subplots(nrows, ncols,
                              figsize=(fig_w, fig_h),
                              dpi=dpi, layout="constrained")
-
-    bbox = None
-    # bbox = 'tight'
-
-    # Draw first page
-    plot_ind = 0
-    for i in range(nrows * ncols):
-        ax = fig.axes[i]
-        if i >= nplots:
-            ax.set_frame_on(False)
-            ax.set_xticks([])
-            ax.set_yticks([])
-            # NB: could use ax.set_visible(False), but this changes the figure's layout -> ok?
-            continue
+    for ax in fig.axes:
         # ax2 = None
         ax2 = ax.twiny()
         # ax.set_box_aspect(0.5)
@@ -459,14 +448,91 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         #                          functions=(velo2freq(win.transition.f_trans_mhz, lte_model.vlsr_file),
         #                                     freq2velo(win.transition.f_trans_mhz, lte_model.vlsr_file)))
 
-        win = lte_model.win_list_file[i]
-        plot_window(lte_model, win, ax=ax, ax2=ax2, auto=False, lw=0.5, axes_labels=False)
-        plot_ind += 1
+    bbox = None
+    # bbox = 'tight'
 
-    # Set common labels
-    fig.suptitle("Frequency [MHz]")
-    fig.supxlabel("Velocity [km/s]")
-    fig.supylabel("Intensity [K]")
+    with PdfPages(file_path) as pdf:
+        for sp, win_list in win_per_sp.items():
+            # compute the number of pages for the current species
+            nplots = len(win_list)
+            nb_pages = int(np.ceil(nplots / (nrows * ncols)))
+
+            # Common labels
+            fig.suptitle("Frequency [MHz]")
+            fig.supxlabel("Velocity [km/s]")
+            fig.supylabel("Intensity [K]")
+
+            for p in range(nb_pages):
+                for i in range(nrows * ncols):
+                    ax = fig.axes[i]
+                    # ax2 = None
+                    ax2 = fig.axes[nrows * ncols + i]
+                    # try:  # takes longer than setting secondary axis before looping on the plots
+                    #     ax2 = fig.axes[nrows * ncols + i]
+                    # except IndexError:
+                    #     ax2 = ax.twiny()
+                    #     ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+
+                    # Clear elements from the selected axis :
+                    ax.clear()  # takes longer than clearing individual elements but
+                    # clearing individual elements produces an error in some environments??? - TBC
+                    # ax.lines.clear()
+                    # ax.texts.clear()
+                    # ax.patches.clear()
+
+                    # Make sure the frame is visible
+                    ax.set_frame_on(True)
+                    ax2.set_frame_on(True)
+
+                    plot_ind = p * nrows * ncols + i
+                    # if global index greater than number of plots, also clear the axes themselves
+                    if plot_ind >= nplots:
+                        ax.set_frame_on(False)
+                        ax.set_xticks([])
+                        ax.set_yticks([])
+                        # NB: could use ax.set_visible(False), but this changes the figure's layout -> ok?
+                        if ax2 is not None:
+                            ax2.set_frame_on(False)
+                            ax2.set_xticks([])
+                            ax2.set_yticks([])
+                        continue
+
+                    win = win_list[plot_ind]
+                    plot_window(lte_model, win, ax=ax, ax2=ax2, lw=0.5, axes_labels=False, auto=False)
+
+                # Update position of common labels for the last page
+                if p == (nb_pages - 1):
+                    n_last = nplots - (nb_pages - 1) * nrows * ncols
+                    nrows_last = n_last / ncols
+                    nrows_last = int(np.ceil(nrows_last))
+                    w_last, h_last = file_fig_size(nrows_last, ncols, **margins)
+
+                    if nrows_last < nrows:
+                        # move supylabel and supxlabel up
+                        fig.texts[2].set_y((fig_h - h_last/2) / fig_h)  # supylabel ; works ok
+                        # fig.texts[1].set_y((fig_h - h_last - margins['bottom']) / fig_h)  # supxlabel
+                        # the above does not work??!! ; reset supxlabel and compute new ypos
+                        fig.supxlabel("")
+                        ypos_bottom_label = (fig_h - h_last - 0.2) / fig_h
+                        try:
+                            fig.texts[3].set_position((xpos, ypos_bottom_label))
+                        except IndexError:
+                            fig.text(xpos, ypos_bottom_label, "Velocity [km/s]",
+                                     fontsize=fig.texts[0].get_fontsize(), ha='center', va='bottom')
+                    # else:
+                    #     ypos_bottom_label = fig.texts[1].get_y()
+                    if n_last < ncols:
+                        # reset supxlabel and compute new xpos
+                        w = fig.subplotpars.right - fig.subplotpars.left - (ncols - 1) * fig.subplotpars.hspace
+                        w /= ncols
+                        xpos = fig.subplotpars.left + (n_last * w + (n_last - 1) * fig.subplotpars.hspace) / 2
+                        # move suptitle to xpos
+                        fig.texts[0].set_x(xpos)
+                        fig.texts[1].set_x(xpos)
+                    else:
+                        xpos = 0.5
+
+
     # fig.text(0.5, t+(1-t)*2/3, "Frequency [MHz]", ha='center', va='top')
     # fig.text(0.5, b/3, "Velocity [km/s]", ha='center', va='bottom')
     # fig.text(l/2, 0.5, "Intensity [K]", ha='center', va='center', rotation='vertical')
@@ -482,59 +548,9 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     #                     left=l, right=r,
     #                     wspace=wspace, hspace=hspace)
 
-    if nb_pages == 1:
-        fig.savefig(file_path, bbox_inches=bbox,
-                    dpi=dpi)
+                pdf.savefig(fig, bbox_inches=bbox,
+                            dpi=dpi)
 
-    else:
-        with PdfPages(file_path) as pdf:
-            # save first page
-            pdf.savefig(fig, bbox_inches=bbox)
-            # plot and save pages 2+
-            for p in range(1, nb_pages):
-                if p == (nb_pages - 1):  # last page : redefine the figure
-                    nrows = (nplots - (nb_pages - 1) * nrows * ncols) / ncols
-                    nrows = int(np.ceil(nrows))
-                    fig, axes = plt.subplots(nrows, ncols,
-                                             figsize=(file_fig_size(nrows, ncols, **margins)),
-                                             dpi=dpi, layout="constrained")
-                    fig.suptitle("Frequency [MHz]")
-                    fig.supxlabel("Velocity [km/s]")
-                    fig.supylabel("Intensity [K]")
-
-                for i in range(nrows * ncols):
-                    ax = fig.axes[i]
-                    try:
-                        ax2 = fig.axes[nrows * ncols + i]
-                    except IndexError:
-                        ax2 = ax.twiny()
-                        ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-
-                    # Clear elements from the selected axis :
-                    ax.clear()  # takes longer than clearing individual elements but
-                    # clearing individual elements produces an error in some environments??? - TBC
-                    # ax.lines.clear()
-                    # ax.texts.clear()
-                    # ax.patches.clear()
-
-                    # plot_ind = p * nrows * ncols + i
-                    if plot_ind >= nplots:
-                        ax.set_frame_on(False)
-                        ax.set_xticks([])
-                        ax.set_yticks([])
-                        if ax2 is not None:
-                            ax2.set_frame_on(False)
-                            ax2.set_xticks([])
-                            ax2.set_yticks([])
-                        continue
-
-                    win = lte_model.win_list_file[plot_ind]
-                    plot_window(lte_model, win, ax=ax, ax2=ax2, lw=0.5, axes_labels=False)
-                    plot_ind += 1
-
-                pdf.savefig(fig, bbox_inches=bbox)
-        # last page
-        # pdf.savefig(fig)
         plt.close()
     #     # fig.savefig(file_path, bbox_inches='tight', dpi=dpi)
 
@@ -548,8 +564,8 @@ def file_fig_size(nrows, ncols, **kwargs):
     # aspect_a4 = width_a4 / height_a4  # height/width of a subplot
     aspect = 0.5
 
-    sub_w = 2
-    sub_h = 2 * aspect
+    sub_w = PLOT_WIDTH
+    sub_h = sub_w * aspect
 
     wspace = 0.2  # space size in width
     hspace = wspace / aspect * 1.2  # space size in height
