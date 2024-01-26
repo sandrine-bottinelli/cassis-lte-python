@@ -8,7 +8,7 @@ data_file = os.path.join(data_dir, data_filename)
 
 tag_list = [
     '41505',  # CH3CN
-    # '28502'  # H2CN
+    '28502'  # H2CN
 ]
 thresholds = {
     tag_list[0]: {'eup_max': 150},

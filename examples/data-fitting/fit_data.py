@@ -87,8 +87,8 @@ config = {
     },
 }
 
-# reload = False  # 1st time run
-reload = True  # reload the config and change plotting parameters if
+reload = False  # 1st time run
+# reload = True  # reload the config and change plotting parameters if
 
 if not reload:
     res = ModelSpectrum(config)
