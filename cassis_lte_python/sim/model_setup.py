@@ -242,8 +242,8 @@ class ModelConfiguration:
             self.get_data()
             self.yunit = self.data_file_obj.yunit
 
-        if self.vlsr_file == 0. and 'components' in configuration:
-            self.vlsr_file = self.cpt_list[0].vlsr
+        if self.vlsr_plot == 0. and 'components' in configuration:
+            self.vlsr_plot = self.cpt_list[0].vlsr
 
         if 'tc' in self._configuration_dict:
             self.get_continuum()
