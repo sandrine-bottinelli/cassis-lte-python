@@ -1,0 +1,7 @@
+# File giving the rms (data units) and calibration uncertainties (%) to be used to compute chi2
+# Format : 
+#
+# fmin <tab> fmax <tab> rms <tab> cal
+#
+100000.0	150000.0	0.1	10.
+200000.0	300000.0	0.2	10.

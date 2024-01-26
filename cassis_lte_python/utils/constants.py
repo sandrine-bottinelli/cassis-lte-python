@@ -16,7 +16,7 @@ UNITS = {'flux': ['Jy/beam', 'Jy beam-1', 'beam-1 Jy'],
          'frequency': ['GHz', 'MHz'],
          'wavelength': ['nm', 'micron', 'um', 'A', 'angstrom']}
 UNITS['xaxis'] = UNITS['frequency'] + UNITS['wavelength']
-UNITS['yaxis'] = UNITS['flux'] + ['K', 'Jy']
+UNITS['yaxis'] = UNITS['flux'] + ['K', 'Kelvin', 'Jy']
 # TODO : complete these lists
 
 TEL_DIAM = {'iram': 30.,

@@ -130,13 +130,11 @@ class DataFile:
         self.header = header
 
     def get_vlsr(self):
-        try:
-            self.vlsr = float(self.header.get('vlsr'))
-        except TypeError:
-            try:
-                self.vlsr = self.header['VLSR']  # km/s
-            except KeyError:
-                print(f"Vlsr not found, using {self.vlsr} km/s")
+        for k, v in self.header.items():
+            if 'vlsr' in k or 'VLSR' in k:
+                self.vlsr = float(v)
+                return
+        print(f"Vlsr not found, using {self.vlsr} km/s")
 
     def read_beam(self):
         try:
@@ -601,8 +599,8 @@ def read_telescope_file(telescope_file):
     with open(telescope_file, 'r') as f:
         col_names = ['Frequency (MHz)', 'Beff/Feff']
         tel_data = f.readlines()
-        tel_diam = int(tel_data[1])
-        if tel_diam == 0:
+        tel_diam = float(tel_data[1])
+        if int(tel_diam) == 0:
             col_names += ['Bmaj (arcsec)', 'Bmin (arcsec)']
         # get column names:
         line = tel_data[2]

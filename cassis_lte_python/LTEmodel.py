@@ -100,7 +100,7 @@ def generate_lte_model_func(config):
                 intensity = ff * intensity_cpt
 
         intensity = intensity + intensity_before - utils.jnu(fmhz, tcmb)
-        intensity += normal(0., config['noise'], len(intensity))  # add gaussian noise
+        intensity += normal(0., config['noise'](fmhz), len(intensity))  # add gaussian noise
         intensity *= tmb2ta  # convert to Ta
         intensity /= jypb2k  # convert to Jy/beam
 
@@ -225,13 +225,20 @@ class ModelSpectrum(object):
                 if self.name_config is not None:
                     self.save_config(self.name_config)
 
+        if self.save_spec:
+            filename, ext = os.path.splitext(self.file_spec)
+            self.save_spectrum(filename, ext=ext)
+
         if self.plot_gui or self.plot_file:
             print('Finding windows for gui and file plots.')
             self.setup_plot()
             if self.plot_gui and len(self.model_config.win_list_gui) > 0:
                 t_start = process_time()
                 print("Preparing windows for GUI plot...")
-                self.setup_plot_la(self.model_config.win_list_gui, **self.gui_kws)
+                if self.bandwidth is None or self.model_config.fit_freq_except is not None:
+                    self.setup_plot_fus()
+                else:
+                    self.setup_plot_la(self.model_config.win_list_gui, **self.gui_kws)
                 if self.exec_time:
                     print(f"Execution time for preparing GUI plot : {utils.format_time(process_time() - t_start)}.")
 
@@ -251,7 +258,10 @@ class ModelSpectrum(object):
                         win_list = self.model_config.win_list_file
 
                     if len(win_list) > 0:
-                        self.setup_plot_la(win_list, **self.file_kws)
+                        if self.bandwidth is not None:
+                            self.setup_plot_la(win_list, **self.file_kws)
+                        else:
+                            self.setup_plot_fus()
                     # Compute errors if necessary
                     for win in self.model_config.win_list_file:
                         if win.y_mod_err is None and self.file_kws['model_err']:
@@ -291,7 +301,7 @@ class ModelSpectrum(object):
             'fghz_min': self.fmin_mhz / 1.e3,
             'fghz_max': self.fmax_mhz / 1.e3,
             'df_mhz': self.dfmhz,
-            'noise': self.noise,
+            'noise': np.mean(self.noise(self.x_mod)),  # TODO : write range
             'tau_max': self.tau_max,
             'thresholds': self.thresholds,
             'minimize': False,  # by default, do not (re-)minimize
@@ -395,10 +405,10 @@ class ModelSpectrum(object):
         # Check min/max Tex:
         for icpt, cpt in enumerate(self.cpt_list):
             par = params[f'{cpt.name}_tex']
-            if par.min < cpt.tmin:
+            if par.min < cpt.tmin and self.minimize:
                 print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
                       f'(smallest temperature for which the partition function is defined for all species).')
-            if par.max > cpt.tmax:
+            if par.max > cpt.tmax and self.minimize:
                 print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
                       f'(highest temperature for which the partition function is defined for all species).')
             par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
@@ -481,26 +491,26 @@ class ModelSpectrum(object):
                                         max_nfev=max_nfev, fit_kws=fit_kws,
                                         iter_cb=fit_callback)
 
-        if len(self.cpt_list) > 1:
-            for cpt in self.cpt_list:
-                model_fit_cpt = copy.deepcopy(self.model_fit)
-                c_par = Parameters()
-                for par in model_fit_cpt.params:
-                    if cpt.name in par:
-                        c_par[par] = self.model_fit.params[par]
-                model_fit_cpt.params = c_par
-                indices = [i for i, var_name in enumerate(model_fit_cpt.var_names) if cpt.name in var_name]
-                nvarys = len(indices)
-                model_fit_cpt.var_names = [model_fit_cpt.var_names[i] for i in indices]
-                model_fit_cpt.best_values = {k: v for k, v in model_fit_cpt.best_values.items() if cpt.name in k}
-                model_fit_cpt.nvarys = nvarys
-                covar = np.zeros((nvarys, nvarys))
-                for i in range(nvarys):
-                    for j in range(nvarys):
-                        covar[i, j] = model_fit_cpt.covar[indices[i], indices[j]]
-                model_fit_cpt.covar = covar
-                model_fit_cpt.model.func = generate_lte_model_func(self.model_info(cpt=cpt))
-                self.model_fit_cpt.append(model_fit_cpt)
+        # if len(self.cpt_list) > 1:
+        #     for cpt in self.cpt_list:
+        #         model_fit_cpt = copy.deepcopy(self.model_fit)
+        #         c_par = Parameters()
+        #         for par in model_fit_cpt.params:
+        #             if cpt.name in par:
+        #                 c_par[par] = self.model_fit.params[par]
+        #         model_fit_cpt.params = c_par
+        #         indices = [i for i, var_name in enumerate(model_fit_cpt.var_names) if cpt.name in var_name]
+        #         nvarys = len(indices)
+        #         model_fit_cpt.var_names = [model_fit_cpt.var_names[i] for i in indices]
+        #         model_fit_cpt.best_values = {k: v for k, v in model_fit_cpt.best_values.items() if cpt.name in k}
+        #         model_fit_cpt.nvarys = nvarys
+        #         covar = np.zeros((nvarys, nvarys))
+        #         for i in range(nvarys):
+        #             for j in range(nvarys):
+        #                 covar[i, j] = model_fit_cpt.covar[indices[i], indices[j]]
+        #         model_fit_cpt.covar = covar
+        #         model_fit_cpt.model.func = generate_lte_model_func(self.model_info(cpt=cpt))
+        #         self.model_fit_cpt.append(model_fit_cpt)
 
         self.model = self.model_fit.model
 
@@ -524,6 +534,10 @@ class ModelSpectrum(object):
                     p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
                 val = 10 ** pfit.value if p.vary or p.expr is not None else p.user_data['value']
                 p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
+
+        # update components
+        for cpt in self.model_config.cpt_list:
+            cpt.update_parameters(self.params)
 
         # update vlr_plot
         if self.vlsr_file == 0:
@@ -723,44 +737,53 @@ class ModelSpectrum(object):
         Plot in full spectrum mode (self.bandwidth is None)
         :return:
         """
-        win = self.win_list_plot[0]
-        win.x_mod = self.x_mod
-        # win.f_range_plot = [min(win.x_file), max(win.x_file)]
-        win.f_range_plot = [min(win.x_mod), max(win.x_mod)]
-        win.bottom_unit = 'MHz'
-        win.bottom_lim = utils.get_extended_limits(win.f_range_plot)
-        win.top_lim = win.bottom_lim
+        # info to be saved in line list file
+        # cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'catdir_id', 'qn']
+        cols = ['tag', 'sp_name', 'fMHz', 'f_err_mhz', 'aij', 'elow', 'eup', 'igu', 'qn']
 
-        # compute the model :
-        plot_pars = self.params
-        # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
-        # TODO: check if following is necessary
-        if win.x_file is not None:
-            x_mod = []
-            for i, row in self.tuning_info.iterrows():
-                x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
-                if len(x_sub) == 0:
-                    continue
-                x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
-            win.x_mod = np.array(x_mod)
+        for win in self.win_list_plot:
+            # win.x_mod = self.x_mod
+            # win.f_range_plot = [min(win.x_file), max(win.x_file)]
+            win.f_range_plot = [min(win.x_mod), max(win.x_mod)]
+            win.bottom_unit = 'MHz'
+            win.bottom_lim = utils.get_extended_limits(win.f_range_plot)
+            win.top_lim = win.bottom_lim
 
-        else:
-            pass
-        win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
-                                                   line_list=self.line_list_all)
-        if len(self.cpt_list) > 1:
-            for icpt in range(len(self.cpt_list)):
-                win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
-                                                                    line_list=self.line_list_all,
-                                                                    cpt=self.cpt_list[icpt]))
+            # compute the model :
+            plot_pars = self.params
+            # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
+            # TODO: check if following is necessary
+            if win.x_file is not None:
+                x_mod = []
+                for i, row in self.tuning_info.iterrows():
+                    x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
+                    if len(x_sub) == 0:
+                        continue
+                    x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+                win.x_mod = np.array(x_mod)
 
-        win.x_mod_plot = win.x_mod
-        win.x_file_plot = win.x_file
+            else:
+                pass
+            line_list = select_transitions(self.line_list_all, xrange=[min(win.x_mod), max(win.x_mod)])
+            with open(os.path.join(self.output_dir, 'linelist.txt'), "a") as f:
+                f.write(f"{win.name} : model species within thresholds\n")
+                f.writelines(line_list[cols].to_string(index=False))
+                f.write("\n\n")
+            win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                       line_list=self.line_list_all)
+            if len(self.cpt_list) > 1:
+                for icpt in range(len(self.cpt_list)):
+                    win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                                        line_list=self.line_list_all,
+                                                                        cpt=self.cpt_list[icpt]))
 
-        if win.x_file is not None:
-            win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
-                                                                    line_list=self.line_list_all)
-            win.y_res += self.get_tc(win.x_file)
+            win.x_mod_plot = win.x_mod
+            win.x_file_plot = win.x_file
+
+            if win.x_file is not None:
+                win.y_res = win.y_file - self.compute_model_intensities(params=plot_pars, x_values=win.x_file,
+                                                                        line_list=self.line_list_all)
+                win.y_res += self.get_tc(win.x_file)
 
     def setup_plot_la(self, win_list: list, verbose=True, other_species_dict: dict | None = None, **kwargs):
         """
@@ -773,7 +796,10 @@ class ModelSpectrum(object):
 
         # Define some useful quantities
         plot_pars = self.params
-        vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
+        # vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
+        vlsr = self.vlsr_file
+        if len(self.cpt_list) > 1 and self.vlsr_file == 0.:
+            vlsr = self.cpt_list[0].vlsr
         try:
             fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
         except TypeError:
@@ -914,7 +940,7 @@ class ModelSpectrum(object):
 
             # if tag of fitted species in other species, concatenate with user lines, dropping duplicates
             for tag in self.model_config.tag_list:
-                if tag in other_species_win.tag.unique():
+                if not other_species_win.empty and tag in other_species_win.tag.unique():
                     other_species_win = pd.concat([model_lines_user,
                                                    other_species_win]).drop_duplicates(subset='db_id', keep=False)
             # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
@@ -922,25 +948,33 @@ class ModelSpectrum(object):
             #                                other_species_win_all]).drop_duplicates(subset='db_id', keep='first')
 
             win_colors = {t: PLOT_COLORS[itag] for itag, t in enumerate(model_lines_user.tag.unique())}
-            for icpt, cpt in enumerate(self.cpt_list):
-                # build list of dataframes containing lines to be plotted for each component
-                win.main_lines_display[icpt] = self.get_lines_plot_params(
-                    model_lines_user[model_lines_user['tag'].isin(cpt.tag_list)], cpt, f_ref, tag_colors=win_colors)
-                # win.other_lines_display[icpt] = self.get_lines_plot_params(
-                #     model_lines_other[model_lines_other['tag'].isin(cpt.tag_list)], cpt, f_ref, tag_colors=win_colors)
-
-            # line plot parameters for other lines and other species (not component-dependent)
-            plot_colors_sub = PLOT_COLORS[len(win_colors):]
-            icol = 0
-            for itag, t in enumerate(other_species_win.tag.unique()):
-                if t not in win_colors.keys():
-                    win_colors[t] = plot_colors_sub[icol % len(plot_colors_sub)]
-                    icol += 1
-            win.tag_colors = win_colors
+            if len(self.cpt_list) > 0:
+                for icpt, cpt in enumerate(self.cpt_list):
+                    # build list of dataframes containing lines to be plotted for each component
+                    win.main_lines_display[icpt] = self.get_lines_plot_params(
+                        model_lines_user[model_lines_user['tag'].isin(cpt.tag_list)], cpt.vlsr, f_ref,
+                        tag_colors=win_colors)
+                    # win.other_lines_display[icpt] = self.get_lines_plot_params(
+                    #     model_lines_other[model_lines_other['tag'].isin(cpt.tag_list)], cpt, f_ref, tag_colors=win_colors)
+            else:
+                win.main_lines_display[0] = self.get_lines_plot_params(
+                    model_lines_user[model_lines_user['tag'].isin(self.tag_list)], self.model_config.vlsr_plot, f_ref,
+                    tag_colors=win_colors)
 
             if len(other_species_win) > 0:
-                win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0], f_ref,
+                # line plot parameters for other lines and other species (not component-dependent)
+                plot_colors_sub = PLOT_COLORS[len(win_colors):]
+                icol = 0
+                for itag, t in enumerate(other_species_win.tag.unique()):
+                    if t not in win_colors.keys():
+                        win_colors[t] = plot_colors_sub[icol % len(plot_colors_sub)]
+                        icol += 1
+
+                win.other_species_display = self.get_lines_plot_params(other_species_win, self.cpt_list[0].vlsr, f_ref,
                                                                        tag_colors=win_colors)
+
+            win.tag_colors = win_colors
+
             if iwin == 0:
                 prep_time = (process_time() - t_start)
                 print(f"    Time for one window : {prep_time:.2f} seconds")
@@ -957,12 +991,12 @@ class ModelSpectrum(object):
                         f.writelines(win.other_species_display[cols].to_string(index=False))
                         f.write("\n\n")
 
-    def get_lines_plot_params(self, line_list: pd.DataFrame, cpt: Component, f_ref: float,
+    def get_lines_plot_params(self, line_list: pd.DataFrame, vlsr: float, f_ref: float,
                               tag_colors: dict):
 
         colors = tag_colors
         lines_plot_params = line_list.copy()
-        lines_plot_params['x_pos'] = [utils.frequency_to_velocity(row.fMHz, f_ref, vref_kms=cpt.vlsr)
+        lines_plot_params['x_pos'] = [utils.frequency_to_velocity(row.fMHz, f_ref, vref_kms=vlsr)
                                       for i, row in lines_plot_params.iterrows()]
         lines_plot_params['x_pos_err'] = [utils.delta_v_to_delta_f(row.f_err_mhz, f_ref, reverse=True)
                                           for i, row in lines_plot_params.iterrows()]
@@ -1072,14 +1106,18 @@ class ModelSpectrum(object):
 
         self.thresholds_other = thresholds_other
 
+        # Create file for saving the lines
+        with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+            f.write("List of plotted lines\n")
+
         if self.bandwidth is None or self.model_config.fit_freq_except is not None:
             self.model_config.win_list_plot = self.win_list
-            self.setup_plot_fus()
-        else:
-            # Create file for saving the lines
-            with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
-                f.write("List of plotted lines")
+            if self.model_config.plot_gui:
+                self.model_config.win_list_gui = self.model_config.win_list_plot
+            if self.model_config.plot_file:
+                self.model_config.win_list_file = self.model_config.win_list_plot
 
+        else:
             if self.model_config.plot_gui:
                 self.model_config.win_list_gui = self.select_windows(**self.gui_kws)
                 if len(self.model_config.win_list_gui) == 0:
@@ -1231,6 +1269,7 @@ class ModelSpectrum(object):
         :return: the path to the file
         """
         file_path = self.set_filepath(filename, dirname=dirname, ext=ext)
+        ext = ext.strip('.')
 
         spectrum_type = ''
         if continuum:  # spec will be ignored
@@ -1247,6 +1286,8 @@ class ModelSpectrum(object):
             #     x_values, y_values = self.x_file, self.y_file
             else:
                 x_values, y_values = self.x_mod, self.y_mod
+                if y_values is None:
+                    y_values = self.model.eval(fmhz=self.x_mod, **self.params)
                 spectrum_type = 'synthetic'
 
         if ext == 'fits':
@@ -1283,11 +1324,22 @@ class ModelSpectrum(object):
         if ext == 'txt':
             with open(file_path, 'w') as f:
                 if spectrum_type != 'continuum':
-                    f.writelines(['#title: Spectral profile\n',
-                                  '#date: {}\n'.format(datetime.datetime.now().strftime("%c")),
-                                  '#coordinate: world\n',
-                                  '#xLabel: frequency [MHz]\n',
-                                  '#yLabel: [Kelvin] Mean\n'])
+                    header = ['#title: Spectral profile\n',
+                              '#date: {}\n'.format(datetime.datetime.now().strftime("%c"))
+                              # '#coordinate: world\n'
+                             ]
+                    if len(self.model_config.tuning_info) > 1:
+                        header.append('#telescopes:\n')
+                        for i, row in self.model_config.tuning_info.iterrows():
+                            header.append(f"#  {row['telescope']}: {row['fmhz_range']}\n")
+                    else:
+                        header.append('#telescope: ' + self.model_config.tuning_info.iloc[0]['telescope'] + '\n')
+
+                    header.append(f'#vlsr [km/s]: {self.model_config.vlsr_file}\n')
+                    header.extend(['#xLabel: frequency [MHz]\n',
+                                   '#yLabel: [Kelvin] Mean\n'])
+                    f.writelines(header)
+
                 for x, y in zip(x_values, y_values):
                     if len(np.shape(y_values)) == 1:
                         f.write('{}\t{}\n'.format(utils.format_float(x, nb_signif_digits=4), utils.format_float(y)))
@@ -1444,7 +1496,7 @@ class ModelSpectrum(object):
             'observing': 'PSDBS',
             'tbg': self.tcmb,
             'tbgUnit': 'K',
-            'noise': self.noise * 1000.,
+            'noise': np.mean(self.noise(self.x_mod)) * 1000.,  # TODO: compute at the same time as telescope
             'noiseUnit': 'mK',
             'frequency': 'SKY' if self.cpt_list[0].vlsr != 0. else 'REST'
         }

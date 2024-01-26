@@ -1,0 +1,23 @@
+# File giving the velocity ranges over which to compute chi2
+#    *or* the rms and cal to be used to compute chi2
+# Format for velocity range : 
+#
+# tag
+# vmin <tab> vmax <tab> list of transitions numbers 
+# <blank line>
+#
+# Format for velocity range : 
+#
+# tag
+# rms_mK <tab> cal_percent <tab> list of transitions numbers 
+# <blank line>
+#
+# N.B. : transition numbers are as given by CASSIS, ordered by frequency, with the same thresholds
+#
+
+41505
+0.5	5.5	2,4,7,9
+-5.5	5.5	5, 10
+
+28502
+1.0	5.0	3

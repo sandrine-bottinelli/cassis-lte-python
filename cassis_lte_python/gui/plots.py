@@ -71,14 +71,14 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
     if axes_labels:
         xlabel = 'Velocity' if win.bottom_unit == 'km/s' else 'Frequency'
         ax.set_xlabel(f'{xlabel} [{win.bottom_unit}]')
-        ax.set_ylabel(f'Intensity [{lte_model.model_config.data_file_obj.yunit}]')
+        ax.set_ylabel(f'Intensity [{lte_model.yunit}]')
         if win.bottom_unit != win.top_unit:
             ax2.set_xlabel(f'Frequency [{win.top_unit}]')
 
     # plot range used (or not) for chi2 calculation
     v_range = win.v_range_fit
     if v_range is not None:
-        ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.05)
+        ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.075)
     for f_range in win.f_ranges_nofit:
         ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.05)
 
@@ -267,7 +267,10 @@ def gui_plot(lte_model):
     nplots = len(lte_model.win_list_gui)
 
     root = tkinter.Tk()
-    root.wm_title("LTEmodel - Results")
+    title = "LTEmodel"
+    if lte_model.model_config.minimize:
+        title += " - Results"
+    root.wm_title(title)
     root.geometry("1000x700")
     # root.columnconfigure(0, weight=1)
     # root.columnconfigure(1, weight=3)
@@ -302,9 +305,15 @@ def gui_plot(lte_model):
     win_frame = tkinter.Frame(root)
     win_names = [win.name
                  for win in lte_model.win_list_gui] if nplots > 1 else [lte_model.win_list_gui[0].name[:-4]]
+    len_max = 0
+    for name in win_names:
+        if len(name) > len_max:
+            len_max = len(name)
     # Create a Listbox and attaching it to its frame
-    win_list = tkinter.Listbox(win_frame, width=10, selectmode='single', activestyle='none',
-                               listvariable=tkinter.StringVar(value=win_names))
+    var = tkinter.StringVar()
+    var.set(win_names)
+    win_list = tkinter.Listbox(win_frame, width=len_max, selectmode='single', activestyle='none',
+                               listvariable=var)
     win_list.select_set(0)
     win_list.activate(0)
     win_list.focus_set()
@@ -398,7 +407,10 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if nplots == 0:
         raise IndexError("Nothing to plot.")
 
-    win_per_sp = {sp: [win for win in lte_model.win_list_file if sp in win.name] for sp in lte_model.tag_list}
+    if lte_model.model_config.bandwidth is None:
+        win_per_sp = {'*': lte_model.win_list_file}
+    else:
+        win_per_sp = {sp: [win for win in lte_model.win_list_file if sp in win.name] for sp in lte_model.tag_list}
     win_per_sp = {k: v for k, v in win_per_sp.items() if len(v) > 0}
 
     if nplots == 1:
@@ -513,25 +525,22 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
                         # fig.texts[1].set_y((fig_h - h_last - margins['bottom']) / fig_h)  # supxlabel
                         # the above does not work??!! ; reset supxlabel and compute new ypos
                         fig.supxlabel("")
-                        ypos_bottom_label = (fig_h - h_last - 0.2) / fig_h
+                        ypos_bottom_label = (fig_h - h_last - margins['bottom']) / fig_h
                         try:
-                            fig.texts[3].set_position((xpos, ypos_bottom_label))
+                            fig.texts[3].set_y(ypos_bottom_label)
                         except IndexError:
-                            fig.text(xpos, ypos_bottom_label, "Velocity [km/s]",
+                            fig.text(0.5, ypos_bottom_label, "Velocity [km/s]",
                                      fontsize=fig.texts[0].get_fontsize(), ha='center', va='bottom')
                     # else:
                     #     ypos_bottom_label = fig.texts[1].get_y()
                     if n_last < ncols:
-                        # reset supxlabel and compute new xpos
+                        # compute new xpos
                         w = fig.subplotpars.right - fig.subplotpars.left - (ncols - 1) * fig.subplotpars.hspace
                         w /= ncols
                         xpos = fig.subplotpars.left + (n_last * w + (n_last - 1) * fig.subplotpars.hspace) / 2
                         # move suptitle to xpos
                         fig.texts[0].set_x(xpos)
                         fig.texts[1].set_x(xpos)
-                    else:
-                        xpos = 0.5
-
 
     # fig.text(0.5, t+(1-t)*2/3, "Frequency [MHz]", ha='center', va='top')
     # fig.text(0.5, b/3, "Velocity [km/s]", ha='center', va='bottom')

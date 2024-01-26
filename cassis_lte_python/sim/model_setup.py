@@ -22,19 +22,20 @@ class ModelConfiguration:
         self.jmodel_fit = configuration.get('model_fit', None)
 
         self.fwhm_max = 0.
-        self.tag_list = []
+        self.tag_list = configuration.get('inspect', [])
         self.cpt_list = []
-        for key, cpt_dic in configuration.get('components').items():
-            sp_list = cpt_dic['species']
-            cpt = Component(key, sp_list,
-                            isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
-                            vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
-            self.cpt_list.append(cpt)
-            for sp in cpt.species_list:
-                if sp.parameters[1].max is not None and sp.parameters[1].max != np.inf:
-                    self.fwhm_max = max(self.fwhm_max, sp.parameters[1].max)
-                if sp.tag not in self.tag_list:
-                    self.tag_list.append(sp.tag)
+        if 'components' in configuration:
+            for key, cpt_dic in configuration.get('components').items():
+                sp_list = cpt_dic['species']
+                cpt = Component(key, sp_list,
+                                isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
+                                vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
+                self.cpt_list.append(cpt)
+                for sp in cpt.species_list:
+                    if sp.parameters[1].max is not None and sp.parameters[1].max != np.inf:
+                        self.fwhm_max = max(self.fwhm_max, sp.parameters[1].max)
+                    if sp.tag not in self.tag_list:
+                        self.tag_list.append(sp.tag)
 
         self.output_dir = configuration.get('output_dir', os.path.curdir)
         if not os.path.isdir(self.output_dir):
@@ -43,14 +44,17 @@ class ModelConfiguration:
 
         self.data_file = configuration.get('data_file', None)
         self.data_file_obj = None
+        self.xunit = 'Mhz'
+        self.yunit = 'K'
         self.x_file = None
         self.y_file = None
         self.x_obs = configuration.get('x_obs', None)
         self.y_obs = configuration.get('y_obs', None)
-        self.vlsr_file = None
-        self.vlsr_plot = None
+        self.vlsr_file = 0.
+        self.vlsr_plot = configuration.get('vlsr_plot', 0.)
         self.cont_info = None
         self.tc = None
+        self._telescope_data = {}
         self.tmb2ta = None
         self.jypb = None
         self.bmaj = None
@@ -80,7 +84,7 @@ class ModelConfiguration:
 
         self.x_fit = None
         self.y_fit = None
-        self.x_mod = None
+        self.x_mod = configuration.get('x_mod', None)
         self.y_mod = None
 
         fmin_ghz = 115.
@@ -95,16 +99,42 @@ class ModelConfiguration:
         if 'df_mhz' in configuration and configuration['df_mhz'] is not None:
             dfmhz = configuration['df_mhz']
         self.dfmhz = dfmhz
-        if self.x_mod is None and self.data_file is None:
-            self.x_mod = np.arange(self.fmin_mhz, self.fmax_mhz + self.dfmhz, self.dfmhz)
 
-        self.noise = 1.e-3 * configuration.get('noise_mk', 0.)
+        franges_ghz = configuration.get('franges_ghz', [[fmin_ghz, fmax_ghz]])
+        # make sure it is a list of lists
+        if not isinstance(franges_ghz[0], list):
+            franges_ghz = [franges_ghz]
+        self.franges_mhz = []
+
+        if self.x_mod is None and self.data_file is None:
+            # self.x_mod = np.arange(self.fmin_mhz, self.fmax_mhz + self.dfmhz, self.dfmhz)
+            self.x_mod = np.array([])
+            for r in franges_ghz:
+                self.franges_mhz.append([min(r) * 1000, max(r) * 1000])
+                self.x_mod = np.concatenate([self.x_mod,
+                                             np.arange(min(r) * 1000, max(r) * 1000 + self.dfmhz / 2, self.dfmhz)],
+                                            dtype=np.float32)
+            self.fmin_mhz = min(self.x_mod)
+            self.fmax_mhz = max(self.x_mod)
+
+        noise = 0.
+        if 'noise' in configuration:
+            noise = configuration.get('noise', 0.)
+        if 'noise_mk' in configuration:
+            noise = 1.e-3 * configuration.get('noise_mk', 0.)
+        if isinstance(noise, (float, int)):
+            self.noise = lambda x: noise
+        elif isinstance(noise, list):
+            yvals = np.array([[n, n] for n in noise])
+            self.noise = interp1d(np.concatenate(self.franges_mhz), np.concatenate(yvals), kind='nearest')
+        else:
+            print('Noise format not supported. Should be a integer, a float or a list.')
 
         self.t_a_star = configuration.get('t_a*', False)
         self._tuning_info_user = configuration.get('tuning_info', None)
-        self.tuning_info = None
+        self.tuning_info = []
 
-        if 'thresholds' in configuration:
+        if 'thresholds' in configuration and configuration['thresholds'] is not None:
             self.thresholds = get_species_thresholds(configuration['thresholds'],
                                                      select_species=self.tag_list,
                                                      return_list_sp=False)
@@ -112,9 +142,6 @@ class ModelConfiguration:
             self.thresholds = {}
             for tag in self.tag_list:
                 self.thresholds[str(tag)] = THRESHOLDS_DEF
-
-        self._telescope_data = {}
-        self.get_tuning_info()
 
         self.line_list_all = None
         self.tr_list_by_tag = None
@@ -145,6 +172,8 @@ class ModelConfiguration:
         self.save_results = configuration.get('save_results', True) or configuration.get('save_res_configs', True)
         self.name_lam = configuration.get('name_lam', None)
         self.name_config = configuration.get('name_config', None)
+        self.save_spec = configuration.get('save_spec', False)
+        self.file_spec = configuration.get('file_spec', 'synthetic_spectrum.txt')
 
         # Default plot keywords :
         self.plot_kws = {
@@ -194,6 +223,8 @@ class ModelConfiguration:
         if 'file_kws' in configuration:
             file_kws = configuration.get('file_kws')
             new_plot_kws['file_only'] = file_kws
+        if 'plot_filename' in configuration:
+            file_kws['filename'] = configuration['plot_filename']
         if self.plot_file and 'filename' not in file_kws:
             raise NameError("Please provide a name for the output pdf file.")
         for k in kws_plot_only:
@@ -209,9 +240,15 @@ class ModelConfiguration:
 
         if 'data_file' in self._configuration_dict or 'x_obs' in self._configuration_dict:
             self.get_data()
+            self.yunit = self.data_file_obj.yunit
+
+        if self.vlsr_file == 0. and 'components' in configuration:
+            self.vlsr_file = self.cpt_list[0].vlsr
 
         if 'tc' in self._configuration_dict:
             self.get_continuum()
+
+        self.get_tuning_info()
 
         self.get_linelist()
         self.get_windows()
@@ -233,15 +270,13 @@ class ModelConfiguration:
             self.x_file, self.y_file = self.data_file_obj.xdata_mhz, self.data_file_obj.ydata
             self.vlsr_file = self.data_file_obj.vlsr
         self.vlsr_plot = self.vlsr_file
-        if self.vlsr_plot == 0.:
-            self.vlsr_plot = self.cpt_list[0].vlsr
 
         if self.x_file is not None and isinstance(self.x_file[0], np.ndarray):
             self.x_file = np.concatenate(self.x_file)
         if self.y_file is not None and isinstance(self.y_file[0], np.ndarray):
             self.y_file = np.concatenate(self.y_file)
 
-        if self.x_file is not None:
+        if self.x_file is not None and len(self.tuning_info) > 0:
             # select data within telescope range
             x_sub, y_sub = utils.select_from_ranges(self.x_file, self.tuning_info['fmhz_range'].array,
                                                     y_values=self.y_file)
@@ -270,8 +305,8 @@ class ModelConfiguration:
         if config is None:
             config = self._configuration_dict
 
-        if self.x_file is None:
-            self.get_data()
+        # if self.x_file is None:
+        #     self.get_data()
 
         self.cont_info = config.get('tc', 0.)
 
@@ -327,9 +362,16 @@ class ModelConfiguration:
 
             tuning_info = {'fmhz_range': [], 'telescope': [], 'fmhz_min': [], 'fmhz_max': []}
             for key, val in config['tuning_info'].items():
-                arr = np.array(val)
-                if len(arr.shape) == 1:
-                    arr = np.array([val])
+                # make sure we have a list of frequency ranges
+                if len(val) == 0:  # empty list, use entire data range
+                    arr = [[min(self.x_file), max(self.x_file)]]
+                elif isinstance(val[0], list):
+                    arr = val
+                else:
+                    arr = [val]
+                # arr = np.array(val)  # convert list to array
+                # if len(arr.shape) == 1:
+                #     arr = np.array([val])
                 for r in arr:
                     r_min, r_max = min(r), max(r)
                     # if self.x_file is not None:
@@ -503,7 +545,23 @@ class ModelConfiguration:
                         print('  {}. {}'.format(iw + 1, w.transition))
 
         if self.bandwidth is None:
-            self.win_list = [Window(name='Full spectrum')]
+            if len(self.franges_mhz) > 1:
+                self.win_list = []
+                for r in self.franges_mhz:
+                    ndigit = 0
+                    rmin = np.round(min(r), ndigit)
+                    rmax = np.round(max(r), ndigit)
+                    while rmin == rmax:
+                        ndigit += 1
+                        rmin = np.round(min(r), ndigit)
+                        rmax = np.round(max(r), ndigit)
+                    if ndigit == 0:
+                        rmin = int(rmin)
+                        rmax = int(rmax)
+                    self.win_list.append(Window(name=f'{rmin}-{rmax} MHz',
+                                                x_mod=self.x_mod[(self.x_mod >= min(r)) & (self.x_mod <= max(r))]))
+            else:
+                self.win_list = [Window(name='Full spectrum')]
             return
 
         self.get_rms_cal_info()
@@ -606,22 +664,23 @@ class ModelConfiguration:
                         win.f_range_fit = f_range
 
                         # get rms and cal for windows to be fitted
-                        try:
-                            if 'freq_range' in self._rms_cal.columns:
-                                rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
-                                                        & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
-                            else:
-                                rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
+                        if self._rms_cal is not None:
+                            try:
+                                if 'freq_range' in self._rms_cal.columns:
+                                    rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
+                                                            & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
+                                else:
+                                    rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
+                                    if len(rms_cal) == 0:
+                                        rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
                                 if len(rms_cal) == 0:
-                                    rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
-                            if len(rms_cal) == 0:
-                                raise IndexError(f"rms/cal info not found for {win.transition}.")
-                            win.rms = rms_cal['rms'].values[0]
-                            # if self.jypb is not None:
-                            #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
-                            win.cal = rms_cal['cal'].values[0]
-                        except KeyError:
-                            raise KeyError(f"rms/cal info not found.")
+                                    raise IndexError(f"rms/cal info not found for {win.transition}.")
+                                win.rms = rms_cal['rms'].values[0]
+                                # if self.jypb is not None:
+                                #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
+                                win.cal = rms_cal['cal'].values[0]
+                            except KeyError:
+                                raise KeyError(f"rms/cal info not found.")
 
     def get_data_to_fit(self):
         # find windows with data to be fitted
@@ -687,13 +746,20 @@ class Component:
         }
 
     def update_parameters(self, new_pars):
-        self.vlsr.set(value=new_pars['{}_vlsr'.format(self.name)].value, is_init_value=False)
-        self.size.set(value=new_pars['{}_size'.format(self.name)].value, is_init_value=False)
-        self.tex.set(value=new_pars['{}_tex'.format(self.name)].value, is_init_value=False)
+        self._vlsr = new_pars['{}_vlsr'.format(self.name)]
+        self._size = new_pars['{}_size'.format(self.name)]
+        self._tex = new_pars['{}_tex'.format(self.name)]
         for sp in self.species_list:
-            sp.ntot.set(value=new_pars['{}_ntot_{}'.format(self.name, sp.tag)].value, is_init_value=False)
-            sp.fwhm.set(value=new_pars['{}_fwhm_{}'.format(self.name, sp.tag)].value, is_init_value=False)
-            # sp.tex = new_pars['{}_tex'.format(self.name, sp.tag)].value
+            sp._ntot = new_pars['{}_ntot_{}'.format(self.name, sp.tag)]
+            sp._fwhm = new_pars['{}_fwhm_{}'.format(self.name, sp.tag)]
+
+        # self.vlsr.set(value=new_pars['{}_vlsr'.format(self.name)].value, is_init_value=False)
+        # self.size.set(value=new_pars['{}_size'.format(self.name)].value, is_init_value=False)
+        # self.tex.set(value=new_pars['{}_tex'.format(self.name)].value, is_init_value=False)
+        # for sp in self.species_list:
+        #     sp.ntot.set(value=new_pars['{}_ntot_{}'.format(self.name, sp.tag)].value, is_init_value=False)
+        #     sp.fwhm.set(value=new_pars['{}_fwhm_{}'.format(self.name, sp.tag)].value, is_init_value=False)
+        #     # sp.tex = new_pars['{}_tex'.format(self.name, sp.tag)].value
 
     @property
     def vlsr(self):
@@ -738,7 +804,8 @@ class Component:
 
 
 class Window:
-    def __init__(self, transition=None, plot_nb=0, name="", v_range_fit=None, f_range_fit=None, rms=None, cal=None):
+    def __init__(self, transition=None, plot_nb=0, name="", v_range_fit=None, f_range_fit=None, rms=None, cal=None,
+                 x_mod=None):
         self.transition = transition
         self.plot_nb = plot_nb
         self._name = name
@@ -754,7 +821,7 @@ class Window:
         self._x_fit = None
         self._y_fit = None
         self._in_fit = False
-        self._x_mod = None
+        self._x_mod = x_mod
         self._y_mod = None
         self._y_mod_err = None
         self.y_mod_cpt = []
