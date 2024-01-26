@@ -812,9 +812,9 @@ class ModelSpectrum(object):
         else:
             thresholds_other = self.thresholds_other if self.thresholds_other is not None else {}
 
-        for t in self.tag_list:
-            if t in thresholds_other:
-                thresholds_other.pop(t)
+        # for t in self.tag_list:
+        #     if t in thresholds_other:
+        #         thresholds_other.pop(t)
         list_other_species = list(thresholds_other.keys())
 
         # lines from other species : if many other species, more efficient to first find all transitions
@@ -938,11 +938,10 @@ class ModelSpectrum(object):
                                                    xrange=[min(win.f_range_plot), max(win.f_range_plot)],
                                                    vlsr=vlsr if self.vlsr_file == 0 else None)
 
-            # if tag of fitted species in other species, concatenate with user lines, dropping duplicates
-            for tag in self.model_config.tag_list:
-                if not other_species_win.empty and tag in other_species_win.tag.unique():
-                    other_species_win = pd.concat([model_lines_user,
-                                                   other_species_win]).drop_duplicates(subset='db_id', keep=False)
+            # Concatenate with user lines, dropping duplicates
+            if not other_species_win.empty:
+                other_species_win = pd.concat([model_lines_user,
+                                               other_species_win]).drop_duplicates(subset='db_id', keep=False)
             # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
             # other_species_win = pd.concat([model_lines_other,
             #                                other_species_win_all]).drop_duplicates(subset='db_id', keep='first')
