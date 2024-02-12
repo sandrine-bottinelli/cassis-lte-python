@@ -938,13 +938,14 @@ class ModelSpectrum(object):
                                                    xrange=[min(win.f_range_plot), max(win.f_range_plot)],
                                                    vlsr=vlsr if self.vlsr_file == 0 else None)
 
-            # Concatenate with user lines, dropping duplicates
+            # Drop transition if already in model_lines_user
             if not other_species_win.empty:
-                other_species_win = pd.concat([model_lines_user,
-                                               other_species_win]).drop_duplicates(subset='db_id', keep=False)
-            # concatenate with model lines outside thresholds, keeping first occurrence of duplicates
-            # other_species_win = pd.concat([model_lines_other,
-            #                                other_species_win_all]).drop_duplicates(subset='db_id', keep='first')
+                for i, row in other_species_win.iterrows():
+                    if row['db_id'] in list(model_lines_user['db_id']):
+                        other_species_win.drop([i], inplace=True)
+                # NB: cannot use the following because not all lines in model_lines_user are in other_species_win
+                # other_species_win = pd.concat([model_lines_user,
+                #                                other_species_win]).drop_duplicates(subset='db_id', keep=False)
 
             win_colors = {t: PLOT_COLORS[itag] for itag, t in enumerate(model_lines_user.tag.unique())}
             if len(self.cpt_list) > 0:
