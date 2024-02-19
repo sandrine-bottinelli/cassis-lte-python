@@ -575,7 +575,7 @@ class ModelSpectrum(object):
                 end_line = f"{utils.format_float(float(err), nb_signif_digits=2): <8} {rest}"
                 new_lines.append(" +/- ".join([begin_line, end_line]))
 
-            elif 'init' in line:  # no uncertainties, reformat as well
+            elif '(init' in line:  # no uncertainties, reformat as well
                 begin_line, end_line = line.split(sep=" (")
                 label, val = begin_line.rsplit(sep=' ', maxsplit=1)
                 begin_line = f"{label} {utils.format_float(float(val), nb_signif_digits=2): <8}"
