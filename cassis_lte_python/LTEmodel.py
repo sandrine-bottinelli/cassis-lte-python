@@ -601,59 +601,62 @@ class ModelSpectrum(object):
         """From lmfit.model"""
         res = []
 
-        for cpt in self.cpt_list:
-            params = Parameters()
-            for par in self.params:
-                if cpt.name in par:
-                    params[par] = self.params[par]
+        if self.model_fit.covar is not None:
+            for cpt in self.cpt_list:
+                params = Parameters()
+                for par in self.params:
+                    if cpt.name in par:
+                        params[par] = self.params[par]
 
-            indices = [i for i, var_name in enumerate(self.model_fit.var_names) if cpt.name in var_name]
-            var_names = [self.model_fit.var_names[i] for i in indices]
-            nvarys = len(var_names)
-            cpt_model_func = generate_lte_model_func(self.model_info(cpt=cpt))
+                indices = [i for i, var_name in enumerate(self.model_fit.var_names) if cpt.name in var_name]
+                var_names = [self.model_fit.var_names[i] for i in indices]
+                nvarys = len(var_names)
+                cpt_model_func = generate_lte_model_func(self.model_info(cpt=cpt))
 
-            # ensure fjac and df2 are correct size if independent var updated by kwargs
-            feval = cpt_model_func(fmhz=fmhz, log=False, **params)
-            ndata = len(feval.view('float64'))        # allows feval to be complex
-            covar = np.zeros((nvarys, nvarys))
-            for i in range(nvarys):
-                for j in range(nvarys):
-                    covar[i, j] = self.model_fit.covar[indices[i], indices[j]]
-            if any(p.stderr is None for p in params.values()):
-                res.append(np.zeros(ndata))
-                continue
+                # ensure fjac and df2 are correct size if independent var updated by kwargs
+                feval = cpt_model_func(fmhz=fmhz, log=False, **params)
+                ndata = len(feval.view('float64'))        # allows feval to be complex
+                covar = np.zeros((nvarys, nvarys))
+                for i in range(nvarys):
+                    for j in range(nvarys):
+                        covar[i, j] = self.model_fit.covar[indices[i], indices[j]]
+                if any(p.stderr is None for p in params.values()):
+                    res.append(np.zeros(ndata))
+                    continue
 
-            fjac = np.zeros((nvarys, ndata), dtype='float64')
-            df2 = np.zeros(ndata, dtype='float64')
+                fjac = np.zeros((nvarys, ndata), dtype='float64')
+                df2 = np.zeros(ndata, dtype='float64')
 
-            # find derivative by hand!
-            pars = params.copy()
-            for i in range(nvarys):
-                pname = var_names[i]
-                val0 = pars[pname].value
-                dval = pars[pname].stderr/3.0
-                pars[pname].value = val0 + dval
-                res1 = cpt_model_func(fmhz=fmhz, log=False, **pars)
+                # find derivative by hand!
+                pars = params.copy()
+                for i in range(nvarys):
+                    pname = var_names[i]
+                    val0 = pars[pname].value
+                    dval = pars[pname].stderr/3.0
+                    pars[pname].value = val0 + dval
+                    res1 = cpt_model_func(fmhz=fmhz, log=False, **pars)
 
-                pars[pname].value = val0 - dval
-                res2 = cpt_model_func(fmhz=fmhz, log=False, **pars)
+                    pars[pname].value = val0 - dval
+                    res2 = cpt_model_func(fmhz=fmhz, log=False, **pars)
 
-                pars[pname].value = val0
-                fjac[i] = (res1.view('float64') - res2.view('float64')) / (2*dval)
+                    pars[pname].value = val0
+                    fjac[i] = (res1.view('float64') - res2.view('float64')) / (2*dval)
 
-            for i in range(nvarys):
-                for j in range(nvarys):
-                    df2 += fjac[i] * fjac[j] * covar[i, j]
+                for i in range(nvarys):
+                    for j in range(nvarys):
+                        df2 += fjac[i] * fjac[j] * covar[i, j]
 
-            if sigma < 1.0:
-                prob = sigma
-            else:
-                prob = erf(sigma/np.sqrt(2))
+                if sigma < 1.0:
+                    prob = sigma
+                else:
+                    prob = erf(sigma/np.sqrt(2))
 
-            scale = t.ppf((prob+1)/2.0, self.model_fit.ndata-nvarys)
+                scale = t.ppf((prob+1)/2.0, self.model_fit.ndata-nvarys)
 
-            res.append(scale * np.sqrt(df2))
+                res.append(scale * np.sqrt(df2))
 
+        else:
+            print("## Warning: could not compute model errors.")
         return res
 
     def compute_model_intensities(self, params=None, x_values=None, line_list=None, line_center_only=False,
