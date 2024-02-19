@@ -77,7 +77,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
 
     # plot range used (or not) for chi2 calculation
     v_range = win.v_range_fit
-    if v_range is not None:
+    if v_range is not None and win.in_fit:
         ax.axvspan(v_range[0], v_range[1], facecolor='green', alpha=0.075)
     for f_range in win.f_ranges_nofit:
         ax.axvspan(f_range[0], f_range[1], facecolor='red', alpha=0.05)

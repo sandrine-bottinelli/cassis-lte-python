@@ -206,12 +206,7 @@ class ModelSpectrum(object):
                                      funcdefs={'lte_model_func': generate_lte_model_func(self.model_info())})
 
         if self.minimize:
-            t_start = process_time()
-            # Perform the fit
-            self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
-            t_stop = process_time()
-            if self.exec_time:
-                print("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
+            self.do_minimization()
             if self.save_results:
                 filename = ''
                 if self.name_lam is not None:
@@ -294,7 +289,9 @@ class ModelSpectrum(object):
             'tc': os.path.abspath(self.cont_info) if isinstance(self.cont_info, (str, os.PathLike)) else self.cont_info,
             'tcmb': self.tcmb,
             'tuning_info': self.model_config._tuning_info_user,
-            'v_range': self.model_config._v_range_user,
+            # 'v_range': self.model_config._v_range_user,
+            'v_range': {tag: {win.name.split()[-1]: win.v_range_fit for win in self.model_config.win_list_fit}
+                        for tag in self.model_config.tag_list},
             'chi2_info': self.model_config._rms_cal_user,
             'bandwidth': self.bandwidth,
             'oversampling': self.oversampling,
@@ -414,18 +411,6 @@ class ModelSpectrum(object):
             par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
                     max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
 
-        if self.minimize:
-            if self.log:
-                for par in params:
-                    if 'tex' in par or 'ntot' in par:
-                        params[par].user_data = {'value': params[par].value,
-                                                      'min': params[par].min,
-                                                      'max': params[par].max}
-                        if params[par].expr is None:
-                            params[par].set(value=np.log10(params[par].value),
-                                            min=np.log10(params[par].min),
-                                            max=np.log10(params[par].max))
-
         # reset bounds if a parameters contains an expression to make sure it does not interfere
         for par in params:
             if params[par].expr is not None:
@@ -453,14 +438,68 @@ class ModelSpectrum(object):
                                              ]
                            )
 
-    def fit_model(self, max_nfev=None, fit_kws=None, print_report=True, report_kws=None):
+    def do_minimization(self, print_report=True, report_kws=None):
+        t_start = process_time()
+        # Perform the fit
+        self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
+        t_stop = process_time()
+        if self.exec_time:
+            print("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
+
+        # If finite tau_lim, check if some lines have tau0 > tau_lim, if so, drop them from win_list_fit
+        # and re-do minimization
+        if self.model_config.tau_lim < np.inf:
+            print("Checking line-center opacities...")
+            rerun = True
+            while rerun:
+                for win in self.model_config.win_list_fit:
+                    for cpt in self.model_config.cpt_list:
+                        par_names = [f'{cpt.name}_ntot_{win.transition.tag}',
+                                     f'{cpt.name}_fwhm_{win.transition.tag}',
+                                     f'{cpt.name}_tex']
+                        par_vals = []
+                        for pname in par_names:
+                            par = self.model_fit.params[pname]
+                            if par.user_data is not None and par.user_data.get('log', False):
+                                val = 10 ** par.value if par.vary or par.expr is not None else par.user_data['value']
+                            else:
+                                val = par.value
+                            par_vals.append(val)
+                        tau0 = utils.compute_tau0(win.transition, par_vals[0], par_vals[1], par_vals[2])
+                        if tau0 > self.model_config.tau_lim:
+                            win.in_fit = False
+                            break
+                if len([w for w in self.model_config.win_list if w.in_fit]) < len(self.model_config.win_list_fit):
+                    print("Some opacities are above the user-defined limit. Re-run the minimization.")
+                    # update data to be fitted and min/max values if factor
+                    self.model_config.get_data_to_fit(update=True)
+                    for par in self.params:
+                        p = self.params[par]
+                        if p.user_data is not None and 'factor' in p.user_data:
+                            p.set(min=p.value*p.user_data.get('min_fact', 1.),
+                                  max=p.value*p.user_data.get('max_fact', 1.))
+                    t_start = process_time()
+                    # Perform the fit
+                    self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
+                    t_stop = process_time()
+                    if self.exec_time:
+                        print("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
+                else:
+                    print("All line-center are below the user-defined limit.")
+                    rerun = False
+
+        # reset norm factors and log scale
+        self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
+        self.log = False
+
+        if print_report:
+            print(self.fit_report(report_kws=report_kws))
+
+    def fit_model(self, max_nfev=None, fit_kws=None):
         """
         Computes weights and perform the fit.
         :param max_nfev: maximum number of iterations (default value depends on the algorithm)
         :param fit_kws: keywords for the fit function
-        :param print_report: whether to print the statistics and best values (default=True)
-        :param report_kws: keywords for the fit_report function
-        :param method: name of the fitting method
         :return:
         """
 
@@ -468,6 +507,23 @@ class ModelSpectrum(object):
             # Function called after each iteration to print the iteration number every 100 iterations
             if iter % 100 == 0:
                 print(f"    Iteration {int(iter // 100) * 100 + 1}...")
+
+        if self.log:  # take log10 for tex and ntot
+            params = self.params
+            for par in params:
+                if 'tex' in par or 'ntot' in par:
+                    user_data = {'value': params[par].value,
+                                 'min': params[par].min,
+                                 'max': params[par].max,
+                                 'log': True}
+                    if params[par].user_data is None:
+                        params[par].user_data = user_data
+                    else:
+                        params[par].user_data = {**user_data, **params[par].user_data}
+                    if params[par].expr is None:
+                        params[par].set(value=np.log10(params[par].value),
+                                        min=np.log10(params[par].min),
+                                        max=np.log10(params[par].max))
 
         if len(self.win_list_fit) > 1:
             wt = np.concatenate([utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
@@ -528,7 +584,7 @@ class ModelSpectrum(object):
                 if pfit.stderr is not None:
                     p.stderr = nf * pfit.stderr
 
-            if p.user_data is not None:
+            if p.user_data is not None and p.user_data.get('log', False):
                 p.init_value = p.user_data['value']
                 if pfit.stderr is not None:
                     p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
@@ -542,13 +598,6 @@ class ModelSpectrum(object):
         # update vlr_plot
         if self.vlsr_file == 0:
             self.model_config.vlsr_plot = self.cpt_list[0].vlsr
-
-        # reset norm factors and log scale
-        self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
-        self.log = False
-
-        if print_report:
-            print(self.fit_report(report_kws=report_kws))
 
     def fit_report(self, report_kws=None):
         fit_params = self.model_fit.params.copy()

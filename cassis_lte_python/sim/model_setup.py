@@ -166,6 +166,7 @@ class ModelConfiguration:
         self.modeling = configuration.get('modeling', False)
 
         self.minimize = configuration.get('minimize', False)
+        self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)
         self.fit_kws = configuration.get('fit_kws', None)
         self.save_configs = configuration.get('save_configs', True) or configuration.get('save_res_configs', True)
@@ -682,12 +683,13 @@ class ModelConfiguration:
                             except KeyError:
                                 raise KeyError(f"rms/cal info not found.")
 
-    def get_data_to_fit(self):
+    def get_data_to_fit(self, update=False):
         # find windows with data to be fitted
-        for win in self.win_list:
-            if win.f_range_fit is not None:
-                win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, win.f_range_fit,
-                                                                y_values=self.y_file)
+        if not update:
+            for win in self.win_list:
+                if win.f_range_fit is not None:
+                    win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, win.f_range_fit,
+                                                                    y_values=self.y_file)
 
         self.win_list_fit = [w for w in self.win_list if w.in_fit]
 
@@ -916,6 +918,11 @@ class Window:
     @property
     def in_fit(self):
         return self._in_fit
+
+    @in_fit.setter
+    def in_fit(self, value):
+        if isinstance(value, bool) and value != self._in_fit:
+            self._in_fit = value
 
     @property
     def x_mod(self):
