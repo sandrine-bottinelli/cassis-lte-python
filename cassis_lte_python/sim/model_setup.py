@@ -143,6 +143,10 @@ class ModelConfiguration:
             for tag in self.tag_list:
                 self.thresholds[str(tag)] = THRESHOLDS_DEF
 
+        self.sort = configuration.get('sort', 'frequency')
+        sort_parameters = ['frequency', 'eup', 'aij']
+        if self.sort not in sort_parameters:
+            print("Sort should be one of the following :", ", ".join(sort_parameters))
         self.line_list_all = None
         self.tr_list_by_tag = None
 
@@ -432,6 +436,10 @@ class ModelConfiguration:
             x_vals = self.x_mod
 
         tr_list_tresh = get_transition_df(self.tag_list, [[min(x_vals), max(x_vals)]], **self.thresholds)
+        if self.sort == 'frequency':
+            tr_list_tresh.sort_values('fMHz', inplace=True)
+        else:
+            tr_list_tresh.sort_values(self.sort, inplace=True)
         # for comparison with CASSIS look for number of transitions w/i min/max of data :
         if self.x_file is not None:
             print(f"{len(tr_list_tresh)} transitions within thresholds ",
@@ -446,9 +454,13 @@ class ModelConfiguration:
             for f_range in self.tuning_info['fmhz_range']:
                 x_sub = x_vals[(x_vals >= min(f_range)) & (x_vals <= max(f_range))]
                 f_range_search.append([min(x_sub), max(x_sub)])
-            tr_list_tresh = select_transitions(tr_list_tresh)
+            tr_list_tresh = select_transitions(tr_list_tresh, xrange=f_range_search)
             print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
                   f"{self.tuning_info['fmhz_range'].tolist()}")
+            if self.sort == 'frequency':
+                tr_list_tresh.sort_values('fMHz', inplace=True)
+            else:
+                tr_list_tresh.sort_values(self.sort, inplace=True)
 
         # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
         self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
@@ -645,6 +657,9 @@ class ModelConfiguration:
             self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=win_list_limits)
             self.line_list_all = self.line_list_all.drop_duplicates(subset='db_id', keep='first')
 
+        if self.sort != 'frequency':
+            self.line_list_all.sort_values(self.sort, inplace=True)
+
         return
 
     def get_velocity_ranges(self):
@@ -785,9 +800,9 @@ class Component:
         self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
         return self._tmin
 
-    def get_transitions(self, fmhz_ranges, **thresholds):
-        self.transition_list = get_transition_df(self.species_list, fmhz_ranges, **thresholds)
-        return self.transition_list
+    # def get_transitions(self, fmhz_ranges, **thresholds):  # not used -> keep??
+    #     self.transition_list = get_transition_df(self.species_list, fmhz_ranges, **thresholds)
+    #     return self.transition_list
 
     def get_fwhm(self, transition):
         tag = transition.tag
