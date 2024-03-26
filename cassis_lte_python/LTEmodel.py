@@ -31,12 +31,13 @@ def generate_lte_model_func(config):
 
     def lte_model_func(fmhz, log=False, cpt=None, line_center_only=False, **params):
         norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
-        vlsr_file = config['vlsr_file']
+        vlsr_file = config.get('vlsr_file', 0.)
         tc = config['tc'](fmhz)
         beam_sizes = config['beam_sizes'](fmhz)
-        tmb2ta = config['tmb2ta'](fmhz)
-        jypb2k = config['jypb2k'](fmhz)
-        tcmb = config['tcmb']
+        tmb2ta = config.get('tmb2ta', lambda x: 1.)(fmhz)
+        jypb2k = config.get('jypb2k', lambda x: 1.)(fmhz)
+        noise = config.get('noise', lambda x: 0.)(fmhz)
+        tcmb = config.get('tcmb', 2.73)
         line_list = config['line_list']
         cpt_list = config['cpt_list']
         if not isinstance(cpt_list, list):
@@ -100,7 +101,7 @@ def generate_lte_model_func(config):
                 intensity = ff * intensity_cpt
 
         intensity = intensity + intensity_before - utils.jnu(fmhz, tcmb)
-        intensity += normal(0., config['noise'](fmhz), len(intensity))  # add gaussian noise
+        intensity += normal(0., noise, len(intensity))  # add gaussian noise
         intensity *= tmb2ta  # convert to Ta
         intensity /= jypb2k  # convert to Jy/beam
 

@@ -413,15 +413,7 @@ class ModelConfiguration:
             else:
                 self.tmb2ta = lambda x: 1.
 
-            if 'Bmin (arcsec)' in tuning_data.columns:
-                self.bmin = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Bmin (arcsec)'])
-            if 'Bmaj (arcsec)' in tuning_data.columns:
-                self.bmaj = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Bmaj (arcsec)'])
-            if self.bmin is not None and self.bmaj is not None:  # explicit beam major and minor axes
-                self.beam = lambda f: np.sqrt(self.bmin(f) * self.bmaj(f))
-            else:  # beam size from telescope diameter
-                self.beam = lambda f: utils.get_beam_size(f, interp1d(tuning_data['Frequency (MHz)'],
-                                                                      tuning_data['Diameter (m)'])(f))
+            self.beam = utils.beam_function(tuning_data)
 
             self.jypb = lambda f: 1.  # utils.compute_jypb2k(f, )
             pass

@@ -12,6 +12,7 @@ from astropy import units as u
 import pandas as pd
 from regions import Regions, PixCoord, EllipseSkyRegion
 from astropy.wcs import WCS
+from scipy.interpolate import interp1d
 from datetime import timedelta
 
 
@@ -641,6 +642,21 @@ def get_tmb2ta_factor(freq_mhz: float | int, tel_data: pd.DataFrame) -> float:
     f_tel = tel_data[tel_data.columns[0]]
     beff_tel = tel_data[tel_data.columns[1]]
     return np.interp(freq_mhz, f_tel, beff_tel)
+
+
+def beam_function(tel_data: pd.DataFrame):
+    bmin, bmaj = None, None
+    if 'Bmin (arcsec)' in tel_data.columns:
+        bmin = interp1d(tel_data['Frequency (MHz)'], tel_data['Bmin (arcsec)'])
+    if 'Bmaj (arcsec)' in tel_data.columns:
+        bmaj = interp1d(tel_data['Frequency (MHz)'], tel_data['Bmaj (arcsec)'])
+
+    if bmin is not None and bmaj is not None:  # explicit beam major and minor axes
+        beam = lambda f: np.sqrt(bmin(f) * bmaj(f))
+    else:  # beam size from telescope diameter
+        beam = lambda f: get_beam_size(f, interp1d(tel_data['Frequency (MHz)'],
+                                                   tel_data['Diameter (m)'])(f))
+    return beam
 
 
 def get_beam(freq_mhz: float | int, tel_data: pd.DataFrame):
