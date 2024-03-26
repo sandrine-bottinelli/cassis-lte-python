@@ -29,7 +29,7 @@ import copy
 
 def generate_lte_model_func(config):
 
-    def lte_model_func(fmhz, log=False, cpt=None, line_center_only=False, **params):
+    def lte_model_func(fmhz, log=False, cpt=None, line_center_only=False, return_tau=False, **params):
         norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
         vlsr_file = config.get('vlsr_file', 0.)
         tc = config['tc'](fmhz)
@@ -44,8 +44,8 @@ def generate_lte_model_func(config):
             cpt_list = [cpt_list]
         if cpt is not None:
             cpt_list = [cpt]
-        tau_max = config['tau_max']
-        file_rejected = config['file_rejected']
+        tau_max = config.get('tau_max', None)
+        file_rejected = config.get('file_rejected', None)
         intensity_before = tc + utils.jnu(fmhz, tcmb)
         intensity = 0.
         for icpt, cpt in enumerate(cpt_list):
@@ -105,7 +105,9 @@ def generate_lte_model_func(config):
         intensity *= tmb2ta  # convert to Ta
         intensity /= jypb2k  # convert to Jy/beam
 
-        return intensity
+        if return_tau:
+            intensity = (intensity, sum_tau)
+        return intensity  #, sum_tau if return_tau else intensity
 
     return lte_model_func
 
@@ -437,7 +439,7 @@ class ModelSpectrum(object):
             self.make_params(normalize=normalize)
 
         self.model = Model(generate_lte_model_func(self.model_info()),
-                           independent_vars=['fmhz', 'log', 'cpt', 'line_center_only'
+                           independent_vars=['fmhz', 'log', 'cpt', 'line_center_only', 'return_tau'
                                              # 'tc', 'beam_sizes', 'tmb2ta', 'jypb2k'
                                              ]
                            )
@@ -545,7 +547,7 @@ class ModelSpectrum(object):
         self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=True,
                                         # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
                                         # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
-                                        cpt=None, line_center_only=False,
+                                        cpt=None, line_center_only=False, return_tau=False,
                                         weights=wt,
                                         method=method,
                                         max_nfev=max_nfev, fit_kws=fit_kws,
@@ -724,7 +726,7 @@ class ModelSpectrum(object):
         if params is None:
             params = self.params
 
-        return self.model.func(x_values, log=False, cpt=cpt, line_center_only=line_center_only,
+        return self.model.func(x_values, log=False, cpt=cpt, line_center_only=line_center_only, return_tau=False,
                                **params)
         # if cpt is not None:
         #     c_best_pars = {}
