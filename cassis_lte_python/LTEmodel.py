@@ -259,11 +259,14 @@ class ModelSpectrum(object):
                         else:
                             self.setup_plot_fus()
                     # Compute errors if necessary
-                    for win in self.model_config.win_list_file:
-                        if win.y_mod_err is None and self.file_kws['model_err']:
-                            win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
-                        if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
-                            win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
+                    if self.model_fit.covar is not None:
+                        for win in self.model_config.win_list_file:
+                            if win.y_mod_err is None and self.file_kws['model_err']:
+                                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
+                            if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
+                                win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
+                    else:
+                        print("## Warning: could not compute model errors.")
 
                     if self.exec_time:
                         print(f"Execution time for preparing file plot : {utils.format_time(process_time() - t_start)}.")
@@ -705,8 +708,6 @@ class ModelSpectrum(object):
 
                 res.append(scale * np.sqrt(df2))
 
-        else:
-            print("## Warning: could not compute model errors.")
         return res
 
     def compute_model_intensities(self, params=None, x_values=None, line_list=None, line_center_only=False,
