@@ -44,7 +44,7 @@ class ModelConfiguration:
 
         self.data_file = configuration.get('data_file', None)
         self.data_file_obj = None
-        self.xunit = 'Mhz'
+        self.xunit = 'MHz'
         self.yunit = 'K'
         self.x_file = None
         self.y_file = None
@@ -247,7 +247,6 @@ class ModelConfiguration:
 
         if 'data_file' in self._configuration_dict or 'x_obs' in self._configuration_dict:
             self.get_data()
-            self.yunit = self.data_file_obj.yunit
 
         if self.vlsr_plot == 0. and 'components' in configuration:
             self.vlsr_plot = self.cpt_list[0].vlsr
@@ -274,6 +273,8 @@ class ModelConfiguration:
             self.data_file_obj = utils.DataFile(self.data_file)
             self.x_file, self.y_file = self.data_file_obj.xdata_mhz, self.data_file_obj.ydata
             self.vlsr_file = self.data_file_obj.vlsr
+            self.yunit = self.data_file_obj.yunit
+
         self.vlsr_plot = self.vlsr_file
 
         if self.x_file is not None and isinstance(self.x_file[0], np.ndarray):
