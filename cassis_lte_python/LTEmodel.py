@@ -1277,9 +1277,10 @@ class ModelSpectrum(object):
                 if win.x_mod is None:
                     win.x_mod = np.linspace(min(win.x_file), max(win.x_file),
                                 num=self.oversampling * (len(win.x_file) - 1) + 1)
-                    mdl_info = self.model_info(win.x_mod)
+                    mdl_info = self.model_info()
                     model = Model(generate_lte_model_func(mdl_info))
                     y_mod = model.eval(params, fmhz=win.x_mod)
+                    win.y_mod = y_mod
                     if len(self.cpt_list) > 1:
                         y_mod = y_mod.reshape(len(y_mod), 1)
                         for cpt in self.cpt_list:
@@ -1291,12 +1292,15 @@ class ModelSpectrum(object):
                             c_lte_func = generate_lte_model_func(mdl_info)
                             y_cpt = c_lte_func(win.x_mod, **c_best_pars)
                             y_mod = np.hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
-                    win.y_mod = y_mod
+                            win.y_mod_cpt.append[y_cpt]
+                y_mod = win.y_mod.reshape(len(win.y_mod), 1)
+                for y_cpt in win.y_mod_cpt:
+                    y_mod = np.hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
                 x_values.extend(win.x_mod)
-                y_values.extend(win.y_mod)
+                y_values.extend(y_mod)
         else:
             # y_values = self.compute_model_intensities(params=params, x_values=x_values)
-            mdl_info = self.model_info(x_values)
+            mdl_info = self.model_info()
             model = Model(generate_lte_model_func(mdl_info))
             y_values = model.eval(params, fmhz=x_values)
             if len(self.cpt_list) > 1:
