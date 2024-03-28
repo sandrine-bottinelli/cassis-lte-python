@@ -1070,6 +1070,10 @@ class ModelSpectrum(object):
         :return:
         """
         tag = kwargs.get('tag', None)
+        if tag is not None:
+            if not isinstance(tag, list):
+                tag = [tag]
+            tag = [str(t) for t in tag]
         display_all = kwargs.get('display_all', True)
         windows = kwargs.get('windows', None).copy()
 
@@ -1078,7 +1082,7 @@ class ModelSpectrum(object):
         if not display_all:  # only display windows with fitted data
             win_list_plot = [w for w in win_list_plot if w.in_fit]
 
-        if tag is not None:  # user only wants one tag
+        if tag is not None:  # user only wants some tags
             win_list_plot = [w for w in win_list_plot if w.transition.tag in tag]
 
         if windows is not None and len(windows) > 0:

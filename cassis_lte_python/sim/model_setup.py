@@ -719,6 +719,8 @@ class Component:
         # super().__init__()
         self.name = name
         self.species_list = []
+        if not isinstance(species_list, list):
+            species_list = [species_list]
         for sp in species_list:
             if isinstance(sp, Species):
                 sp2add = sp
