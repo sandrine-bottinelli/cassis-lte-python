@@ -281,6 +281,11 @@ class ModelConfiguration:
         if self.y_file is not None and isinstance(self.y_file[0], np.ndarray):
             self.y_file = np.concatenate(self.y_file)
 
+        if self.x_file is not None:
+            idx = self.x_file.argsort()
+            self.x_file = self.x_file[idx]
+            self.y_file = self.y_file[idx]
+
         if self.x_file is not None and len(self.tuning_info) > 0:
             # select data within telescope range
             x_sub, y_sub = utils.select_from_ranges(self.x_file, self.tuning_info['fmhz_range'].array,
@@ -649,8 +654,7 @@ class ModelConfiguration:
             self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=win_list_limits)
             self.line_list_all = self.line_list_all.drop_duplicates(subset='db_id', keep='first')
 
-        if self.sort != 'frequency':
-            self.line_list_all.sort_values(self.sort, inplace=True)
+        self.line_list_all.sort_values(self.sort, inplace=True)
 
         return
 
@@ -697,6 +701,10 @@ class ModelConfiguration:
                 if win.f_range_fit is not None:
                     win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, win.f_range_fit,
                                                                     y_values=self.y_file)
+                    # with open('freq2fit.txt', 'a') as f:
+                    #     f.write(win.name + f' - {win.f_range_fit}\n')
+                    #     f.writelines('\n'.join([str(freq) for freq in win.x_fit]))
+                    #     f.write('\n\n')
 
         self.win_list_fit = [w for w in self.win_list if w.in_fit]
 

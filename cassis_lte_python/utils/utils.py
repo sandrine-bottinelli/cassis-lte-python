@@ -329,14 +329,17 @@ def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
         imin = find_nearest_id(x_values, min(x_range))
         imax = find_nearest_id(x_values, max(x_range))
         x_sub = x_values[imin:imax+1]
+        # x_sub = x_values[(x_values >= min(x_range)) & (x_values <= max(x_range))]
         if len(x_sub) == 0:
             continue
+        xmin, xmax = min(x_sub), max(x_sub)
         if oversampling is not None:
-            xmin, xmax = min(x_sub), max(x_sub)
+            # xmin, xmax = min(x_sub), max(x_sub)
             x_sub = np.linspace(xmin, xmax, num=len(x_sub)*oversampling, endpoint=True)
         x_new = np.append(x_new, x_sub)
         if y_values is not None:
             y_sub = y_values[imin:imax+1]
+            # y_sub = y_values[(x_values >= xmin) & (x_values <= xmax)]
             y_new = np.append(y_new, y_sub)
 
     return x_new, y_new if y_values is not None else x_new
