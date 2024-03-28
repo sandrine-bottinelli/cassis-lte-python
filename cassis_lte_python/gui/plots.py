@@ -15,7 +15,7 @@ from matplotlib.backends.backend_tkagg import (
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import ticker
 import matplotlib
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 
 
 # Matplotlib global parameters
@@ -310,7 +310,7 @@ def gui_plot(lte_model):
         if len(name) > len_max:
             len_max = len(name)
     # Create a Listbox and attaching it to its frame
-    var = tkinter.StringVar()
+    var = tkinter.StringVar(root)
     var.set(win_names)
     win_list = tkinter.Listbox(win_frame, width=len_max, selectmode='single', activestyle='none',
                                listvariable=var)
