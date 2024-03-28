@@ -1473,7 +1473,7 @@ class ModelSpectrum(object):
         with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
             f.writelines(self.fit_report(report_kws={'show_correl': True}))
 
-    def write_cassis_file(self, filename, dirname=None):
+    def write_cassis_file(self, filename, dirname=None, datafile=None):
         def lam_item(name, value):
             if isinstance(value, float):
                 fmt = '{:.3e}' if (value >= 1.e4 or value <= 1.e-2) else '{:.2f}'
@@ -1507,12 +1507,20 @@ class ModelSpectrum(object):
                 'resolutionUnit': 'MHZ'
             }
         else:
+            if datafile is not None:
+                nameData = datafile
+            elif isinstance(self.data_file, str):
+                nameData = os.path.abspath(self.data_file)
+            else:
+                nameData = ''
             tuning = {
-                'nameData': os.path.abspath(self.data_file) if isinstance(self.data_file, str) else '',
+                'nameData': nameData,
                 'telescopeData': '',  # TBD when writing the lam file
                 'typeFrequency': 'SKY' if self.vlsr_file == 0. else 'REST',
-                'minValue': min(self.x_file) / 1000.,
-                'maxValue': max(self.x_file) / 1000.,
+                # 'minValue': min(self.x_file) / 1000.,
+                # 'maxValue': max(self.x_file) / 1000.,
+                'minValue': '',  # TBD when writing the lam file
+                'maxValue': '',  # TBD when writing the lam file
                 'valUnit': 'GHZ',
                 'bandValue': self.bandwidth,
                 'bandUnit': 'KM_SEC_MOINS_1'
@@ -1556,7 +1564,7 @@ class ModelSpectrum(object):
 
         lte_radex = {
             'telescope': '',  # TBD when writing the file
-            'tmbBox': 'false',
+            'tmbBox': 'true' if self.tmb2ta else 'false',
             'observing': 'PSDBS',
             'tbg': self.tcmb,
             'tbgUnit': 'K',
@@ -1570,7 +1578,7 @@ class ModelSpectrum(object):
         # Define continuum
         if isinstance(self.model_config.cont_info, (float, int)):
             cont_type = 'CONSTANT'
-            cont_size = self.tc  # in fact the continuum value
+            cont_size = f'{self.model_config.cont_info:.2g}'
             cont = 'Continuum 0 [K]'  # default
         else:  # it is a file
             cont_type = 'FILE'
@@ -1638,6 +1646,11 @@ class ModelSpectrum(object):
                 if 'telescope' in tuning:
                     tuning['telescope'] = tel_path
                 lte_radex['telescope'] = tel_path
+                tel_info = self.model_config.tuning_info[self.model_config.tuning_info.telescope == tel]
+                if 'minValue' in tuning:
+                    tuning['minValue'] = tel_info.fmhz_min.min() / 1000
+                if 'maxValue' in tuning:
+                    tuning['maxValue'] = tel_info.fmhz_max.max() / 1000
                 f.writelines(all_lines)
                 if ext == 'ltm':
                     items = [tuning, thresholds, lte_radex]
