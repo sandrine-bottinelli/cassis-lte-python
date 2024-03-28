@@ -243,6 +243,8 @@ class ModelConfiguration:
 
         self.exec_time = configuration.get('exec_time', True)
 
+        self.get_tuning_info()
+
         if 'data_file' in self._configuration_dict or 'x_obs' in self._configuration_dict:
             self.get_data()
             self.yunit = self.data_file_obj.yunit
@@ -252,8 +254,6 @@ class ModelConfiguration:
 
         if 'tc' in self._configuration_dict:
             self.get_continuum()
-
-        self.get_tuning_info()
 
         self.get_linelist()
         self.get_windows()
