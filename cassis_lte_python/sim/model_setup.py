@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from cassis_lte_python.utils import utils
-from cassis_lte_python.utils.constants import C_LIGHT, K_B, TEL_DIAM
 from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
@@ -45,7 +44,7 @@ class ModelConfiguration:
         self.data_file = configuration.get('data_file', None)
         self.data_file_obj = None
         self.xunit = 'MHz'
-        self.yunit = 'K'
+        self.yunit = configuration.get('yunit', 'K')
         self.x_file = None
         self.y_file = None
         self.x_obs = configuration.get('x_obs', None)
@@ -56,6 +55,8 @@ class ModelConfiguration:
         self.tc = None
         self._telescope_data = {}
         self.tmb2ta = None
+        if 'beam_info' in configuration:
+            self.get_jypb(configuration)
         self.jypb = None
         self.bmaj = None
         self.bmin = None
@@ -304,13 +305,13 @@ class ModelConfiguration:
                     x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
                 self.x_mod = np.array(x_mod)
 
-    def get_jypb(self, config=None):  # keep?
+    def get_jypb(self, config=None):
         if config is None:
             config = self._configuration_dict
         if 'beam_info' in config:
-            f_hz_beam = np.concatenate(config['beam_info']['f_mhz']) * 1.e6
-            omega = np.concatenate(config['beam_info']['beam_omega'])
-            self.jypb = 1.e-26 * C_LIGHT ** 2 / (f_hz_beam * f_hz_beam) / (2. * K_B * omega)
+            f_beam = config['beam_info']['f_mhz']
+            jypb2k = utils.compute_jypb2k(f_beam, config['beam_info']['beam_omega'])
+            self.jypb = interp1d(f_beam, jypb2k, kind='nearest')
 
     def get_continuum(self, config=None):
         if config is None:
@@ -344,12 +345,6 @@ class ModelConfiguration:
             config = self._configuration_dict
 
         if 'tuning_info' in config:
-            # if telescope is not in TEL_DIAM, try to find it in TELESCOPE_DIR
-            for tel in config['tuning_info'].keys():
-                tel_info = utils.read_telescope_file(utils.search_telescope_file(tel))
-                TEL_DIAM[tel] = tel_info['Diameter (m)'][0]  # values should all be the same
-                self._telescope_data[tel] = tel_info
-
             if check_tel_range:  # check telescope ranges cover all data / all model values:
                 x_vals = self.x_file if self.x_file is not None else [min(self.x_mod), max(self.x_mod)]
                 extended = False
@@ -370,6 +365,15 @@ class ModelConfiguration:
                 if extended:
                     print("Some telescope ranges did not cover some of the data ; ranges were extended to :")
                     print(config['tuning_info'])
+
+            for tel in config['tuning_info'].keys():
+                freq_user = config['tuning_info'][tel]
+                if isinstance(freq_user[0], list):
+                    freq_user = [el for li in freq_user for el in li]
+                tel_info = utils.read_telescope_file(utils.search_telescope_file(tel),
+                                                     fmin_mhz=min(freq_user),
+                                                     fmax_mhz=max(freq_user))
+                self._telescope_data[tel] = tel_info
 
             tuning_info = {'fmhz_range': [], 'telescope': [], 'fmhz_min': [], 'fmhz_max': []}
             for key, val in config['tuning_info'].items():
@@ -401,18 +405,21 @@ class ModelConfiguration:
                     tuning_info['fmhz_max'].append(r_max)
             self.tuning_info = pd.DataFrame(tuning_info)
 
-            tuning_data = pd.DataFrame()
+            # tuning_data = pd.DataFrame()
+            #
+            # for i, row in self.tuning_info.iterrows():
+            #     tel_data = self._telescope_data[row['telescope']]
+            #     index_min = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_min']) - 1
+            #     # NB: searchsorted returns the index where value could be inserted and maintain order
+            #     index_max = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_max'])
+            #     tel_data_sub = tel_data.loc[index_min: index_max]
+            #     if tuning_data.empty:
+            #         tuning_data = tel_data_sub
+            #     else:
+            #         tuning_data = pd.concat([tuning_data, tel_data_sub])
 
-            for i, row in self.tuning_info.iterrows():
-                tel_data = self._telescope_data[row['telescope']]
-                index_min = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_min']) - 1
-                # NB: searchsorted returns the index where value could be inserted and maintain order
-                index_max = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_max'])
-                tel_data_sub = tel_data.loc[index_min: index_max]
-                if tuning_data.empty:
-                    tuning_data = tel_data_sub
-                else:
-                    tuning_data = pd.concat([tuning_data, tel_data_sub])
+            tuning_data = pd.concat(list(self._telescope_data.values()))
+            tuning_data = tuning_data.sort_values(by=['Frequency (MHz)'])
 
             if self.t_a_star:
                 self.tmb2ta = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Beff/Feff'])
@@ -421,8 +428,8 @@ class ModelConfiguration:
 
             self.beam = utils.beam_function(tuning_data)
 
-            self.jypb = lambda f: 1.  # utils.compute_jypb2k(f, )
-            pass
+            if self.jypb is None:
+                self.jypb = lambda f: utils.compute_jypb2k(f, self.beam(f))
 
     def get_linelist(self, config=None):
         # if config is None:
@@ -655,7 +662,10 @@ class ModelConfiguration:
             self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=win_list_limits)
             self.line_list_all = self.line_list_all.drop_duplicates(subset='db_id', keep='first')
 
-        self.line_list_all.sort_values(self.sort, inplace=True)
+        if self.sort == 'frequency':
+            self.line_list_all.sort_values('fMHz', inplace=True)
+        else:
+            self.line_list_all.sort_values(self.sort, inplace=True)
 
         return
 

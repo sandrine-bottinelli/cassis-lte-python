@@ -4,7 +4,7 @@ from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SQLITE_FILE, NCOLS_DEF, NROWS_DEF, DPI_DEF
-from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS
+from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 import numpy as np
@@ -354,7 +354,7 @@ class ModelSpectrum(object):
 
     def model_info(self, cpt=None):
 
-        return {
+        mdl_info = {
             'tc': self.tc,
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
@@ -362,13 +362,15 @@ class ModelSpectrum(object):
             'log': self.log,
             'beam_sizes': self.beam,
             'tmb2ta': self.tmb2ta,
-            'jypb2k': self.jypb,
             'line_list': self.line_list_all,
             'cpt_list': self.cpt_list if cpt is None else [cpt],
             'noise': self.noise,
             'tau_max': self.tau_max,
             'file_rejected': self.file_rejected
         }
+        if self.yunit in UNITS['flux']:
+            mdl_info['jypb2k'] = self.jypb
+        return mdl_info
 
     def get_tc(self, x_mod):
         return self.tc(x_mod)

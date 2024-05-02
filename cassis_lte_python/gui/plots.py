@@ -472,7 +472,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
             # Common labels
             fig.suptitle("Frequency [MHz]")
             fig.supxlabel("Velocity [km/s]")
-            fig.supylabel("Intensity [K]")
+            fig.supylabel(f'Intensity [{lte_model.yunit}]')
 
             for p in range(nb_pages):
                 for i in range(nrows * ncols):

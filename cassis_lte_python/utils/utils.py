@@ -14,6 +14,7 @@ from regions import Regions, PixCoord, EllipseSkyRegion
 from astropy.wcs import WCS
 from scipy.interpolate import interp1d
 from datetime import timedelta
+import warnings
 
 
 class DataFile:
@@ -151,16 +152,19 @@ class DataFile:
             self.bmin = min(beam)
         except KeyError:
             try:
-                if 'CUNIT1' in self.header:
-                    bmaj_unit = self.header['CUNIT1']
-                    bmin_unit = self.header['CUNIT2']
-                else:
-                    bmaj_unit = self.header['TUNIT1']
-                    bmin_unit = self.header['TUNIT2']
+                bmaj_unit, bmin_unit = 'deg', 'deg'
+                if self.header['NAXIS'] > 2:  # assume cube with AXIS1 = RA, AXIS2 = Dec
+                    if 'CUNIT1' in self.header:
+                        bmaj_unit = self.header['CUNIT1']
+                        bmin_unit = self.header['CUNIT2']
+                    else:
+                        bmaj_unit = self.header['TUNIT1']
+                        bmin_unit = self.header['TUNIT2']
                 self.bmaj = (self.header['BMAJ'] * u.Unit(bmaj_unit)).to('arcsec').value
                 self.bmin = (self.header['BMIN'] * u.Unit(bmin_unit)).to('arcsec').value
             except KeyError:
-                pass
+                warnings.warn(f"Warning : data in {self.yunit} but beam not found in data file, "
+                              f"make sure it is present in telescope file.")
 
     def beam(self):
         return self.bmaj, self.bmin
@@ -599,7 +603,14 @@ def search_telescope_file(tel):
         raise FileNotFoundError(f"Telescope file {tel} not found.")
 
 
-def read_telescope_file(telescope_file):
+def read_telescope_file(telescope_file, fmin_mhz=None, fmax_mhz=None):
+    """
+    Read telescope file into dataframe
+    :param telescope_file: CASSIS telescope file
+    :param fmin_mhz: the lowest frequency to retrieve
+    :param fmax_mhz: the highest frequency to retrieve
+    :return: dataframe
+    """
     with open(telescope_file, 'r') as f:
         col_names = ['Frequency (MHz)', 'Beff/Feff']
         tel_data = f.readlines()
@@ -613,6 +624,23 @@ def read_telescope_file(telescope_file):
 
         tel_info = pd.read_csv(telescope_file, sep='\t', skiprows=3,
                                names=col_names, usecols=list(range(len(col_names))))
+
+        if not tel_info['Frequency (MHz)'].is_monotonic_increasing:
+            warnings.warn(f"Warning : frequencies in telescope file {telescope_file} are not in ascending order.")
+
+        if fmin_mhz is not None:
+            tel_info = tel_info[tel_info['Frequency (MHz)'] > fmin_mhz]
+            first_row = tel_info.iloc[0].to_dict()
+            first_row['Frequency (MHz)'] = fmin_mhz
+            tel_info = pd.concat([pd.DataFrame([list(first_row.values())], columns=tel_info.columns), tel_info])
+            tel_info = tel_info.sort_values(by=['Frequency (MHz)'], ignore_index=True)
+        if fmax_mhz is not None:
+            tel_info = tel_info[tel_info['Frequency (MHz)'] < fmax_mhz]
+            last_row = tel_info.iloc[-1].to_dict()
+            last_row['Frequency (MHz)'] = fmax_mhz
+            tel_info = pd.concat([pd.DataFrame([list(last_row.values())], columns=tel_info.columns), tel_info])
+            tel_info = tel_info.sort_values(by=['Frequency (MHz)'], ignore_index=True)
+
         tel_info['Diameter (m)'] = [tel_diam for _ in range(len(tel_info))]
 
         return tel_info
@@ -768,6 +796,42 @@ def reduce_wcs_dim(wcs):
     return wcs
 
 
+def read_crtf(file, use_region=None):
+    """
+    Read a CRTF region file.
+    :param file: a CRTF file
+    :param region_number: if more than one region in the file, specify which region to use (starting at 0)
+    :return: the region
+    """
+    try:
+        regs = Regions.read(file, format='crtf')
+        if use_region is None:
+            use_region = len(regs) - 1
+            if len(regs) > 1:
+                print('More than one regions were found: using the last one by default.'
+                      'If this is not what you want, please use the use_region keyword or edit your CRTF file.')
+        return regs[use_region]
+    except TypeError:
+        print('Not a CRTF file.')
+        return None
+
+
+def get_mask(wcs: WCS, file):
+    wcs_image = reduce_wcs_dim(wcs)
+    nx = wcs_image.array_shape[0]
+    ny = wcs_image.array_shape[1]
+    mask = np.full((nx, ny), True)
+    try:
+        reg = read_crtf(file)
+        reg_pix = reg.to_pixel(wcs_image)
+        reg_mask = reg_pix.to_mask(mode='center')
+        im_mask = reg_mask.to_image((nx, ny))
+        mask = im_mask.astype(bool)
+    except TypeError:
+        print('Invalid region or region file. No masking.')
+    return mask
+
+
 def get_valid_pixels(wcs: WCS, file, file2=None, masked=False, snr=5., mask_operation='or'):
     """
     Obtain a list of valid or of masked pixels
@@ -787,7 +851,9 @@ def get_valid_pixels(wcs: WCS, file, file2=None, masked=False, snr=5., mask_oper
     ny = wcs_image.array_shape[1]
 
     extension = os.path.splitext(file)[1]
-    if extension == '.crtf':
+    with open(file) as f:
+        line = f.readline()
+    if line.startswith('#CRTF'):
         mask_region = Regions.read(file, format='crtf')[0]
         if file2 is not None:
             region2 = Regions.read(file2, format='crtf')[0]
@@ -800,6 +866,7 @@ def get_valid_pixels(wcs: WCS, file, file2=None, masked=False, snr=5., mask_oper
 
         mask_pix = mask_region.to_pixel(wcs_image)
 
+        mask = np.full(wcs_image.array_shape, True)
         if masked:
             return [(i, j) for i in range(nx) for j in range(ny) if PixCoord(j, i) not in mask_pix]
         else:
