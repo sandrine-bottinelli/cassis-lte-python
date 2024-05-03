@@ -5,7 +5,7 @@ from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
-from cassis_lte_python.sim.parameters import create_parameter
+from cassis_lte_python.sim.parameters import create_parameter, parameter_infos
 from cassis_lte_python.utils.settings import TELESCOPE_DIR, VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF
 import os
 import pandas as pd
@@ -20,12 +20,52 @@ class ModelConfiguration:
         self.jparams = configuration.get('params', None)
         self.jmodel_fit = configuration.get('model_fit', None)
 
+        self.species_infos = None
+        if 'species_infos' in configuration:
+            # sp_infos = {}
+            df = pd.read_csv(configuration['species_infos'], delimiter='\t', comment='#', index_col=0, dtype=str)
+            if df.index.has_duplicates:
+                dup = df.index[df.index.duplicated()]
+                raise ValueError('Duplicate species infos detected for tags :',
+                                 ", ".join([str(val) for val in dup.values]))
+            sp_infos = df.apply(pd.to_numeric, errors='coerce')
+            sp_infos = sp_infos.fillna('*')
+            # sp_infos['tag'] = sp_infos['tag'].astype("string")
+            self.species_infos = sp_infos
+
         self.fwhm_max = 0.
         self.tag_list = configuration.get('inspect', [])
         self.cpt_list = []
         if 'components' in configuration:
             for key, cpt_dic in configuration.get('components').items():
                 sp_list = cpt_dic['species']
+                if not isinstance(sp_list, list):  # make sure it is a list
+                    sp_list = [sp_list]
+                if isinstance(sp_list[0], (int, str)) and self.species_infos is not None:
+                    # we have a list of tags and infos from file
+                    species_list = []
+                    for sp in sp_list:
+                        if f'{key}_fwhm_min_d' in self.species_infos.keys():
+                            diff = True
+                            min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min_d']
+                            max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max_d']
+                        else:
+                            diff = False
+                            min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min']
+                            max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max']
+                        species_list.append(
+                            {'tag': str(sp),
+                             'ntot': parameter_infos(
+                                 value=self.species_infos.at[int(sp), f'{key}_ntot'],
+                                 min=1e-2, max=1e2, factor=True
+                             ),
+                             'fwhm': parameter_infos(
+                                 value=self.species_infos.at[int(sp), f'{key}_fwhm'],
+                                 min=min_f, max=max_f, difference=diff
+                             )
+                             }
+                        )
+                    sp_list = species_list
                 cpt = Component(key, sp_list,
                                 isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
                                 vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
@@ -137,6 +177,14 @@ class ModelConfiguration:
 
         if 'thresholds' in configuration and configuration['thresholds'] is not None:
             self.thresholds = get_species_thresholds(configuration['thresholds'],
+                                                     select_species=self.tag_list,
+                                                     return_list_sp=False)
+        elif self.species_infos is not None:
+            cols_thresholds = self.species_infos[[col for col in self.species_infos.columns if not col.startswith('c')]]
+            sp_thresholds = {}
+            for index, row in self.species_infos.iterrows():
+                sp_thresholds[str(index)] = {c: row[c] for c in cols_thresholds if row[c] != '*'}
+            self.thresholds = get_species_thresholds(sp_thresholds,
                                                      select_species=self.tag_list,
                                                      return_list_sp=False)
         else:
@@ -736,7 +784,7 @@ class Component:
                 sp2add = sp
             elif isinstance(sp, dict):
                 sp2add = Species(sp['tag'], ntot=sp['ntot'], fwhm=sp['fwhm'], component=self)
-            elif isinstance(sp, int):
+            elif isinstance(sp, (int, str)):
                 sp2add = Species(sp)
             else:
                 try:

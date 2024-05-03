@@ -124,11 +124,17 @@ def get_species_thresholds(sp_threshold_infos: list | dict | str | os.PathLike,
 
     elif isinstance(sp_threshold_infos, (str, os.PathLike)):
         try:
-            df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#', index_col=False, dtype=str)
-            col_names = df.columns[1:]
-            list_species = [t.strip() for t in df.tag]
+            df = pd.read_csv(sp_threshold_infos, delimiter='\t', comment='#', index_col=0, dtype=str)
+            if df.index.has_duplicates:
+                dup = df.index[df.index.duplicated()]
+                raise ValueError('Duplicate species infos detected for tags :',
+                                 ", ".join([str(val) for val in dup.values]))
+            df = df[[col for col in df.columns if not col.startswith('c')]]
+            df = df.apply(pd.to_numeric, errors='coerce')
+            df = df.fillna('*')
+            list_species = [str(t) for t in df.index]
             for index, row in df.iterrows():
-                sp_thresholds[str(int(row.tag))] = {c: float(row[c]) for c in col_names if '*' not in row[c]}
+                sp_thresholds[str(index)] = {c: row[c] for c in df.columns if row[c] != '*'}
         except FileNotFoundError:
             raise FileNotFoundError(f"{sp_thresholds} not found.")
     else:
