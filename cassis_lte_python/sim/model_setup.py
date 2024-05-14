@@ -66,6 +66,12 @@ class ModelConfiguration:
                              }
                         )
                     sp_list = species_list
+                if 'set_fwhm' in cpt_dic:
+                    tag_ref = str(cpt_dic['set_fwhm'])
+                    expr = f'{key}_fwhm_{tag_ref}'
+                    for sp in sp_list:
+                        if sp['tag'] != tag_ref:
+                            sp['fwhm'].update({'expr': expr})
                 cpt = Component(key, sp_list,
                                 isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
                                 vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
