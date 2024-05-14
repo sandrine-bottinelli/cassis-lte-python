@@ -175,6 +175,19 @@ class ModelSpectrum(object):
 
         elif isinstance(configuration, ModelConfiguration):
             model_config = configuration
+            model_config.get_data_to_fit()
+            model_config.get_continuum()
+            # update tag list and windows to fit
+            tag_list = []
+            for cpt in model_config.cpt_list:
+                tag_list.append([str(t) for t in cpt.tag_list if str(t) not in tag_list])
+            model_config.tag_list = tag_list
+            for win in model_config.win_list:
+                if win.name.split()[0] in model_config.tag_list:
+                    win.in_fit = True
+                else:
+                    win.in_fit = False
+            model_config.win_list_fit = [win for win in model_config.win_list if win.in_fit]
 
         else:  # unknown
             raise TypeError("Configuration must be a dictionary or a path to a configuration file "
@@ -287,7 +300,11 @@ class ModelSpectrum(object):
         except FileNotFoundError:
             print(f"File not found : {path}")
 
-    def save_config(self, filename, dirname=None):
+    def save_config_dict(self):
+        try:
+            name_config = os.path.abspath(self.name_config)
+        except TypeError:
+            name_config = self.name_config
         config_save = {
             'creation-date': datetime.datetime.now().strftime("%Y-%m-%d,  %H:%M:%S"),
             'data_file': os.path.abspath(self.data_file) if self.data_file is not None else None,
@@ -312,7 +329,7 @@ class ModelSpectrum(object):
             'max_iter': self.max_iter,
             'fit_kws': self.fit_kws,
             'name_lam': self.name_lam,
-            'name_config': os.path.abspath(self.name_config) if os.path.isfile(self.name_config) else self.name_config,
+            'name_config': name_config,
             'save_configs': self.save_configs,
             'save_results': self.save_results,
             'plot_gui': self.plot_gui,
@@ -327,7 +344,11 @@ class ModelSpectrum(object):
         }
         if self.model_fit is not None:
             config_save['model_fit'] = self.model_fit.dumps()
-        json_dump = json.dumps(config_save, indent=4)  # separators=(', \n', ': '))
+        return config_save
+
+    def save_config(self, filename, dirname=None):
+        json_dump = json.dumps(self.save_config_dict(), indent=4)  # separators=(', \n', ': '))
+
         if dirname is not None:
             if not os.path.isdir(os.path.abspath(dirname)):
                 os.makedirs(os.path.abspath(dirname))
@@ -500,6 +521,9 @@ class ModelSpectrum(object):
         self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
         self.log = False
 
+        # save parameters for re-use
+        self.model_config.jparams = self.params.dumps()
+
         if print_report:
             print(self.fit_report(report_kws=report_kws))
 
@@ -527,7 +551,7 @@ class ModelSpectrum(object):
                     if params[par].user_data is None:
                         params[par].user_data = user_data
                     else:
-                        params[par].user_data = {**user_data, **params[par].user_data}
+                        params[par].user_data = {**params[par].user_data, **user_data}
                     if params[par].expr is None:
                         params[par].set(value=np.log10(params[par].value),
                                         min=np.log10(params[par].min),
@@ -598,6 +622,7 @@ class ModelSpectrum(object):
                     p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
                 val = 10 ** pfit.value if p.vary or p.expr is not None else p.user_data['value']
                 p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
+                p.user_data['log'] = False
 
         # update components
         for cpt in self.model_config.cpt_list:
