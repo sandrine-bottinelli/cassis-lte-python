@@ -431,14 +431,17 @@ class ModelSpectrum(object):
         # Check min/max Tex:
         for icpt, cpt in enumerate(self.cpt_list):
             par = params[f'{cpt.name}_tex']
+            mini = cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin)
+            maxi = cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax)
             if par.min < cpt.tmin and self.minimize:
                 print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
                       f'(smallest temperature for which the partition function is defined for all species).')
+                val = (mini + maxi) / 2
             if par.max > cpt.tmax and self.minimize:
                 print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
                       f'(highest temperature for which the partition function is defined for all species).')
-            par.set(min=cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin),
-                    max=cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax))
+                val = (mini + maxi) / 2
+            par.set(min=mini, max=maxi)
 
         # reset bounds if a parameters contains an expression to make sure it does not interfere
         for par in params:
