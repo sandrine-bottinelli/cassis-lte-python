@@ -51,7 +51,7 @@ def generate_lte_model_func(config):
         for icpt, cpt in enumerate(cpt_list):
             tex = params['{}_tex'.format(cpt.name)] * norm_factors['{}_tex'.format(cpt.name)]
             if log:
-                tex = 10. ** tex
+                tex = round(10. ** tex, 6)
             vlsr = params['{}_vlsr'.format(cpt.name)] * norm_factors['{}_vlsr'.format(cpt.name)]
             size = params['{}_size'.format(cpt.name)] * norm_factors['{}_size'.format(cpt.name)]
 
@@ -620,7 +620,7 @@ class ModelSpectrum(object):
                 p.init_value = p.user_data['value']
                 if pfit.stderr is not None:
                     p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
-                val = 10 ** pfit.value if p.vary or p.expr is not None else p.user_data['value']
+                val = round(10 ** pfit.value, 6) if p.vary or p.expr is not None else p.user_data['value']
                 p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
                 p.user_data['log'] = False
 
