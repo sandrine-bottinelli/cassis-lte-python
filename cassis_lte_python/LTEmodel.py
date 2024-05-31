@@ -7,6 +7,7 @@ from cassis_lte_python.utils.settings import SQLITE_FILE, NCOLS_DEF, NROWS_DEF, 
 from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
+from cassis_lte_python.utils.settings import SQLITE_FILE
 import numpy as np
 from numpy.random import normal
 from lmfit import Model, Parameters
@@ -1419,7 +1420,8 @@ class ModelSpectrum(object):
             with open(file_path, 'w') as f:
                 if spectrum_type != 'continuum':
                     header = ['#title: Spectral profile\n',
-                              '#date: {}\n'.format(datetime.datetime.now().strftime("%c"))
+                              '#date: {}\n'.format(datetime.datetime.now().strftime("%c")),
+                              '#database :{}\n'.format(SQLITE_FILE),
                               # '#coordinate: world\n'
                              ]
                     if len(self.model_config.tuning_info) > 1:
@@ -1431,15 +1433,17 @@ class ModelSpectrum(object):
 
                     header.append(f'#vlsr [km/s]: {self.model_config.vlsr_file}\n')
                     header.extend(['#xLabel: frequency [MHz]\n',
-                                   '#yLabel: [Kelvin] Mean\n'])
+                                   f'#yLabel: [{self.model_config.yunit}] Mean\n',
+                                   '#Columns : frequency, intensity (total), intensity of each component\n'])
                     f.writelines(header)
 
                 for x, y in zip(x_values, y_values):
                     if len(np.shape(y_values)) == 1:
-                        f.write('{}\t{}\n'.format(utils.format_float(x, nb_signif_digits=4), utils.format_float(y)))
+                        f.write('{}\t{}\n'.format(utils.format_float(x, nb_signif_digits=4),
+                                                  utils.format_float(y, fmt="{:.5e}")))
                     else:
                         line = '{}\t'.format(utils.format_float(x, nb_signif_digits=4))
-                        line += '\t'.join([utils.format_float(yy) for yy in y])
+                        line += '\t'.join([utils.format_float(yy, fmt="{:.5e}") for yy in y])
                         f.write(line + '\n')
 
         return os.path.abspath(file_path)
