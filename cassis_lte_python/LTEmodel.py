@@ -47,6 +47,7 @@ def generate_lte_model_func(config):
             cpt_list = [cpt]
         tau_max = config.get('tau_max', None)
         file_rejected = config.get('file_rejected', None)
+        tc = tc * jypb2k  # if jypb2k not 1, data, and so tc, are in Jy/beam -> convert to K
         intensity_before = tc + utils.jnu(fmhz, tcmb)
         intensity = 0.
         for icpt, cpt in enumerate(cpt_list):
