@@ -1,3 +1,4 @@
+import numpy as np
 from lmfit import Parameter
 
 
@@ -33,6 +34,11 @@ def create_parameter(name, param):
         return Parameter(name, value=param)
 
     elif isinstance(param, dict):
+        # if bounds are equal, fix parameter and reset bounds (otherwise lmfit complains)
+        if param.get('min', -np.inf) == param.get('max', np.inf):
+            param['vary'] = False
+            param['min'] = -np.inf
+            param['max'] = np.inf
         return Parameter(name, **param)
 
     elif isinstance(param, Parameter):
