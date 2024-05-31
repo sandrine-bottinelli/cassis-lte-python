@@ -92,12 +92,14 @@ class ModelConfiguration:
         self.xunit = 'MHz'
         yunit = configuration.get('yunit', 'K')
         self.yunit = yunit.strip()
+        self._x_file = None
+        self._y_file = None
         self.x_obs = configuration.get('x_obs', None)
         self.y_obs = configuration.get('y_obs', None)
         self.vlsr_file = 0.
         self.vlsr_plot = configuration.get('vlsr_plot', 0.)
-        self.cont_info = None
-        self.tc = None
+        self._cont_info = configuration.get('tc', 0.)
+        self._tc = None
         self._telescope_data = {}
         self.tmb2ta = None
         if 'beam_info' in configuration:
@@ -367,20 +369,12 @@ class ModelConfiguration:
             self.jypb = interp1d(f_beam, jypb2k, kind='nearest')
 
     def get_continuum(self, config=None):
-        if config is None:
-            config = self._configuration_dict
-
-        # if self.x_file is None:
-        #     self.get_data()
-
-        self.cont_info = config.get('tc', 0.)
-
         if isinstance(self.cont_info, (float, int)):
-            self.tc = lambda x: self.cont_info
+            self._tc = lambda x: self.cont_info
         elif isinstance(self.cont_info, str) and os.path.isfile(self.cont_info):
             # cont_info is a CASSIS continuum file : MHz [tab] K
             f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', unpack=True)
-            self.tc = interp1d(f_cont, t_cont, kind='nearest')
+            self._tc = interp1d(f_cont, t_cont, kind='nearest')
         elif isinstance(self.cont_info, dict):
             # to compute continuum over ranges given by the user : { '[fmin, fmax]': value, ...}
             f_cont, t_cont = [], []
@@ -389,7 +383,7 @@ class ModelConfiguration:
                 frange = [float(f) for f in frange.split(sep=',')]
                 f_cont.extend(frange)
                 t_cont.extend([val, val])
-            self.tc = interp1d(f_cont, t_cont, kind='nearest')
+            self._tc = interp1d(f_cont, t_cont, kind='nearest')
         else:
             raise TypeError("Continuum must be a float, an integer or a 2-column tab-separated file (MHz K).")
 
@@ -775,6 +769,43 @@ class ModelConfiguration:
         if len(self.win_list_fit) > 0:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
+
+    @property
+    def x_file(self):
+        return self._x_file
+
+    @x_file.setter
+    def x_file(self, value):
+        self._x_file = value
+
+    @property
+    def y_file(self):
+        return self._y_file
+
+    @y_file.setter
+    def y_file(self, value):
+        self._y_file = value
+        # update windows :
+        if len(self.win_list) > 0 and self.x_file is not None:
+            for win in self.win_list:
+                x_win, y_win = utils.select_from_ranges(self.x_file, [min(win.x_file), max(win.x_file)],
+                                                        y_values=value)
+                win.y_file = y_win
+            self.get_data_to_fit()
+
+    @property
+    def tc(self):
+        return self._tc
+
+    @property
+    def cont_info(self):
+        return self._cont_info
+
+    @cont_info.setter
+    def cont_info(self, value):
+        # self._configuration_dict['tc'] = value
+        self._cont_info = value
+        self.get_continuum()
 
 
 class Component:
