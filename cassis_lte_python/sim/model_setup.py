@@ -322,6 +322,7 @@ class ModelConfiguration:
         self.get_linelist()
         self.get_windows()
         if self._v_range_user is not None:
+            self.win_nb_fit = {}
             self.get_velocity_ranges()
         if self.minimize or self.modeling:
             self.get_data_to_fit()
@@ -735,6 +736,7 @@ class ModelConfiguration:
             nt = len(win_list_tag)
             if self._v_range_user is not None and (tag in self._v_range_user or '*' in self._v_range_user):
                 v_range = utils.expand_dict(self._v_range_user[tag], nt)
+                self.win_nb_fit[tag] = list(v_range.keys())
                 for win in win_list_tag:
                     win_num = win.plot_nb
 
@@ -844,7 +846,7 @@ class Component:
                 sp2add.set_component(self.name)
             self.species_list.append(sp2add)
 
-        self.tag_list = [sp.tag for sp in self.species_list]
+        self._tag_list = [sp.tag for sp in self.species_list]
         self.isInteracting = isInteracting
         if vlsr is None:
             vlsr = VLSR_DEF  # TODO: find out why VLSR_DEF inside __init__ does not work
@@ -909,6 +911,14 @@ class Component:
         self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
         return self._tmin
 
+    @property
+    def tag_list(self):
+        return self._tag_list
+
+    @tag_list.setter
+    def tag_list(self, value):
+        self._tag_list = value
+
     # def get_transitions(self, fmhz_ranges, **thresholds):  # not used -> keep??
     #     self.transition_list = get_transition_df(self.species_list, fmhz_ranges, **thresholds)
     #     return self.transition_list
@@ -968,6 +978,21 @@ class Window:
         self.tag_colors = {}
         self._y_min = np.inf
         self._y_max = -np.inf
+
+    def set_rms_cal(self, rms_cal_df):
+        if 'freq_range' in rms_cal_df.columns:
+            rms_cal = rms_cal_df[(self.transition.f_trans_mhz > rms_cal_df['fmin'])
+                                 & (self.transition.f_trans_mhz < rms_cal_df['fmax'])]
+        else:
+            rms_cal = rms_cal_df[rms_cal_df['win_id'] == (self.transition.tag, self.plot_nb)]
+            if len(rms_cal) == 0:
+                rms_cal = rms_cal_df[rms_cal_df['win_id'] == (self.transition.tag, '*')]
+        if len(rms_cal) == 0:
+            raise IndexError(f"rms/cal info not found for {self.transition}.")
+        self._rms = rms_cal['rms'].values[0]
+        # if self.jypb is not None:
+        #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
+        self._cal = rms_cal['cal'].values[0]
 
     @property
     def name(self):

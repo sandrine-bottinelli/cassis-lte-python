@@ -179,17 +179,27 @@ class ModelSpectrum(object):
             model_config = configuration
             model_config.get_data_to_fit()
             model_config.get_continuum()
-            # update tag list and windows to fit
+            # update tag list and windows to fit (intensities, noise)
             tag_list = []
             for cpt in model_config.cpt_list:
-                tag_list.append([str(t) for t in cpt.tag_list if str(t) not in tag_list])
-            model_config.tag_list = tag_list
-            for win in model_config.win_list:
-                if win.name.split()[0] in model_config.tag_list:
-                    win.in_fit = True
-                else:
-                    win.in_fit = False
-            model_config.win_list_fit = [win for win in model_config.win_list if win.in_fit]
+                tag_list.extend([str(t) for t in cpt.tag_list if str(t) not in tag_list])
+            # determine whether tag_list has changed :
+            recompute_win = True
+            if len(tag_list) == len(model_config.tag_list) and all([tag in model_config.tag_list for tag in tag_list]):
+                recompute_win = False
+            if recompute_win:
+                model_config.tag_list = tag_list
+                for win in model_config.win_list:
+                    win.set_rms_cal(model_config.rms_cal)
+                    tag = win.transition.tag
+                    if tag in model_config.tag_list and win.plot_nb in model_config.win_nb_fit[tag]:
+                        win.in_fit = True
+                    else:
+                        win.in_fit = False
+                model_config.win_list_fit = [win for win in model_config.win_list if win.in_fit]
+                if len(model_config.win_list_fit) > 0:
+                    model_config.x_fit = np.concatenate([w.x_fit for w in model_config.win_list_fit], axis=None)
+                    model_config.y_fit = np.concatenate([w.y_fit for w in model_config.win_list_fit], axis=None)
 
         else:  # unknown
             raise TypeError("Configuration must be a dictionary or a path to a configuration file "
