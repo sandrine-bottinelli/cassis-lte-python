@@ -90,9 +90,8 @@ class ModelConfiguration:
         self.data_file = configuration.get('data_file', None)
         self.data_file_obj = None
         self.xunit = 'MHz'
-        self.yunit = configuration.get('yunit', 'K')
-        self.x_file = None
-        self.y_file = None
+        yunit = configuration.get('yunit', 'K')
+        self.yunit = yunit.strip()
         self.x_obs = configuration.get('x_obs', None)
         self.y_obs = configuration.get('y_obs', None)
         self.vlsr_file = 0.
