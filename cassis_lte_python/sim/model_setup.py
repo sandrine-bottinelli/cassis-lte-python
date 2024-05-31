@@ -70,9 +70,14 @@ class ModelConfiguration:
                 if 'set_fwhm' in cpt_dic:
                     tag_ref = str(cpt_dic['set_fwhm'])
                     expr = f'{key}_fwhm_{tag_ref}'
+                    sp_list_ord = []
                     for sp in sp_list:
                         if sp['tag'] != tag_ref:
                             sp['fwhm'].update({'expr': expr})
+                            sp_list_ord.append(sp)
+                        else:
+                            sp_list_ord = [sp] + sp_list_ord  # make sure the reference species is first
+                    sp_list = sp_list_ord
                 cpt = Component(key, sp_list,
                                 isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
                                 vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
