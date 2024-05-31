@@ -317,7 +317,7 @@ class ModelSpectrum(object):
             # 'v_range': self.model_config._v_range_user,
             'v_range': {tag: {win.name.split()[-1]: win.v_range_fit for win in self.model_config.win_list_fit}
                         for tag in self.model_config.tag_list},
-            'chi2_info': self.model_config._rms_cal_user,
+            'rms_cal': self.model_config._rms_cal_user,
             'bandwidth': self.bandwidth,
             'oversampling': self.oversampling,
             'fghz_min': self.fmin_mhz / 1.e3,

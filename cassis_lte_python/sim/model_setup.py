@@ -11,6 +11,7 @@ import os
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
+import warnings
 
 
 class ModelConfiguration:
@@ -122,7 +123,10 @@ class ModelConfiguration:
             self.fit_freq_except = None
 
         self._v_range_user = configuration.get('v_range', None)
-        self._rms_cal_user = configuration.get('chi2_info', None)
+        self._rms_cal_user = configuration.get('rms_cal', None)
+        if 'chi2_info' in configuration:
+            warnings.warn("The chi2_info keyword is deprecated, please use the keyword rms_cal instead.")
+            self._rms_cal_user = configuration.get('chi2_info', None)
         self._rms_cal = None
         self.win_list = []
         self.win_list_fit = None
@@ -549,7 +553,14 @@ class ModelConfiguration:
         # extract rms/cal info
         if self._rms_cal_user is not None:
             if isinstance(self._rms_cal_user, dict):
-                if next(iter(self._rms_cal_user))[0] == '[':  # info by frequency range
+                if '*' in self._rms_cal_user:
+                    self._rms_cal = pd.DataFrame({'freq_range': [[min(self.x_file), max(self.x_file)]],
+                                                  'fmin': [min(self.x_file)],
+                                                  'fmax': [max(self.x_file)],
+                                                  'rms': [self._rms_cal_user['*'][0]],
+                                                  'cal': [self._rms_cal_user['*'][1]]})
+
+                elif next(iter(self._rms_cal_user))[0] == '[':  # info by frequency range
                     frange, fmin, fmax, rms, cal = [], [], [], [], []
                     for k, v in self._rms_cal_user.items():
                         k = k.strip('[').strip(']').strip()  # remove brackets and spaces ; could be improved
@@ -566,9 +577,6 @@ class ModelConfiguration:
                                                   'cal': cal})
 
                 else:  # TODO : check the following
-                    if '*' in self._rms_cal_user:
-                        self._rms_cal_user = {str(tag): {'*': self._rms_cal_user['*']} for tag in self.tag_list}
-
                     if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._rms_cal_user:
                         # only one species and tag not given => "reformat" dictionary to contain tag
                         self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
@@ -598,7 +606,7 @@ class ModelConfiguration:
                                               'cal': cal})
 
             else:
-                raise TypeError("chi2_info must be a dictionary or a path to an appropriate file.")
+                raise TypeError("rms_cal must be a dictionary or a path to an appropriate file.")
 
     def get_windows(self, verbose=True):
         if self.bandwidth is None or self.fit_freq_except is not None:
@@ -734,23 +742,13 @@ class ModelConfiguration:
                         win.f_range_fit = f_range
 
                         # get rms and cal for windows to be fitted
-                        if self._rms_cal is not None:
+                        if self._rms_cal_user is not None:
                             try:
-                                if 'freq_range' in self._rms_cal.columns:
-                                    rms_cal = self._rms_cal[(win.transition.f_trans_mhz > self._rms_cal['fmin'])
-                                                            & (win.transition.f_trans_mhz < self._rms_cal['fmax'])]
-                                else:
-                                    rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, win_num)]
-                                    if len(rms_cal) == 0:
-                                        rms_cal = self._rms_cal[self._rms_cal['win_id'] == (tag, '*')]
-                                if len(rms_cal) == 0:
-                                    raise IndexError(f"rms/cal info not found for {win.transition}.")
-                                win.rms = rms_cal['rms'].values[0]
-                                # if self.jypb is not None:
-                                #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
-                                win.cal = rms_cal['cal'].values[0]
+                                win.set_rms_cal(self.rms_cal)
                             except KeyError:
                                 raise KeyError(f"rms/cal info not found.")
+                        else:
+                            pass
 
     def get_data_to_fit(self, update=False):
         # find windows with data to be fitted
@@ -806,6 +804,15 @@ class ModelConfiguration:
         # self._configuration_dict['tc'] = value
         self._cont_info = value
         self.get_continuum()
+
+    @property
+    def rms_cal(self):
+        return self._rms_cal
+
+    @rms_cal.setter
+    def rms_cal(self, value):
+        self._rms_cal_user = value
+        self.get_rms_cal_info()
 
 
 class Component:
