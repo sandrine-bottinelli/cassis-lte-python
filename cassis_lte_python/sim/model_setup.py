@@ -389,7 +389,7 @@ class ModelConfiguration:
             # to compute continuum over ranges given by the user : { '[fmin, fmax]': value, ...}
             f_cont, t_cont = [], []
             for frange, val in self.cont_info.items():
-                frange = frange.replace('[', ' ').replace('[', ' ')
+                frange = frange.replace('[', ' ').replace(']', ' ')
                 frange = [float(f) for f in frange.split(sep=',')]
                 f_cont.extend(frange)
                 t_cont.extend([val, val])
