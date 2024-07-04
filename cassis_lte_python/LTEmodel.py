@@ -1690,7 +1690,7 @@ class ModelSpectrum(object):
 
         lte_radex = {
             'telescope': '',  # TBD when writing the file
-            'tmbBox': 'true' if self.tmb2ta else 'false',
+            'tmbBox': 'true' if self.model_config.t_a_star else 'false',
             'observing': 'PSDBS',
             'tbg': self.tcmb,
             'tbgUnit': 'K',
