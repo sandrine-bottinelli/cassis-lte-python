@@ -474,6 +474,21 @@ class ModelSpectrum(object):
                 val = (mini + maxi) / 2
             par.set(min=mini, max=maxi)
 
+        # user constraints
+        if self.model_config.constraints is not None and self.model_config.ref_pixel_info is None:
+            for key, val in self.model_config.constraints.items():
+                if 'set_fwhm' in key:
+                    tag_ref = val.split('_')[-1]
+                    cpt = val.split('_')[0]
+                    for tag in self.model_config.tag_list:
+                        if tag != tag_ref:
+                            try:
+                                params[f'{cpt}_fwhm_{tag}'].set(expr=val)
+                            except KeyError:  # key does not exist, do nothing
+                                pass
+                else:
+                    params[key].set(expr=val)
+
         # reset bounds if a parameters contains an expression to make sure it does not interfere
         for par in params:
             if params[par].expr is not None:

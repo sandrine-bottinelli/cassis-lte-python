@@ -67,7 +67,7 @@ class ModelConfiguration:
                              }
                         )
                     sp_list = species_list
-                if 'set_fwhm' in cpt_dic:
+                if 'set_fwhm' in cpt_dic and cpt_dic['set_fwhm'] is not None:
                     tag_ref = str(cpt_dic['set_fwhm'])
                     expr = f'{key}_fwhm_{tag_ref}'
                     sp_list_ord = []
@@ -234,6 +234,8 @@ class ModelConfiguration:
 
         self.modeling = configuration.get('modeling', False)
 
+        self.constraints = configuration.get('constraints', None)
+        self.ref_pixel_info = None
         self.minimize = configuration.get('minimize', False)
         self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)
