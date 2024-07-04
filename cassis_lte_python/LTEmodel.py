@@ -180,7 +180,7 @@ class ModelSpectrum(object):
             model_config = configuration
             model_config.get_data_to_fit()
             model_config.get_continuum()
-            # update tag list and windows to fit (intensities, noise)
+            # update tag list, parameters, and windows to fit (intensities, noise)
             tag_list = []
             for cpt in model_config.cpt_list:
                 tag_list.extend([str(t) for t in cpt.tag_list if str(t) not in tag_list])
@@ -189,6 +189,15 @@ class ModelSpectrum(object):
             if len(tag_list) == len(model_config.tag_list) and all([tag in model_config.tag_list for tag in tag_list]):
                 recompute_win = False
             if recompute_win:
+                for cpt in model_config.cpt_list:  # should contain new tag list
+                    current_tags = {sp.tag: sp for sp in cpt.species_list}
+                    new_sp_list = []
+                    for tag in cpt.tag_list:
+                        if tag in current_tags.keys():
+                            new_sp_list.append(current_tags[tag])
+                        else:
+                            new_sp_list.append(model_config.ref_pixel_info[cpt.name][tag])
+                    cpt.species_list = new_sp_list
                 model_config.tag_list = tag_list
                 for win in model_config.win_list:
                     win.set_rms_cal(model_config.rms_cal)
@@ -224,6 +233,11 @@ class ModelSpectrum(object):
 
         if self.minimize:
             self.log = True
+
+        # try:
+        #     self.make_params(json_params=self.model_config.jparams)
+        # except TypeError:
+        #     pass
 
         if self.modeling or self.minimize:
             self.make_params(json_params=self.model_config.jparams)
@@ -542,7 +556,7 @@ class ModelSpectrum(object):
         self.log = False
 
         # save parameters for re-use
-        self.model_config.jparams = self.params.dumps()
+        # self.model_config.jparams = self.params.dumps()
 
         if print_report:
             print(self.fit_report(report_kws=report_kws))
@@ -1295,6 +1309,35 @@ class ModelSpectrum(object):
                 filename += ext
 
         return os.path.join(dirname, filename)
+
+    def update_params_dict(self, params, tag_list):
+        tag_list = [str(t) for t in tag_list]  # make sure we have a list of strings
+        for par in params:
+            if 'ntot' in par or 'fwhm' in par:
+                if par.split('_')[-1] not in tag_list:
+                    params.pop(par)
+        return params
+
+    def save_ref_pixel(self):
+        ref_pixel_info = {
+            'params': self.params.copy(),
+            'model': self.model,
+            'model_fit': self.model_fit,
+            'tag_list': self.model_config.tag_list
+        }
+        cpt_info = {
+            cpt.name: {sp.tag: sp for sp in cpt.species_list}
+            for cpt in self.model_config.cpt_list
+        }
+        self.model_config.ref_pixel_info = {**ref_pixel_info, **cpt_info}
+
+    def use_ref_pixel(self, tag_list=None):
+        params = self.ref_pixel_info['params'].copy()
+        # self.model = self.ref_pixel_info['model']
+        if tag_list is not None:
+            self.update_params_dict(params, tag_list)
+            self.generate_lte_model()
+        self.params = params
 
     def save_model(self, filename, dirname=None, ext='txt', full_spectrum=True):
         """
