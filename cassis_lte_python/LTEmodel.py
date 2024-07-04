@@ -670,7 +670,10 @@ class ModelSpectrum(object):
             if p.user_data is not None and p.user_data.get('log', False):
                 p.init_value = p.user_data['value']
                 if pfit.stderr is not None:
-                    p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
+                    try:
+                        p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
+                    except (OverflowError, RuntimeWarning):
+                        p.stderr = np.inf
                 val = round(10 ** pfit.value, 6) if p.vary or p.expr is not None else p.user_data['value']
                 p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
                 p.user_data['log'] = False
