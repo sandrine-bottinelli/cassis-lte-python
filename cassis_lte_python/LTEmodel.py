@@ -8,6 +8,7 @@ from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from cassis_lte_python.utils.settings import SQLITE_FILE
+from cassis_lte_python.utils.utils import get_df_row_from_freq_range
 import numpy as np
 from numpy.random import normal
 from lmfit import Model, Parameters
@@ -407,6 +408,10 @@ class ModelSpectrum(object):
 
     def get_tc(self, x_mod):
         return self.tc(x_mod)
+
+    def get_rms_cal(self, fmhz):
+        row = get_df_row_from_freq_range(self._rms_cal, fmhz)
+        return row['rms'].values[0], row['cal'].values[0]
 
     def get_rms(self, fmhz):
         if type(fmhz) == float:

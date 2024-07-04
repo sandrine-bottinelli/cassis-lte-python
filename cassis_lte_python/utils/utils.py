@@ -499,6 +499,14 @@ def get_extended_limits(values, padding=0.05):
     return [min(values) - padding * dx, max(values) + padding * dx]
 
 
+def get_df_row_from_freq_range(df: pd.DataFrame, freq: float) -> tuple:
+    try:
+        row = df[(freq > df['fmin']) & (freq < df['fmax'])]
+        return row
+    except IndexError:
+        raise IndexError("The dataframe must have 'fmin' and 'fmax' columns.")
+
+
 def read_noise_info(noise_file):
     noise_info = {}
     with open(noise_file) as f:
