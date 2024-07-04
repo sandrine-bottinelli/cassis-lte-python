@@ -1382,8 +1382,11 @@ class ModelSpectrum(object):
             y_values = []
             for win in self.win_list:
                 if win.x_mod is None:
+                    if win.x_mod_plot is not None:
+                        win.x_mod = win.x_mod_plot
+                        break
                     win.x_mod = np.linspace(min(win.x_file), max(win.x_file),
-                                num=self.oversampling * (len(win.x_file) - 1) + 1)
+                                            num=self.oversampling * (len(win.x_file) - 1) + 1)
                     mdl_info = self.model_info()
                     model = Model(generate_lte_model_func(mdl_info))
                     y_mod = model.eval(params, fmhz=win.x_mod)
