@@ -875,10 +875,10 @@ class ModelSpectrum(object):
             win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
                                                        line_list=self.line_list_all)
             if len(self.cpt_list) > 1:
-                for icpt in range(len(self.cpt_list)):
-                    win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
-                                                                        line_list=self.line_list_all,
-                                                                        cpt=self.cpt_list[icpt]))
+                for cpt in self.cpt_list:
+                    win.y_mod_cpt[cpt.name] = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                                             line_list=self.line_list_all,
+                                                                             cpt=cpt)
 
             win.x_mod_plot = win.x_mod
             win.x_file_plot = win.x_file
@@ -1007,10 +1007,10 @@ class ModelSpectrum(object):
                     win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
 
             if (self.modeling or self.minimize) and (len(self.cpt_list) > 1):
-                for icpt in range(len(self.cpt_list)):
-                    win.y_mod_cpt.append(self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
-                                                                        line_list=model_lines_win,
-                                                                        cpt=self.cpt_list[icpt]))
+                for cpt in self.cpt_list:
+                    win.y_mod_cpt[cpt.name] = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
+                                                                             line_list=model_lines_win,
+                                                                             cpt=cpt)
 
             # transitions from model species, w/i thresholds, for display :
             model_lines_user = select_transitions(model_lines_win,
@@ -1336,12 +1336,14 @@ class ModelSpectrum(object):
                             for pname, par in params.items():
                                 if cpt.name in pname:
                                     c_best_pars[pname] = par.value
-                            c_lte_func = generate_lte_model_func(mdl_info)
-                            y_cpt = c_lte_func(win.x_mod, **c_best_pars)
+                            # c_lte_func = generate_lte_model_func(mdl_info)
+                            # y_cpt = c_lte_func(win.x_mod, **c_best_pars)
+                            y_cpt = self.compute_model_intensities(params=self.params, x_values=win.x_mod,
+                                                                   line_list=self.line_list_all, cpt=cpt)
                             y_mod = np.hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
-                            win.y_mod_cpt.append[y_cpt]
+                            win.y_mod_cpt[cpt.name] = y_cpt
                 y_mod = win.y_mod.reshape(len(win.y_mod), 1)
-                for y_cpt in win.y_mod_cpt:
+                for y_cpt in win.y_mod_cpt.values():
                     y_mod = np.hstack((y_mod, y_cpt.reshape(len(y_cpt), 1)))
                 x_values.extend(win.x_mod)
                 y_values.extend(y_mod)
@@ -1517,7 +1519,7 @@ class ModelSpectrum(object):
                             f.write(f"\t{line.f_trans_mhz:.{nb_dec}f}")
                             f.write(f"\t{line.eup:.{nb_dec}f}\t{line.aij:.{nb_dec}e}\t")
                             f.write(f"{tau0:.{nb_dec}e}\t{tex:.{nb_dec}f}")
-                            f.write(f"\t{self.win_list[0].y_mod_cpt[icpt][ind0]:.{nb_dec}e}\n")
+                            f.write(f"\t{self.win_list[0].y_mod_cpt[cpt.name][ind0]:.{nb_dec}e}\n")
 
     def save_fit_results(self, filename, dirname=None):
         with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:

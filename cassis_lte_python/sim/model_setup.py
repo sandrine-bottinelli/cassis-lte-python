@@ -960,8 +960,8 @@ class Window:
         self._x_mod = x_mod
         self._y_mod = None
         self._y_mod_err = None
-        self.y_mod_cpt = []
-        self.y_mod_err_cpt = []
+        self.y_mod_cpt = {}
+        self.y_mod_err_cpt = {}
         self.bottom_unit = 'MHz'
         self.top_unit = 'MHz'
         self.bottom_lim = None

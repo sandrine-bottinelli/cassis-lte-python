@@ -85,15 +85,15 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
     ymin_plot, ymax_plot = np.inf, -np.inf
     #  Plot components if more than one
     if (lte_model.minimize or lte_model.modeling) and (len(lte_model.cpt_list) > 1):
-        for icpt, _ in enumerate(lte_model.cpt_list):
-            ax.step(win.x_mod_plot, win.y_mod_cpt[icpt], where='mid',
+        for icpt, cpt in enumerate(lte_model.cpt_list):
+            ax.step(win.x_mod_plot, win.y_mod_cpt[cpt.name], where='mid',
                     color=lte_model.cpt_cols[icpt], linewidth=lw)
             if len(win.y_mod_err_cpt) > 0:
-                ax.fill_between(win.x_mod_plot, win.y_mod_cpt[icpt] - win.y_mod_err_cpt[icpt],
-                                win.y_mod_cpt[icpt] + win.y_mod_err_cpt[icpt],
+                ax.fill_between(win.x_mod_plot, win.y_mod_cpt[cpt.name] - win.y_mod_err_cpt[cpt.name],
+                                win.y_mod_cpt[cpt.name] + win.y_mod_err_cpt[cpt.name],
                                 color=lte_model.cpt_cols[icpt], alpha=0.1)
-                ymin_plot = min(ymin_plot, min(win.y_mod_cpt[icpt] - win.y_mod_err_cpt[icpt]))
-                ymax_plot = max(ymin_plot, max(win.y_mod_cpt[icpt] + win.y_mod_err_cpt[icpt]))
+                ymin_plot = min(ymin_plot, min(win.y_mod_cpt[cpt.name] - win.y_mod_err_cpt[cpt.name]))
+                ymax_plot = max(ymin_plot, max(win.y_mod_cpt[cpt.name] + win.y_mod_err_cpt[cpt.name]))
 
     # Plot data and/or model
     if win.x_file is not None:  # data
