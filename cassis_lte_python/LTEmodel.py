@@ -26,6 +26,7 @@ from spectral_cube import SpectralCube
 from astropy.wcs import WCS
 from time import process_time
 from warnings import warn
+from typing_extensions import Literal
 import copy
 
 
@@ -1424,10 +1425,11 @@ class ModelSpectrum(object):
                     y_values = np.hstack((y_values, y_cpt.reshape(len(y_cpt), 1)))
 
         spec = x_values, y_values
-        self.save_spectrum(filename, dirname=dirname, ext=ext, spec=spec)
+        self.save_spectrum(filename, dirname=dirname, ext=ext, spec=spec, spectrum_type='synthetic')
 
     def save_spectrum(self, filename, dirname=None, ext='txt',
-                      spec: None | tuple = None, continuum=False,
+                      spec: None | tuple = None,
+                      spectrum_type: Literal['observed', 'continuum', 'synthetic'] = 'observed',
                       vlsr: None | float | int = None):
         """
         Write a spectrum (continuum, data or model, depending on the provided parameters) on a file.
@@ -1436,16 +1438,17 @@ class ModelSpectrum(object):
         :param ext:
         :param spec: tuple of x and y values to be written ;
                      if not provided and continuum is false, stored model is written
-        :param continuum: if True, spec is ignored
+        :param spectrum_type: 'continuum' or 'synthetic' or None (default)
         :param vlsr:
         :return: the path to the file
         """
+        if spectrum_type not in ['observed', 'continuum', 'synthetic']:
+            raise AttributeError('spectrum_type can only be one of the following: observed, continuum, synthetic')
+
         file_path = self.set_filepath(filename, dirname=dirname, ext=ext)
         ext = ext.strip('.')
 
-        spectrum_type = ''
-        if continuum:  # spec will be ignored
-            spectrum_type = 'continuum'
+        if spectrum_type == 'continuum':
             ext = 'txt'  # force txt extension
             file_path = self.set_filepath(filename + '_cont', dirname=dirname, ext=ext)
             x_values = self.tc['f_mhz']
@@ -1457,10 +1460,13 @@ class ModelSpectrum(object):
             #     self.data_file = file_path
             #     x_values, y_values = self.x_file, self.y_file
             else:
-                x_values, y_values = self.x_mod, self.y_mod
-                if y_values is None:
-                    y_values = self.model.eval(fmhz=self.x_mod, **self.params)
-                spectrum_type = 'synthetic'
+                if self.x_file is not None:
+                    x_values, y_values = self.x_file, self.y_file
+                else:
+                    x_values, y_values = self.x_mod, self.y_mod
+                    if y_values is None:
+                        y_values = self.model.eval(fmhz=self.x_mod, **self.params)
+                    spectrum_type = 'synthetic'
 
         if ext == 'fits':
             y_vals = y_values[:, 0] if len(np.shape(y_values)) > 1 else y_values
@@ -1510,8 +1516,11 @@ class ModelSpectrum(object):
 
                     header.append(f'#vlsr [km/s]: {self.model_config.vlsr_file}\n')
                     header.extend(['#xLabel: frequency [MHz]\n',
-                                   f'#yLabel: [{self.model_config.yunit}] Mean\n',
-                                   '#Columns : frequency, intensity (total), intensity of each component\n'])
+                                   f'#yLabel: [{self.model_config.yunit}] Mean\n'])
+                    if spectrum_type == 'synthetic':
+                        header.extend(['#Columns : frequency, intensity (total), intensity of each component\n'])
+                    else:
+                        header.extend(['#Columns : frequency, intensity\n'])
                     f.writelines(header)
 
                 for x, y in zip(x_values, y_values):
@@ -1522,6 +1531,9 @@ class ModelSpectrum(object):
                         line = '{}\t'.format(utils.format_float(x, nb_signif_digits=4))
                         line += '\t'.join([utils.format_float(yy, fmt="{:.5e}") for yy in y])
                         f.write(line + '\n')
+
+        if self.model_config.data_file is None and spectrum_type != 'continuum' and spectrum_type != 'synthetic':
+            self.model_config.data_file = os.path.abspath(file_path)
 
         return os.path.abspath(file_path)
 
