@@ -3,7 +3,7 @@ from __future__ import annotations
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
-from cassis_lte_python.utils.settings import SQLITE_FILE, NCOLS_DEF, NROWS_DEF, DPI_DEF
+from cassis_lte_python.utils.settings import NCOLS_DEF, NROWS_DEF, DPI_DEF
 from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
