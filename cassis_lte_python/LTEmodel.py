@@ -53,8 +53,8 @@ def generate_lte_model_func(config):
         intensity = 0.
         for icpt, cpt in enumerate(cpt_list):
             tex = params['{}_tex'.format(cpt.name)] * norm_factors['{}_tex'.format(cpt.name)]
-            if log:
-                tex = round(10. ** tex, 6)
+            # if log:
+            #     tex = round(10. ** tex, 6)
             vlsr = params['{}_vlsr'.format(cpt.name)] * norm_factors['{}_vlsr'.format(cpt.name)]
             size = params['{}_size'.format(cpt.name)] * norm_factors['{}_size'.format(cpt.name)]
 
@@ -592,7 +592,8 @@ class ModelSpectrum(object):
         if self.log:  # take log10 for tex and ntot
             params = self.params
             for par in params:
-                if 'tex' in par or 'ntot' in par:
+                # if 'tex' in par or 'ntot' in par:
+                if 'ntot' in par:
                     user_data = {'value': params[par].value,
                                  'min': params[par].min,
                                  'max': params[par].max,
