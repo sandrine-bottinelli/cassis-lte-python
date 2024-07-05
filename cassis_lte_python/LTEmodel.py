@@ -1604,7 +1604,7 @@ class ModelSpectrum(object):
 
     def write_cassis_file(self, filename, dirname=None, datafile=None):
         def lam_item(name, value):
-            if isinstance(value, float):
+            if isinstance(value, float) and value != 0.:
                 fmt = '{:.3e}' if (value >= 1.e4 or value <= 1.e-2) else '{:.2f}'
                 return '{}={}\n'.format(name, fmt.format(value))
             return '{}={}\n'.format(name, value)
@@ -1655,13 +1655,17 @@ class ModelSpectrum(object):
                 'bandUnit': 'KM_SEC_MOINS_1'
             }
 
-        eup_max = 1.e304
-        eup_max_vals = [val['eup_max'] for val in self.thresholds.values() if val['eup_max'] is not None]
-        if len(eup_max_vals) > 0:
+        # eup_max = 1.e304
+        eup_max_vals = [val['eup_max'] for val in self.thresholds.values()]
+        if None in eup_max_vals:
+            eup_max = '*'
+        else:
             eup_max = max(eup_max_vals)
-        aij_max = 1.e304
-        aij_max_vals = [val['aij_max'] for val in self.thresholds.values() if val['aij_max'] is not None]
-        if len(aij_max_vals) > 0:
+        # aij_max = 1.e304
+        aij_max_vals = [val['aij_max'] for val in self.thresholds.values()]
+        if None in aij_max_vals:
+            aij_max = '*'
+        else:
             aij_max = max(aij_max_vals)
         thresholds = {'jupMin': '*',
                       'jupMax': '*',
