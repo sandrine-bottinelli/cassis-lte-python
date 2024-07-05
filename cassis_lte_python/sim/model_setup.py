@@ -43,55 +43,7 @@ class ModelConfiguration:
         self.tag_list = configuration.get('inspect', [])
         self.cpt_list = []
         if 'components' in configuration:
-            for key, cpt_dic in configuration.get('components').items():
-                sp_list = cpt_dic['species']
-                if not isinstance(sp_list, list):  # make sure it is a list
-                    sp_list = [sp_list]
-                if isinstance(sp_list[0], (int, str)) and self.species_infos is not None:
-                    # we have a list of tags and infos from file
-                    species_list = []
-                    for sp in sp_list:
-                        if f'{key}_fwhm_min_d' in self.species_infos.keys():
-                            diff = True
-                            min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min_d']
-                            max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max_d']
-                        else:
-                            diff = False
-                            min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min']
-                            max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max']
-                        species_list.append(
-                            {'tag': str(sp),
-                             'ntot': parameter_infos(
-                                 value=self.species_infos.at[int(sp), f'{key}_ntot'],
-                                 min=1e-2, max=1e2, factor=True
-                             ),
-                             'fwhm': parameter_infos(
-                                 value=self.species_infos.at[int(sp), f'{key}_fwhm'],
-                                 min=min_f, max=max_f, difference=diff
-                             )
-                             }
-                        )
-                    sp_list = species_list
-                if 'set_fwhm' in cpt_dic and cpt_dic['set_fwhm'] is not None:
-                    tag_ref = str(cpt_dic['set_fwhm'])
-                    expr = f'{key}_fwhm_{tag_ref}'
-                    sp_list_ord = []
-                    for sp in sp_list:
-                        if sp['tag'] != tag_ref:
-                            sp['fwhm'].update({'expr': expr})
-                            sp_list_ord.append(sp)
-                        else:
-                            sp_list_ord = [sp] + sp_list_ord  # make sure the reference species is first
-                    sp_list = sp_list_ord
-                cpt = Component(key, sp_list,
-                                isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
-                                vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
-                self.cpt_list.append(cpt)
-                for sp in cpt.species_list:
-                    if sp.parameters[1].max is not None and sp.parameters[1].max != np.inf:
-                        self.fwhm_max = max(self.fwhm_max, sp.parameters[1].max)
-                    if sp.tag not in self.tag_list:
-                        self.tag_list.append(sp.tag)
+            self.get_components(configuration['components'])
 
         self.output_dir = configuration.get('output_dir', os.path.curdir)
         if not os.path.isdir(self.output_dir):
@@ -623,6 +575,85 @@ class ModelConfiguration:
 
             else:
                 raise TypeError("rms_cal must be a dictionary or a path to an appropriate file.")
+
+    def get_components(self, cpt_info):
+        config_key = [key for key in cpt_info.keys() if 'config' in key]
+        if len(config_key) > 0:
+            cpt_config_file = cpt_info[config_key[0]]
+            cpt_info.pop(config_key[0])
+            try:
+                cpt_df = pd.read_csv(cpt_config_file, sep='\t', comment='#')
+                cpt_df = cpt_df.rename(columns=lambda x: x.strip())
+                cpt_names = [name.split('_')[0] for name in cpt_df['name']]
+                cpt_names = list(set(cpt_names))
+                cpt_names.sort()
+                # cpt_info = {cname: {'interacting': True} for cname in cpt_names}
+                for cname in cpt_names:
+                    if cname not in cpt_info:
+                        cpt_info[cname] = {}
+                    if 'interacting' not in cpt_info[cname]:
+                        cpt_info[cname]['interacting'] = True
+                for i, row in cpt_df.iterrows():
+                    cpt_name, par_name = row['name'].split('_')
+                    cpt_info[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
+                                                                   vary=row['vary'])
+            except FileNotFoundError:
+                raise FileNotFoundError(f"{cpt_config_file} was not found.")
+
+        for key, cpt_dic in cpt_info.items():
+            sp_list = cpt_dic.get('species', None)
+            if sp_list is None:
+                if self.species_infos is not None:
+                    pass
+                else:
+                    raise Exception("Missing species info.")
+            if not isinstance(sp_list, list):  # make sure it is a list
+                sp_list = [sp_list]
+            if isinstance(sp_list[0], (int, str)) and self.species_infos is not None:
+                # we have a list of tags and infos from file
+                species_list = []
+                for sp in sp_list:
+                    if f'{key}_fwhm_min_d' in self.species_infos.keys():
+                        diff = True
+                        min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min_d']
+                        max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max_d']
+                    else:
+                        diff = False
+                        min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min']
+                        max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max']
+                    species_list.append(
+                        {'tag': str(sp),
+                         'ntot': parameter_infos(
+                             value=self.species_infos.at[int(sp), f'{key}_ntot'],
+                             min=1e-2, max=1e2, factor=True
+                         ),
+                         'fwhm': parameter_infos(
+                             value=self.species_infos.at[int(sp), f'{key}_fwhm'],
+                             min=min_f, max=max_f, difference=diff
+                         )
+                         }
+                    )
+                sp_list = species_list
+            if 'set_fwhm' in cpt_dic and cpt_dic['set_fwhm'] is not None:
+                tag_ref = str(cpt_dic['set_fwhm'])
+                expr = f'{key}_fwhm_{tag_ref}'
+                sp_list_ord = []
+                for sp in sp_list:
+                    if sp['tag'] != tag_ref:
+                        sp['fwhm'].update({'expr': expr})
+                        sp_list_ord.append(sp)
+                    else:
+                        sp_list_ord = [sp] + sp_list_ord  # make sure the reference species is first
+                sp_list = sp_list_ord
+            cpt = Component(key, sp_list,
+                            isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
+                            vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
+            self.cpt_list.append(cpt)
+            for sp in cpt.species_list:
+                if sp.parameters[1].max is not None and sp.parameters[1].max != np.inf:
+                    self.fwhm_max = max(self.fwhm_max, sp.parameters[1].max)
+                if sp.tag not in self.tag_list:
+                    self.tag_list.append(sp.tag)
 
     def get_windows(self, verbose=True):
         if self.bandwidth is None or self.fit_freq_except is not None:
