@@ -388,10 +388,13 @@ class ModelConfiguration:
     def get_continuum(self, config=None):
         if isinstance(self.cont_info, (float, int)):
             self._tc = lambda x: self.cont_info
-        elif isinstance(self.cont_info, str) and os.path.isfile(self.cont_info):
-            # cont_info is a CASSIS continuum file : MHz [tab] K
-            f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', unpack=True)
-            self._tc = interp1d(f_cont, t_cont, kind='nearest')
+        elif isinstance(self.cont_info, str):
+            try:
+                # cont_info is a CASSIS continuum file : MHz [tab] K
+                f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', unpack=True)
+                self._tc = interp1d(f_cont, t_cont, kind='nearest')
+            except FileNotFoundError:
+                raise FileNotFoundError(f"{os.path.isfile(self.cont_info)} not found.")
         elif isinstance(self.cont_info, dict):
             # to compute continuum over ranges given by the user : { '[fmin, fmax]': value, ...}
             f_cont, t_cont = [], []
