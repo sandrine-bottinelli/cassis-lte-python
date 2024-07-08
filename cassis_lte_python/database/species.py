@@ -10,11 +10,13 @@ from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 
 
 class Species:
-    def __init__(self, tag, ntot=7.0e14, tex=100., fwhm=FWHM_DEF, component=None):
+    def __init__(self, tag, ntot=7.0e14, tex=100., fwhm=None, component=None):
         # super().__init__(self)
         self._tag = str(tag)  # make sure tag is stored as a string
         self._ntot = create_parameter('ntot_{}'.format(tag), ntot)  # total column density [cm-2]
-        self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
+        self._fwhm = fwhm
+        if fwhm is not None:
+            self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
 
         self._tex = tex  # excitation temperature [K]
         self._component = component
@@ -34,7 +36,7 @@ class Species:
         return {
             'tag': self.tag,
             'ntot': round(self.ntot, 3),
-            'fwhm': round(self.fwhm, 3)
+            'fwhm': round(self.fwhm, 3) if self._fwhm is not None else None
         }
 
     @property
@@ -68,16 +70,20 @@ class Species:
 
     @property
     def fwhm(self):
-        return self._fwhm.value
+        return self._fwhm.value if self._fwhm is not None else None
 
     @property
     def parameters(self):
-        return [self._ntot, self._fwhm]
+        params = [self._ntot]
+        if self._fwhm is not None:
+            params.append(self._fwhm)
+        return params
 
     def set_component(self, comp_name):
         self._component = comp_name
         self._ntot.name = '{}_ntot_{}'.format(comp_name, self.tag)
-        self._fwhm.name = '{}_fwhm_{}'.format(comp_name, self.tag)
+        if self._fwhm is not None:
+            self._fwhm.name = '{}_fwhm_{}'.format(comp_name, self.tag)
 
     def get_partition_function(self, tex):
         # tmp = interp(log10(tex), log10(self.pf[0]), self.pf[1])

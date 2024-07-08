@@ -58,6 +58,11 @@ def generate_lte_model_func(config):
             #     tex = round(10. ** tex, 6)
             vlsr = params['{}_vlsr'.format(cpt.name)] * norm_factors['{}_vlsr'.format(cpt.name)]
             size = params['{}_size'.format(cpt.name)] * norm_factors['{}_size'.format(cpt.name)]
+            try:
+                fwhm = params['{}_fwhm'.format(cpt.name)] * norm_factors['{}_fwhm'.format(cpt.name)]
+            except KeyError:
+                fwhm = None
+                pass  # assume fwhm will be given by species, do nothing
 
             sum_tau = 0
             for isp, tag in enumerate(cpt.tag_list):
@@ -69,7 +74,10 @@ def generate_lte_model_func(config):
                 ntot = params['{}_ntot_{}'.format(cpt.name, tag)] * norm_factors['{}_ntot_{}'.format(cpt.name, tag)]
                 if log:
                     ntot = 10. ** ntot
-                fwhm = params['{}_fwhm_{}'.format(cpt.name, tag)] * norm_factors['{}_fwhm_{}'.format(cpt.name, tag)]
+
+                if fwhm is None:
+                    fwhm = params['{}_fwhm_{}'.format(cpt.name, tag)] * norm_factors['{}_fwhm_{}'.format(cpt.name, tag)]
+
                 qtex = cpt.species_list[isp].get_partition_function(tex)
                 for tran in tran_list:
                     tau0 = utils.compute_tau0(tran, ntot, fwhm, tex, qtex=qtex)
@@ -1587,9 +1595,13 @@ class ModelSpectrum(object):
                         line = row['transition']
                         if line.tag in cpt.tag_list:
                             tex = self.params[f"{cpt.name}_tex"].value
+                            try:
+                                fwhm = self.params[f"{cpt.name}_fwhm"].value
+                            except IndexError:
+                                fwhm = self.params[f"{cpt.name}_fwhm_{line.tag}"].value
                             tau0 = utils.compute_tau0(line,
                                                       self.params[f"{cpt.name}_ntot_{line.tag}"].value,
-                                                      self.params[f"{cpt.name}_fwhm_{line.tag}"].value,
+                                                      fwhm,
                                                       tex)
                             ind0 = utils.find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
                             f.write(f"{line.name} ({line.qn_lo}_{line.qn_hi})\t{line.tag}")
@@ -1750,6 +1762,10 @@ class ModelSpectrum(object):
                     }
             for isp, sp in enumerate(cpt.species_list):
                 molname = 'Mol{}'.format(isp + 1)
+                try:
+                    fwhm = params['{}_fwhm'.format(cpt.name)].value
+                except KeyError:
+                    fwhm = params['{}_fwhm_{}'.format(cpt.name, sp.tag)].value
                 mol_dic = {
                     'Tag': sp.tag,
                     'Species': sp.name,
@@ -1760,7 +1776,7 @@ class ModelSpectrum(object):
                     'Abundance': params['{}_ntot_{}'.format(cpt.name, sp.tag)].value / cdic['Density'],
                     'Tex': params['{}_tex'.format(cpt.name)].value,
                     'TKin': '10.0',
-                    'FWHM': params['{}_fwhm_{}'.format(cpt.name, sp.tag)].value,
+                    'FWHM': fwhm,
                     'Size': params['{}_size'.format(cpt.name)].value
                     }
                 cdic[molname] = {basename + molname + key: val for key, val in mol_dic.items()}

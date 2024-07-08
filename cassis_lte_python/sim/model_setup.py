@@ -597,10 +597,15 @@ class ModelConfiguration:
                     cpt_name, par_name = row['name'].split('_')
                     cpt_info[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
                                                                    vary=row['vary'])
+
             except FileNotFoundError:
                 raise FileNotFoundError(f"{cpt_config_file} was not found.")
 
-        for key, cpt_dic in cpt_info.items():
+        for cname in cpt_info.keys():
+            if 'fwhm' not in cpt_info[cname]:
+                cpt_info[cname]['fwhm'] = None
+
+        for cname, cpt_dic in cpt_info.items():
             sp_list = cpt_dic.get('species', None)
             if sp_list is None:
                 if self.species_infos is not None:
@@ -613,30 +618,29 @@ class ModelConfiguration:
                 # we have a list of tags and infos from file
                 species_list = []
                 for sp in sp_list:
-                    if f'{key}_fwhm_min_d' in self.species_infos.keys():
-                        diff = True
-                        min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min_d']
-                        max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max_d']
-                    else:
-                        diff = False
-                        min_f = self.species_infos.at[int(sp), f'{key}_fwhm_min']
-                        max_f = self.species_infos.at[int(sp), f'{key}_fwhm_max']
-                    species_list.append(
-                        {'tag': str(sp),
-                         'ntot': parameter_infos(
-                             value=self.species_infos.at[int(sp), f'{key}_ntot'],
-                             min=1e-2, max=1e2, factor=True
-                         ),
-                         'fwhm': parameter_infos(
-                             value=self.species_infos.at[int(sp), f'{key}_fwhm'],
-                             min=min_f, max=max_f, difference=diff
-                         )
-                         }
-                    )
+                    sp_dict = {
+                        'tag': str(sp),
+                        'ntot': parameter_infos(value=self.species_infos.at[int(sp), f'{cname}_ntot'],
+                                                min=1e-2, max=1e2, factor=True)
+                    }
+                    if cpt_info[cname]['fwhm'] is None:
+                        if f'{cname}_fwhm_min_d' in self.species_infos.keys():
+                            diff = True
+                            min_f = self.species_infos.at[int(sp), f'{cname}_fwhm_min_d']
+                            max_f = self.species_infos.at[int(sp), f'{cname}_fwhm_max_d']
+                        elif f'{cname}_fwhm_min' in self.species_infos.keys():
+                            diff = False
+                            min_f = self.species_infos.at[int(sp), f'{cname}_fwhm_min']
+                            max_f = self.species_infos.at[int(sp), f'{cname}_fwhm_max']
+                        else:
+                            raise Exception("Missing fwhm info.")
+                        sp_dict['fwhm'] = parameter_infos(value=self.species_infos.at[int(sp), f'{cname}_fwhm'],
+                                                          min=min_f, max=max_f, difference=diff)
+                    species_list.append(sp_dict)
                 sp_list = species_list
             if 'set_fwhm' in cpt_dic and cpt_dic['set_fwhm'] is not None:
                 tag_ref = str(cpt_dic['set_fwhm'])
-                expr = f'{key}_fwhm_{tag_ref}'
+                expr = f'{cname}_fwhm_{tag_ref}'
                 sp_list_ord = []
                 for sp in sp_list:
                     if sp['tag'] != tag_ref:
@@ -645,13 +649,27 @@ class ModelConfiguration:
                     else:
                         sp_list_ord = [sp] + sp_list_ord  # make sure the reference species is first
                 sp_list = sp_list_ord
-            cpt = Component(key, sp_list,
+            cpt = Component(cname, sp_list,
                             isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
-                            vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'))
+                            vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'),
+                            fwhm=cpt_dic.get('fwhm'))
             self.cpt_list.append(cpt)
+
+            if cpt_dic.get('fwhm') is not None:
+                if cpt_dic.get('fwhm')['max'] is not None and cpt_dic.get('fwhm')['max'] != np.inf:
+                    self.fwhm_max = max(self.fwhm_max, cpt_dic.get('fwhm')['max'])
+                else:
+                    self.fwhm_max = max(self.fwhm_max, cpt_dic.get('fwhm')['value'])
+
             for sp in cpt.species_list:
-                if sp.parameters[1].max is not None and sp.parameters[1].max != np.inf:
-                    self.fwhm_max = max(self.fwhm_max, sp.parameters[1].max)
+                try:
+                    if sp.parameters[1].max is not None and sp.parameters[1].max != np.inf:
+                        self.fwhm_max = max(self.fwhm_max, sp.parameters[1].max)
+                    else:
+                        self.fwhm_max = max(self.fwhm_max, sp.parameters[1].value)
+                except IndexError:
+                    pass  # do nothing
+
                 if sp.tag not in self.tag_list:
                     self.tag_list.append(sp.tag)
 
@@ -864,9 +882,27 @@ class ModelConfiguration:
 
 
 class Component:
-    def __init__(self, name, species_list, isInteracting=False, vlsr=None, size=None, tex=100., config=None):
+    def __init__(self, name, species_list, isInteracting=False, vlsr=None, size=None, tex=100., fwhm=None, config=None):
         # super().__init__()
         self.name = name
+
+        self.isInteracting = isInteracting
+
+        if vlsr is None:
+            vlsr = VLSR_DEF  # TODO: find out why VLSR_DEF inside __init__ does not work
+        self._vlsr = create_parameter('{}_vlsr'.format(self.name), vlsr)  # km/s
+
+        if size is None:
+            size = SIZE_DEF
+        self._size = create_parameter('{}_size'.format(self.name), size)  # arcsec
+
+        self._tex = create_parameter('{}_tex'.format(self.name), tex)  # K
+
+        if fwhm is not None:
+            self._fwhm = create_parameter('{}_fwhm'.format(self.name), fwhm)
+        else:
+            self._fwhm = None
+
         self.species_list = []
         if not isinstance(species_list, list):
             species_list = [species_list]
@@ -874,7 +910,9 @@ class Component:
             if isinstance(sp, Species):
                 sp2add = sp
             elif isinstance(sp, dict):
-                sp2add = Species(sp['tag'], ntot=sp['ntot'], fwhm=sp['fwhm'], component=self)
+                sp2add = Species(sp['tag'], ntot=sp['ntot'],
+                                 fwhm=None if self._fwhm is not None else sp['fwhm'],
+                                 component=self)
             elif isinstance(sp, (int, str)):
                 sp2add = Species(sp)
             else:
@@ -888,28 +926,26 @@ class Component:
             self.species_list.append(sp2add)
 
         self._tag_list = [sp.tag for sp in self.species_list]
-        self.isInteracting = isInteracting
-        if vlsr is None:
-            vlsr = VLSR_DEF  # TODO: find out why VLSR_DEF inside __init__ does not work
-        self._vlsr = create_parameter('{}_vlsr'.format(self.name), vlsr)  # km/s
-        if size is None:
-            size = SIZE_DEF
-        self._size = create_parameter('{}_size'.format(self.name), size)  # arcsec
-        self._tex = create_parameter('{}_tex'.format(self.name), tex)  # K
+
         for sp in self.species_list:
             sp.tex = self.tex
         # highest temp for the component should be the lowest value among the max values of the partition functions
         self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
         # lowest temp for the component should be the highest value among the min values of the partition functions
         self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
+
         self.transition_list = None
+
         self.parameters = [self._vlsr, self._size, self._tex]
+        if self._fwhm is not None:
+            self.parameters.append(self._fwhm)
 
     def as_json(self):
         return {
             'vlsr': round(self.vlsr, 3),
             'size': round(self.size, 3),
             'tex': round(self.tex, 3),
+            'fwhm': round(self.fwhm, 3) if self._fwhm is not None else None,
             'isInteracting': self.isInteracting,
             'species': [sp.as_json() for sp in self.species_list]
         }
@@ -918,9 +954,12 @@ class Component:
         self._vlsr = new_pars['{}_vlsr'.format(self.name)]
         self._size = new_pars['{}_size'.format(self.name)]
         self._tex = new_pars['{}_tex'.format(self.name)]
+        if '{}_fwhm'.format(self.name) in new_pars:
+            self._fwhm = new_pars['{}_fwhm'.format(self.name)]
         for sp in self.species_list:
             sp._ntot = new_pars['{}_ntot_{}'.format(self.name, sp.tag)]
-            sp._fwhm = new_pars['{}_fwhm_{}'.format(self.name, sp.tag)]
+            if self._fwhm is None:
+                sp._fwhm = new_pars['{}_fwhm_{}'.format(self.name, sp.tag)]
 
         # self.vlsr.set(value=new_pars['{}_vlsr'.format(self.name)].value, is_init_value=False)
         # self.size.set(value=new_pars['{}_size'.format(self.name)].value, is_init_value=False)
@@ -941,6 +980,10 @@ class Component:
     @property
     def tex(self):
         return self._tex.value
+
+    @property
+    def fwhm(self):
+        return self._fwhm.value if self._fwhm is not None else None
 
     @property
     def tmax(self):
