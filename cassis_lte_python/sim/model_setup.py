@@ -582,7 +582,14 @@ class ModelConfiguration:
             cpt_config_file = cpt_info[config_key[0]]
             cpt_info.pop(config_key[0])
             try:
-                cpt_df = pd.read_csv(cpt_config_file, sep='\t', comment='#')
+                with open(cpt_config_file) as f:
+                    lines = f.readlines()
+                    interacting = [line for line in lines if '_interacting' in line]
+                    for line in interacting:
+                        cname = line.split('_')[0]
+                        if cname not in cpt_info:
+                            cpt_info[cname] = {'interacting': line.split()[1].strip == "True"}
+                cpt_df = pd.read_csv(cpt_config_file, sep='\t', comment='#', header=len(interacting))
                 cpt_df = cpt_df.rename(columns=lambda x: x.strip())
                 cpt_names = [name.split('_')[0] for name in cpt_df['name']]
                 cpt_names = list(set(cpt_names))
