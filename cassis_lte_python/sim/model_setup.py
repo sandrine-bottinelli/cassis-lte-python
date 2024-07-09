@@ -197,12 +197,31 @@ class ModelConfiguration:
         self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)
         self.fit_kws = configuration.get('fit_kws', None)
+
+        # outputs other than plots
         self.save_configs = configuration.get('save_configs', True) or configuration.get('save_res_configs', True)
+        self._name_lam = configuration.get('name_lam', self.base_name)  # do not add extension here
+        self._name_config = configuration.get('name_config', self.base_name + '_config.txt')
         self.save_results = configuration.get('save_results', True) or configuration.get('save_res_configs', True)
-        self.name_lam = configuration.get('name_lam', None)
-        self.name_config = configuration.get('name_config', None)
-        self.save_spec = configuration.get('save_spec', False)
-        self.file_spec = configuration.get('file_spec', 'synthetic_spectrum.txt')
+        save_model = False
+        if 'save_spec' in configuration:
+            warnings.warn("'save_spec' is deprecated, use 'save_model' instead.")
+            save_model = configuration['save_spec']
+        self.save_model_spec = configuration.get('save_model', save_model)
+        self.save_obs_spec = configuration.get('save_obs', False)
+        self._file_spec = configuration.get('file_spec', 'synthetic_spectrum.txt')
+        output_files_def = {}
+        if self.save_configs:
+            output_files_def['lam'] = self._name_lam
+            output_files_def['config'] = self._name_config
+        if self.save_results:
+            output_files_def['results'] = self.base_name + '_fit_res.txt'
+        if self.save_obs_spec:
+            output_files_def['obs'] = self.base_name + '_obs.txt'
+        if self.save_model_spec:
+            output_files_def['model'] = self.base_name + '_model.txt'
+
+        self._output_files = configuration.get('output_files', output_files_def)
 
         # Default plot keywords :
         self.plot_kws = {
@@ -886,6 +905,24 @@ class ModelConfiguration:
     def rms_cal(self, value):
         self._rms_cal_user = value
         self.get_rms_cal_info()
+
+    @property
+    def file_spec(self):
+        warnings.warn("This property is deprecated, please use `model_spec` instead.")
+        return self._file_spec
+
+    @file_spec.setter
+    def file_spec(self, value):
+        warnings.warn("This property is deprecated, please use `model_spec` instead.")
+        self._file_spec = value
+
+    @property
+    def output_files(self):
+        return self._output_files
+
+    @output_files.setter
+    def output_files(self, dic):
+        self._output_files = dic
 
 
 class Component:

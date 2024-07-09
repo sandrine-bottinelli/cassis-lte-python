@@ -260,21 +260,29 @@ class ModelSpectrum(object):
         if self.minimize:
             self.do_minimization()
             if self.save_results:
-                filename = ''
-                if self.name_lam is not None:
-                    filename = self.name_lam + '_'
-                filename = filename + 'fit_res'
-                self.save_fit_results(filename)
+                # filename = ''
+                # if self.name_lam is not None:
+                #     filename = self.name_lam + '_'
+                # filename = filename + 'fit_res'
+                self.save_fit_results(self.model_config.output_files['results'])
 
             if self.save_configs:
-                if self.name_lam is not None:
-                    self.write_lam(self.name_lam)
-                if self.name_config is not None:
-                    self.save_config(self.name_config)
+                if 'lam' in self.model_config.output_files:
+                    self.write_lam(self.model_config.output_files['lam'])
+                if 'config' in self.model_config.output_files:
+                    self.save_config(self.model_config.output_files['config'])
 
-        if self.save_spec:
-            filename, ext = os.path.splitext(self.file_spec)
-            self.save_spectrum(filename, ext=ext)
+        if self.save_model_spec:
+            filename, ext = os.path.splitext(self.model_config.output_files['model'])
+            if len(ext) == 0:
+                ext = 'txt'
+            self.save_spectrum(filename, ext=ext, spectrum_type='synthetic')
+
+        if self.save_obs_spec:
+            filename, ext = os.path.splitext(self.model_config.output_files['obs'])
+            if len(ext) == 0:
+                ext = 'txt'
+            self.save_spectrum(filename, ext=ext, spectrum_type='observed')
 
         if self.plot_gui or self.plot_file:
             print('Finding windows for gui and file plots.')
