@@ -240,8 +240,10 @@ class ModelSpectrum(object):
         self.cpt_cols = None
         self.thresholds_other = None
 
-        if self.minimize:
-            self.log = True
+        if self.model_config.fit_kws is not None:
+            if 'log' in self.model_config.fit_kws:
+                self.log = self.model_config.fit_kws['log']
+                self.model_config.fit_kws.pop('log')
 
         # try:
         #     self.make_params(json_params=self.model_config.jparams)
@@ -637,7 +639,7 @@ class ModelSpectrum(object):
         if 'method' in fit_kws:
             fit_kws.pop('method')
 
-        self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=True,
+        self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=self.log,
                                         # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
                                         # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
                                         cpt=None, line_center_only=False, return_tau=False,
