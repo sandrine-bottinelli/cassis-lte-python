@@ -197,6 +197,7 @@ class ModelConfiguration:
         self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)
         self.fit_kws = configuration.get('fit_kws', None)
+        self.print_report = configuration.get('print_report', True)
 
         # outputs other than plots
         self.save_configs = configuration.get('save_configs', True) or configuration.get('save_res_configs', True)

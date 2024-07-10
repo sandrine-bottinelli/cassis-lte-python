@@ -258,7 +258,7 @@ class ModelSpectrum(object):
                                      funcdefs={'lte_model_func': generate_lte_model_func(self.model_info())})
 
         if self.minimize:
-            self.do_minimization()
+            self.do_minimization(print_report=self.print_report)
             if self.save_results:
                 # filename = ''
                 # if self.name_lam is not None:
