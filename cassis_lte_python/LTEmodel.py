@@ -639,6 +639,7 @@ class ModelSpectrum(object):
         if 'method' in fit_kws:
             fit_kws.pop('method')
 
+        cb = fit_callback if self.print_report else None
         self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=self.log,
                                         # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
                                         # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
@@ -646,7 +647,12 @@ class ModelSpectrum(object):
                                         weights=wt,
                                         method=method,
                                         max_nfev=max_nfev, fit_kws=fit_kws,
-                                        iter_cb=fit_callback)
+                                        iter_cb=cb)
+        if not self.print_report:
+            if self.model_fit.nfev == self.model_fit.max_nfev:
+                print(f"Maximum number of iterations reached ({self.model_fit.max_nfev}).")
+            else:
+                print(f"Fit performed in {self.model_fit.nfev} iterations.")
 
         # if len(self.cpt_list) > 1:
         #     for cpt in self.cpt_list:
