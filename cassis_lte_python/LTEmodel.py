@@ -268,12 +268,6 @@ class ModelSpectrum(object):
                 # filename = filename + 'fit_res'
                 self.save_fit_results(self.model_config.output_files['results'])
 
-            if self.save_configs:
-                if 'lam' in self.model_config.output_files:
-                    self.write_lam(self.model_config.output_files['lam'])
-                if 'config' in self.model_config.output_files:
-                    self.save_config(self.model_config.output_files['config'])
-
         if self.save_model_spec:
             filename, ext = os.path.splitext(self.model_config.output_files['model'])
             if len(ext) == 0:
@@ -285,6 +279,12 @@ class ModelSpectrum(object):
             if len(ext) == 0:
                 ext = 'txt'
             self.save_spectrum(filename, ext=ext, spectrum_type='observed')
+
+        if self.save_configs:  # must be last to make sure we have appropriate data file in memory
+            if 'lam' in self.model_config.output_files:
+                self.write_lam(self.model_config.output_files['lam'])
+            if 'config' in self.model_config.output_files:
+                self.save_config(self.model_config.output_files['config'])
 
         if self.plot_gui or self.plot_file:
             print('Finding windows for gui and file plots.')
