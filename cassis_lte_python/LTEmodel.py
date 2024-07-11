@@ -272,7 +272,7 @@ class ModelSpectrum(object):
             filename, ext = os.path.splitext(self.model_config.output_files['model'])
             if len(ext) == 0:
                 ext = 'txt'
-            self.save_spectrum(filename, ext=ext, spectrum_type='synthetic')
+            self.save_model(filename, ext=ext)
 
         if self.save_obs_spec:
             filename, ext = os.path.splitext(self.model_config.output_files['obs'])
@@ -1459,7 +1459,7 @@ class ModelSpectrum(object):
 
     def save_spectrum(self, filename, dirname=None, ext='txt',
                       spec: None | tuple = None,
-                      spectrum_type: Literal['observed', 'continuum', 'synthetic'] = 'observed',
+                      spectrum_type: Literal['observed', 'continuum', 'synthetic', ''] = '',
                       vlsr: None | float | int = None):
         """
         Write a spectrum (continuum, data or model, depending on the provided parameters) on a file.
@@ -1468,35 +1468,44 @@ class ModelSpectrum(object):
         :param ext:
         :param spec: tuple of x and y values to be written ;
                      if not provided and continuum is false, stored model is written
-        :param spectrum_type: 'continuum' or 'synthetic' or None (default)
+        :param spectrum_type: 'continuum', 'observed', 'synthetic' or empty string '' (default)
         :param vlsr:
         :return: the path to the file
         """
-        if spectrum_type not in ['observed', 'continuum', 'synthetic']:
-            raise AttributeError('spectrum_type can only be one of the following: observed, continuum, synthetic')
+        spec_types = ['', 'observed', 'continuum', 'synthetic']
+        if spectrum_type not in spec_types:
+            raise AttributeError('spectrum_type can only be one of the following:',
+                                 ", ".join([f"'{t}'" for t in spec_types]))
 
         file_path = self.set_filepath(filename, dirname=dirname, ext=ext)
         ext = ext.strip('.')
 
-        if spectrum_type == 'continuum':
+        if spec is not None:  # should be a tuple of x and y values
+            x_values, y_values = spec
+
+        elif spectrum_type == 'continuum':
             ext = 'txt'  # force txt extension
             file_path = self.set_filepath(filename + '_cont', dirname=dirname, ext=ext)
             x_values = self.tc['f_mhz']
             y_values = self.tc['tc']
-        else:
-            if spec is not None:  # should be a tuple of x and y values
-                x_values, y_values = spec
-            # elif self.data_file is None and self.x_file is not None:  # TODO: check whether this case is useful
+
+        elif spectrum_type == 'observed':
+            # if self.data_file is None and self.x_file is not None:  # TODO: check whether this case is useful
             #     self.data_file = file_path
             #     x_values, y_values = self.x_file, self.y_file
-            else:
-                if self.x_file is not None:
-                    x_values, y_values = self.x_file, self.y_file
-                else:
-                    x_values, y_values = self.x_mod, self.y_mod
-                    if y_values is None:
-                        y_values = self.model.eval(fmhz=self.x_mod, **self.params)
-                    spectrum_type = 'synthetic'
+            x_values, y_values = self.x_file, self.y_file
+
+        elif spectrum_type == 'synthetic':
+            x_values, y_values = self.x_mod, self.y_mod
+            if y_values is None:
+                y_values = self.model.eval(fmhz=self.x_mod, **self.params)
+
+        else:
+            x_values, y_values = None, None
+
+        if x_values is None or y_values is None:
+            print('Nothing to save.')
+            return None
 
         if ext == 'fits':
             y_vals = y_values[:, 0] if len(np.shape(y_values)) > 1 else y_values
