@@ -9,22 +9,22 @@ def parameter_infos(value=None, min=None, max=None, expr=None, vary=True,
     user_data = {}
     if factor and value is not None:
         user_data['factor'] = True
-        if min is not None:
+        if min is not None and expr is None:
             user_data['min_fact'] = min
             min *= value
-        if max is not None:
+        if max is not None and expr is None:
             user_data['max_fact'] = max
             max *= value
     if difference and value is not None:
         user_data['difference'] = True
-        if min is not None:
+        if min is not None and expr is None:
             user_data['min_diff'] = min
             min += value
-        if max is not None:
+        if max is not None and expr is None:
             user_data['max_diff'] = max
             max += value
     if len(user_data) > 0:
-        return {'value': value, 'min': min, 'max': max, 'expr': expr, 'vary': vary, 'user_data':user_data}
+        return {'value': value, 'min': min, 'max': max, 'expr': expr, 'vary': vary, 'user_data': user_data}
     else:
         return {'value': value, 'min': min, 'max': max, 'expr': expr, 'vary': vary}
 
