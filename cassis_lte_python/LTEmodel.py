@@ -1571,7 +1571,8 @@ class ModelSpectrum(object):
                         line += '\t'.join([utils.format_float(yy, fmt="{:.5e}") for yy in y])
                         f.write(line + '\n')
 
-        if self.model_config.data_file is None and spectrum_type != 'continuum' and spectrum_type != 'synthetic':
+        # if self.model_config.data_file is None and spectrum_type != 'continuum' and spectrum_type != 'synthetic':
+        if spectrum_type not in ['continuum', 'synthetic']:
             self.model_config.data_file = os.path.abspath(file_path)
 
         return os.path.abspath(file_path)
