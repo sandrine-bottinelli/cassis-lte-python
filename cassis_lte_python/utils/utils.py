@@ -525,6 +525,23 @@ def read_noise_info(noise_file):
     return noise_info
 
 
+def read_species_info(sp_file, header=None):
+    df = pd.read_csv(sp_file, delimiter='\t', comment='#', index_col=0, dtype=str, header=header)
+    # perform check on number of columns for components
+    ncols_cpt = [col for col in df.columns if col.startswith('c')]
+    if len(ncols_cpt) % 4 != 0:  # ncols_cpt must be a multiple of 4
+        raise ValueError(f"Number of columns for components in {sp_file} "
+                         f"is not a multiple of 4.")
+    if df.index.has_duplicates:
+        dup = df.index[df.index.duplicated()]
+        raise ValueError('Duplicate species infos detected for tags :',
+                         ", ".join([str(val) for val in dup.values]))
+    sp_infos = df.apply(pd.to_numeric, errors='coerce')
+    sp_infos = sp_infos.fillna('*')
+    # sp_infos['tag'] = sp_infos['tag'].astype("string")
+    return sp_infos
+
+
 def compute_tau0(tran, ntot, fwhm, tex, qtex=None):
     if qtex is None:
         qtex = get_partition_function(tran.tag, temp=tex)

@@ -23,21 +23,9 @@ class ModelConfiguration:
 
         self.species_infos = None
         if 'species_infos' in configuration:
-            # sp_infos = {}
-            df = pd.read_csv(configuration['species_infos'], delimiter='\t', comment='#', index_col=0, dtype=str)
-            # perform check on number of columns for components
-            ncols_cpt = [col for col in df.columns if col.startswith('c')]
-            if len(ncols_cpt) % 4 != 0:  # ncols_cpt must be a multiple of 4
-                raise ValueError(f"Number of columns for components in {configuration['species_infos']} "
-                                 f"is not a multiple of 4.")
-            if df.index.has_duplicates:
-                dup = df.index[df.index.duplicated()]
-                raise ValueError('Duplicate species infos detected for tags :',
-                                 ", ".join([str(val) for val in dup.values]))
-            sp_infos = df.apply(pd.to_numeric, errors='coerce')
-            sp_infos = sp_infos.fillna('*')
-            # sp_infos['tag'] = sp_infos['tag'].astype("string")
-            self.species_infos = sp_infos
+            self.species_infos = utils.read_species_info(configuration['species_infos'])
+
+        self.species_dict = configuration.get('species_dict', {})
 
         self.fwhm_max = 0.
         self.tag_list = configuration.get('inspect', [])
