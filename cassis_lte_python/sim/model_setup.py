@@ -968,7 +968,7 @@ class Component:
         else:
             self._fwhm = None
 
-        self.species_list = []
+        cpt_species_list = []
         if not isinstance(species_list, list):
             species_list = [species_list]
         for sp in species_list:
@@ -988,9 +988,11 @@ class Component:
                           "or the tag as an integer or a string")
             if sp2add._component is None:
                 sp2add.set_component(self.name)
-            self.species_list.append(sp2add)
+            cpt_species_list.append(sp2add)
 
+        self._species_list = cpt_species_list
         self._tag_list = [sp.tag for sp in self.species_list]
+        self._parameters = []
 
         for sp in self.species_list:
             sp.tex = self.tex
@@ -1067,6 +1069,25 @@ class Component:
     @tag_list.setter
     def tag_list(self, value):
         self._tag_list = value
+
+    @property
+    def species_list(self):
+        return self._species_list
+
+    @species_list.setter
+    def species_list(self, value):
+        self._species_list = value
+
+    @property
+    def parameters(self):
+        pars = [self._vlsr, self._size, self._tex]
+        if self._fwhm is not None:
+            pars.append(self._fwhm)
+        for sp in self.species_list:
+            pars.append(sp._ntot)
+            if self._fwhm is None:
+                pars.append(sp._fwhm)
+        return pars
 
     # def get_transitions(self, fmhz_ranges, **thresholds):  # not used -> keep??
     #     self.transition_list = get_transition_df(self.species_list, fmhz_ranges, **thresholds)
