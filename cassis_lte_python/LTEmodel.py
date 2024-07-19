@@ -1164,7 +1164,8 @@ class ModelSpectrum(object):
                     # self.model_fit.nvarys = len(plot_pars)
                     # win.y_mod_err_cpt = [fit_cpt.eval_uncertainty(fmhz=win.x_mod, cpt=cpt)
                     #                      for fit_cpt, cpt in zip(self.model_fit_cpt, self.cpt_list)]
-                    win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
+                    win.y_mod_err_cpt = {f'c{nc+1}': y
+                                         for nc, y in enumerate(self.eval_uncertainties_components(fmhz=win.x_mod))}
 
             if (self.modeling or self.minimize) and (len(self.cpt_list) > 1):
                 for cpt in self.cpt_list:
