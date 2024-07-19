@@ -548,8 +548,9 @@ class ModelSpectrum(object):
             for parname in self.params:
                 self.params[parname] = start_pars[parname]
 
-        if self.model is None:
-            self.generate_lte_model()
+        # if self.model is None:
+        #     self.generate_lte_model()
+        self.generate_lte_model()
 
         t_start = process_time()
         # Perform the fit
