@@ -19,6 +19,7 @@ else:
         raise FileNotFoundError('No configuration file found.')
 
 CASSIS_DIR = config.get('GENERAL', 'CASSIS_DIR')
+NB_DECIMALS = config.getint('GENERAL', 'NB_DECIMALS', fallback=2)
 SQLITE_FILE = config.get('DATABASE', 'SQLITE_FILE')
 PARTITION_FUNCTION_DIR = config.get('DATABASE', 'PARTITION_FUNCTION_DIR')
 TELESCOPE_DIR = config.get('MODEL', 'TELESCOPE_DIR')

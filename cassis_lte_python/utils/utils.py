@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Literal
 
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
-from cassis_lte_python.utils.settings import TELESCOPE_DIR
+from cassis_lte_python.utils.settings import TELESCOPE_DIR, NB_DECIMALS
 from cassis_lte_python.database.species import get_partition_function
 
 import numpy as np
@@ -283,7 +283,7 @@ def retrieve_unit(infos: str | list, unit_type='xaxis') -> str:
                 return unit
 
 
-def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=3):
+def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=NB_DECIMALS):
     """
 
     :param value:

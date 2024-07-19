@@ -3,7 +3,7 @@ from __future__ import annotations
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
-from cassis_lte_python.utils.settings import NCOLS_DEF, NROWS_DEF, DPI_DEF
+from cassis_lte_python.utils.settings import NCOLS_DEF, NROWS_DEF, DPI_DEF, NB_DECIMALS
 from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
 from cassis_lte_python.database.species import get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
@@ -807,28 +807,34 @@ class ModelSpectrum(object):
 
         report = self.model_fit.fit_report(**report_kws)
         pvalue = '    p-value            = {}'.format(
-            utils.format_float(stats.chi2.sf(self.model_fit.chisqr, self.model_fit.nfree), nb_signif_digits=2)
+            utils.format_float(stats.chi2.sf(self.model_fit.chisqr, self.model_fit.nfree))
         )
         lines = report.split(sep='\n')
         new_lines = []
+        lmax = 6 + NB_DECIMALS
         for line in lines:
-            if "+/-" in line:  # reformat
-                begin_line, end_line = line.split(sep=" +/- ")
-                label, val = begin_line.rsplit(sep=' ', maxsplit=1)
-                begin_line = f"{label} {utils.format_float(float(val), nb_signif_digits=2): <8}"
-                err, rest = end_line.split(maxsplit=1)
-                end_line = f"{utils.format_float(float(err), nb_signif_digits=2): <8} {rest}"
-                new_lines.append(" +/- ".join([begin_line, end_line]))
+            if '(init' in line:  # reformat initial value
+                begin_line, end_line = line.rsplit(sep=" (", maxsplit=1)
+                init_label, init_val = end_line.split(' = ')
+                init_val = init_val.strip(')')
+                end_line = f"({init_label} = {utils.format_float(float(init_val))})"
 
-            elif '(init' in line:  # no uncertainties, reformat as well
-                begin_line, end_line = line.split(sep=" (")
+                err = ""
+                if "+/-" in begin_line:  # redefine begin_line and reformat error
+                    begin_line, rest = begin_line.split(sep="+/-")
+                    rest = rest.strip()
+                    err, pc = rest.split(' ', maxsplit=1)
+                    err = f" +/- {utils.format_float(float(err)): <{lmax}} {pc}"
+
+                begin_line = begin_line.rstrip()
                 label, val = begin_line.rsplit(sep=' ', maxsplit=1)
-                begin_line = f"{label} {utils.format_float(float(val), nb_signif_digits=2): <8}"
-                new_lines.append(" (".join([begin_line, end_line]))
+                begin_line = f"{label} {utils.format_float(float(val)): <{lmax}}"
+
+                new_lines.append(" ".join([begin_line, err, end_line]))
 
             elif "=" in line and ":" not in line and "#" not in line:  # reformat statistics if not integers
                 elts = line.rsplit(sep="=", maxsplit=1)
-                new_lines.append("= ".join([elts[0], utils.format_float(float(elts[1]), nb_signif_digits=2)]))
+                new_lines.append("= ".join([elts[0], utils.format_float(float(elts[1]))]))
 
             elif "fixed" in line:  # keep if expr is None, else ignore
                 par = line.split(sep=":")[0].strip()
