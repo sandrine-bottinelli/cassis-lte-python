@@ -341,6 +341,48 @@ class ModelSpectrum(object):
 
         # self.y_mod = self.compute_model_intensities(params=self.params, x_values=self.x_mod)
 
+    def update_tag_list(self, new_tags):
+        current_tags = self.model_config.tag_list
+        current_tags.sort()
+        new_tags.sort()
+        if new_tags == current_tags:  # list has not changed : exit method
+            return
+
+        for cpt in self.model_config.cpt_list:
+            # update tag list and species list
+            new_sp_list = []
+            for tag in new_tags:
+                if tag in cpt.tag_list:
+                    new_sp_list.append(list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0])
+                else:
+                    if self.model_config.ref_pixel_info is not None:
+                        new_sp_list.append(self.model_config.ref_pixel_info[cpt.name][tag])
+
+            cpt.species_list = new_sp_list
+            cpt.tag_list = new_tags
+
+        self.model_config.tag_list = new_tags
+
+        # update parameters
+        params = Parameters()
+        params.add_many(*[par for cpt in self.model_config.cpt_list for par in cpt.parameters])
+        self.params = params
+
+        # update windows to fit
+        for win in self.model_config.win_list:
+            win.set_rms_cal(self.model_config.rms_cal)
+            tag = win.transition.tag
+            if tag in self.model_config.tag_list and win.plot_nb in self.model_config.win_nb_fit[tag]:
+                win.in_fit = True
+            else:
+                win.in_fit = False
+        self.model_config.win_list_fit = [win for win in self.model_config.win_list if win.in_fit]
+
+        # update data to fit
+        if len(self.model_config.win_list_fit) > 0:
+            self.model_config.x_fit = np.concatenate([w.x_fit for w in self.model_config.win_list_fit], axis=None)
+            self.model_config.y_fit = np.concatenate([w.y_fit for w in self.model_config.win_list_fit], axis=None)
+
     def model_info(self, cpt=None):
 
         mdl_info = {
