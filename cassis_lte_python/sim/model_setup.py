@@ -36,7 +36,6 @@ class ModelConfiguration:
         self.output_dir = configuration.get('output_dir', os.path.curdir)
         if not os.path.isdir(self.output_dir):
             os.makedirs(self.output_dir)
-        self.base_name = configuration.get('base_name', 'lte_model')
 
         self.data_file = configuration.get('data_file', None)
         self.data_file_obj = None
@@ -209,6 +208,7 @@ class ModelConfiguration:
         self.print_report = configuration.get('print_report', True)
 
         # outputs other than plots
+        self.base_name = configuration.get('base_name', configuration.get('name_lam', 'lte_model'))
         self.save_configs = configuration.get('save_configs', True) or configuration.get('save_res_configs', True)
         self._name_lam = configuration.get('name_lam', self.base_name)  # do not add extension here
         self._name_config = configuration.get('name_config', self.base_name + '_config.txt')
@@ -988,6 +988,14 @@ class ModelConfiguration:
     @output_files.setter
     def output_files(self, dic):
         self._output_files = dic
+
+    @property
+    def name_config(self):
+        return self.output_files['config']
+
+    @property
+    def name_lam(self):
+        return self.output_files['lam']
 
 
 class Component:
