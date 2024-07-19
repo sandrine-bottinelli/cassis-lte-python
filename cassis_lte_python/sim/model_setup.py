@@ -23,7 +23,7 @@ class ModelConfiguration:
 
         self.species_infos = None
         if 'species_infos' in configuration:
-            self.species_infos = utils.read_species_info(configuration['species_infos'])
+            self.species_infos = utils.read_species_info(configuration['species_infos'], header=0)
 
         self.species_dict = configuration.get('species_dict', {})
 
