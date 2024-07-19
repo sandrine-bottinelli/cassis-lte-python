@@ -422,6 +422,14 @@ class ModelSpectrum(object):
 
         return rms if len(rms) > 1 else rms[0]
 
+    def param_names(self):
+        params = []
+        for cpt in self.cpt_list:
+            params.extend(p.name for p in cpt.parameters)
+            # for sp in cpt.species_list:
+            #     params.extend(p.name for p in sp.parameters)
+        return params
+
     def make_params(self, json_params: str | None = None, normalize=False):
         params = Parameters()
 
