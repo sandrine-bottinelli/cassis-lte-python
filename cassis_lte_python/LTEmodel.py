@@ -250,89 +250,11 @@ class ModelSpectrum(object):
         # except TypeError:
         #     pass
 
-        if self.modeling or self.minimize:
-            self.make_params(json_params=self.model_config.jparams)
-            self.generate_lte_model()
-            if self.model_config.jmodel_fit is not None:
-                self.model_fit = ModelResult(self.model, self.params)
-                self.model_fit.components = self.model.components
-                self.model_fit.loads(self.model_config.jmodel_fit,
-                                     funcdefs={'lte_model_func': generate_lte_model_func(self.model_info())})
+        if self.modeling:
+            self.do_modeling()
 
         if self.minimize:
-            self.do_minimization(print_report=self.print_report)
-            if self.save_results:
-                # filename = ''
-                # if self.name_lam is not None:
-                #     filename = self.name_lam + '_'
-                # filename = filename + 'fit_res'
-                self.save_fit_results(self.model_config.output_files['results'])
-
-        if self.save_model_spec:
-            filename, ext = os.path.splitext(self.model_config.output_files['model'])
-            if len(ext) == 0:
-                ext = 'txt'
-            self.save_model(filename, ext=ext)
-
-        if self.save_obs_spec:
-            filename, ext = os.path.splitext(self.model_config.output_files['obs'])
-            if len(ext) == 0:
-                ext = 'txt'
-            self.save_spectrum(filename, ext=ext, spectrum_type='observed')
-
-        if self.save_configs:  # must be last to make sure we have appropriate data file in memory
-            if 'lam' in self.model_config.output_files:
-                self.write_lam(self.model_config.output_files['lam'])
-            if 'config' in self.model_config.output_files:
-                self.save_config(self.model_config.output_files['config'])
-
-        if self.plot_gui or self.plot_file:
-            print('Finding windows for gui and file plots.')
-            self.setup_plot()
-            if self.plot_gui and len(self.model_config.win_list_gui) > 0:
-                t_start = process_time()
-                print("Preparing windows for GUI plot...")
-                if self.bandwidth is None or self.model_config.fit_freq_except is not None:
-                    self.setup_plot_fus()
-                else:
-                    self.setup_plot_la(self.model_config.win_list_gui, **self.gui_kws)
-                if self.exec_time:
-                    print(f"Execution time for preparing GUI plot : {utils.format_time(process_time() - t_start)}.")
-
-                self.make_plot('gui')
-
-            if self.plot_file and len(self.model_config.win_list_file) > 0:
-                if ((self.model_config.win_list_file != self.model_config.win_list_gui) or
-                        (self.file_kws['model_err'] and not self.gui_kws['model_err']) or
-                        (self.file_kws['component_err'] and not self.gui_kws['component_err'])):
-                    t_start = process_time()
-                    print("Preparing windows for file plot...")
-                    # look for windows not already in gui
-                    if self.model_config.plot_gui:
-                        win_list = [w for w in self.model_config.win_list_file
-                                    if w not in self.model_config.win_list_gui]
-                    else:
-                        win_list = self.model_config.win_list_file
-
-                    if len(win_list) > 0:
-                        if self.bandwidth is not None:
-                            self.setup_plot_la(win_list, **self.file_kws)
-                        else:
-                            self.setup_plot_fus()
-                    # Compute errors if necessary
-                    if self.model_fit.covar is not None:
-                        for win in self.model_config.win_list_file:
-                            if win.y_mod_err is None and self.file_kws['model_err']:
-                                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
-                            if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
-                                win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
-                    else:
-                        print("## Warning: could not compute model errors.")
-
-                    if self.exec_time:
-                        print(f"Execution time for preparing file plot : {utils.format_time(process_time() - t_start)}.")
-
-                self.make_plot('file')
+            self.do_minimization()
 
     def __getattr__(self, item):
         # method called for the times that __getattribute__ raised an AttributeError
@@ -535,7 +457,47 @@ class ModelSpectrum(object):
                                              ]
                            )
 
-    def do_minimization(self, print_report=True, report_kws=None):
+    def do_modeling(self):
+        if self.model_config.line_list_all is None:
+            self.model_config.get_linelist()
+        if len(self.model_config.win_list) == 0:
+            self.get_windows()
+        if self.minimize and len(self.model_config.win_list_fit) == 0:
+            self.model_config.get_data_to_fit()
+
+        if self.params is None:
+            self.make_params(json_params=self.model_config.jparams)
+            self.generate_lte_model()
+
+    def do_minimization(self, print_report=None, report_kws=None):
+        if self.x_fit is None:
+            return None
+
+        if print_report is None:
+            print_report = self.print_report
+        # if self.model_config.line_list_all is None:
+        #     self.model_config.get_linelist()
+        # if len(self.model_config.win_list) == 0:
+        #     self.get_windows()
+        # if len(self.model_config.win_list_fit) == 0:
+        #     self.model_config.get_data_to_fit()
+        if self.model_config.jmodel_fit is not None:
+            self.model_fit = ModelResult(self.model, self.params)
+            self.model_fit.components = self.model.components
+            self.model_fit.loads(self.model_config.jmodel_fit,
+                                 funcdefs={'lte_model_func': generate_lte_model_func(self.model_info())})
+
+        if self.params is None:
+            self.make_params()
+
+        if self.model_config.jparams is not None:
+            start_pars = Parameters().loads(self.model_config.jparams)
+            for parname in self.params:
+                self.params[parname] = start_pars[parname]
+
+        if self.model is None:
+            self.generate_lte_model()
+
         t_start = process_time()
         # Perform the fit
         self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
@@ -594,6 +556,86 @@ class ModelSpectrum(object):
 
         if print_report:
             print(self.fit_report(report_kws=report_kws))
+
+        self.do_savings()
+        self.do_plots()
+
+    def do_savings(self):
+        if self.model_fit is not None and self.save_results:
+            # filename = ''
+            # if self.name_lam is not None:
+            #     filename = self.name_lam + '_'
+            # filename = filename + 'fit_res'
+            self.save_fit_results(self.model_config.output_files['results'])
+
+        if self.model is not None and self.save_model_spec:
+            filename, ext = os.path.splitext(self.model_config.output_files['model'])
+            if len(ext) == 0:
+                ext = 'txt'
+            self.save_model(filename, ext=ext)
+
+        if self.x_file is not None and self.save_obs_spec:
+            filename, ext = os.path.splitext(self.model_config.output_files['obs'])
+            if len(ext) == 0:
+                ext = 'txt'
+            self.save_spectrum(filename, ext=ext, spectrum_type='observed')
+
+        if (self.modeling or self.minimize) and self.save_configs:
+            # must be last to make sure we have appropriate data file in memory
+            if 'lam' in self.model_config.output_files:
+                self.write_lam(self.model_config.output_files['lam'])
+            if 'config' in self.model_config.output_files:
+                self.save_config(self.model_config.output_files['config'])
+
+    def do_plots(self):
+        if self.plot_gui or self.plot_file:
+            print('Finding windows for gui and file plots.')
+            self.setup_plot()
+            if self.plot_gui and len(self.model_config.win_list_gui) > 0:
+                t_start = process_time()
+                print("Preparing windows for GUI plot...")
+                if self.bandwidth is None or self.model_config.fit_freq_except is not None:
+                    self.setup_plot_fus()
+                else:
+                    self.setup_plot_la(self.model_config.win_list_gui, **self.gui_kws)
+                if self.exec_time:
+                    print(f"Execution time for preparing GUI plot : {utils.format_time(process_time() - t_start)}.")
+
+                self.make_plot('gui')
+
+            if self.plot_file and len(self.model_config.win_list_file) > 0:
+                if ((self.model_config.win_list_file != self.model_config.win_list_gui) or
+                        (self.file_kws['model_err'] and not self.gui_kws['model_err']) or
+                        (self.file_kws['component_err'] and not self.gui_kws['component_err'])):
+                    t_start = process_time()
+                    print("Preparing windows for file plot...")
+                    # look for windows not already in gui
+                    if self.model_config.plot_gui:
+                        win_list = [w for w in self.model_config.win_list_file
+                                    if w not in self.model_config.win_list_gui]
+                    else:
+                        win_list = self.model_config.win_list_file
+
+                    if len(win_list) > 0:
+                        if self.bandwidth is not None:
+                            self.setup_plot_la(win_list, **self.file_kws)
+                        else:
+                            self.setup_plot_fus()
+                    # Compute errors if necessary
+                    if self.model_fit.covar is not None:
+                        for win in self.model_config.win_list_file:
+                            if win.y_mod_err is None and self.file_kws['model_err']:
+                                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
+                            if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
+                                win.y_mod_err_cpt = {f'c{nc+1}': y for nc, y in
+                                                     enumerate(self.eval_uncertainties_components(fmhz=win.x_mod))}
+                    else:
+                        print("## Warning: could not compute model errors.")
+
+                    if self.exec_time:
+                        print(f"Execution time for preparing file plot : {utils.format_time(process_time() - t_start)}.")
+
+                self.make_plot('file')
 
     def fit_model(self, max_nfev=None, fit_kws=None):
         """

@@ -262,8 +262,8 @@ class ModelConfiguration:
             new_plot_kws['file_only'] = file_kws
         if 'plot_filename' in configuration:
             file_kws['filename'] = configuration['plot_filename']
-        if self.plot_file and 'filename' not in file_kws:
-            raise NameError("Please provide a name for the output pdf file.")
+        # if self.plot_file and 'filename' not in file_kws:
+        #     raise NameError("Please provide a name for the output pdf file.")
         for k in kws_plot_only:
             if k in file_kws.keys():
                 # print(f'N.B. : {k} in file keywords is not used.')
@@ -286,8 +286,9 @@ class ModelConfiguration:
         if 'tc' in self._configuration_dict:
             self.get_continuum()
 
-        self.get_linelist()
-        self.get_windows()
+        if self.x_file is not None:
+            self.get_linelist()
+            self.get_windows()
         if self._v_range_user is not None:
             self.win_nb_fit = {}
             self.get_velocity_ranges()
@@ -301,6 +302,8 @@ class ModelConfiguration:
         self.data_file = config.get('data_file', None)
         self.x_file = config.get('x_obs', None)
         self.y_file = config.get('y_obs', None)
+        if self.y_file is None and self.x_file is not None:
+            self.y_file = np.random.rand(len(self.x_file))  # random y-values just to be able to set up windows.
         self.vlsr_file = config.get('vlsr_obs', 0.)
         if self.data_file is not None and self.x_file is None:
             self.data_file_obj = utils.DataFile(self.data_file)
@@ -493,6 +496,7 @@ class ModelConfiguration:
                 tr_list_tresh.sort_values('fMHz', inplace=True)
             else:
                 tr_list_tresh.sort_values(self.sort, inplace=True)
+            self.line_list_all = tr_list_tresh
 
         # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
         self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
@@ -880,6 +884,8 @@ class ModelConfiguration:
         if len(self.win_list_fit) > 0:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
+        else:
+            self.x_fit, self.y_fit = None, None
 
     @property
     def x_file(self):
