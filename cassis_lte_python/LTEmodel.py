@@ -1410,7 +1410,8 @@ class ModelSpectrum(object):
             'params': self.params.copy(),
             'model': self.model,
             'model_fit': self.model_fit,
-            'tag_list': self.model_config.tag_list
+            'tag_list': self.model_config.tag_list,
+            'windows': self.model_config.win_list
         }
         cpt_info = {
             cpt.name: {sp.tag: sp for sp in cpt.species_list}

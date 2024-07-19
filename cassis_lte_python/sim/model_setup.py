@@ -79,7 +79,7 @@ class ModelConfiguration:
             self._rms_cal_user = configuration.get('chi2_info', None)
         self._rms_cal = None
         self.win_list = []
-        self.win_list_fit = None
+        self.win_list_fit = []
         self.win_list_plot = []
         self.win_list_gui = []
         self.win_list_file = []
@@ -903,11 +903,20 @@ class ModelConfiguration:
     def y_file(self, value):
         self._y_file = value
         # update windows :
-        if len(self.win_list) > 0 and self.x_file is not None:
-            for win in self.win_list:
+        if self.ref_pixel_info is not None:
+            win_list = self.ref_pixel_info['windows']
+        else:
+            win_list = self.win_list
+        new_win_list = []
+        if len(win_list) > 0 and self.x_file is not None:
+            for win in win_list:
                 x_win, y_win = utils.select_from_ranges(self.x_file, [min(win.x_file), max(win.x_file)],
                                                         y_values=value)
+                if len(x_win) <= 5 or len(set(y_win)) == 1:
+                    continue
                 win.y_file = y_win
+                new_win_list.append(win)
+            self.win_list = new_win_list
             self.get_data_to_fit()
 
     @property
