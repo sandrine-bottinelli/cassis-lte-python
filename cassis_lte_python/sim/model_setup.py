@@ -1047,9 +1047,10 @@ class Component:
 
         self.transition_list = None
 
-        self.parameters = [self._vlsr, self._size, self._tex]
-        if self._fwhm is not None:
-            self.parameters.append(self._fwhm)
+    def __repr__(self):
+        """Return printable representation of a Component object."""
+        s = []
+        return f"<Component '{self.name}', {', '.join(s)}>"
 
     def as_json(self):
         return {
@@ -1192,6 +1193,10 @@ class Window:
         self.tag_colors = {}
         self._y_min = np.inf
         self._y_max = -np.inf
+
+    def __repr__(self):
+        """Return printable representation of a Window object."""
+        return f"<Window '{self.name}'>"
 
     def set_rms_cal(self, rms_cal_df):
         if 'freq_range' in rms_cal_df.columns:
