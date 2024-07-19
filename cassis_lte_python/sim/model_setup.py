@@ -180,6 +180,27 @@ class ModelConfiguration:
         self.modeling = configuration.get('modeling', False)
 
         self.constraints = configuration.get('constraints', None)
+        if self.constraints is not None:
+            constraints_dict_user = self.constraints
+            constraints_dict = {}
+            symbols = ['+', '*', '/', '-']
+            for nc in range(1, len(self.cpt_list) + 1):
+                for key, val in constraints_dict_user.items():
+                    if key.startswith('c'):  # key already has component info, keep and go to the next constraint
+                        constraints_dict[key] = val
+                        continue
+                    constraints_dict[f'c{nc}_{key}'] = f'c{nc}_{val}'  # assume no mathematical expression
+                    for symb in symbols:
+                        if symb in val:  # we have a mathematical expression
+                            elts = val.split(symb)
+                            for i, elt in enumerate(elts):
+                                if not elt[0].isdigit() and not elt[0].startswith('c'):
+                                    elts[i] = f'c{nc}_{elt}'
+                            val = symb.join(elts)
+                        constraints_dict[f'c{nc}_{key}'] = val
+
+            self.constraints = constraints_dict
+
         self.ref_pixel_info = None
         self.minimize = configuration.get('minimize', False)
         self.tau_lim = configuration.get('tau_lim', np.inf)
