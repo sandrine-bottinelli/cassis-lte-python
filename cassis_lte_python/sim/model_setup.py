@@ -569,7 +569,10 @@ class ModelConfiguration:
                         frange.append([float(elt) for elt in k])
                         fmin.append(float(k[0]))
                         fmax.append(float(k[1]))
-                        rms.append(float(v[0]))
+                        rms_val = float(v[0])
+                        if rms_val == 0.:
+                            rms_val = np.nan
+                        rms.append(rms_val)
                         cal.append(float(v[1]))
                     self._rms_cal = pd.DataFrame({'freq_range': frange,
                                                   'fmin': fmin,
@@ -962,6 +965,11 @@ class ModelConfiguration:
     def rms_cal(self, value):
         self._rms_cal_user = value
         self.get_rms_cal_info()
+        for win in self.win_list:
+            row = utils.get_df_row_from_freq_range(self.rms_cal, win.transition.f_trans_mhz)
+            idx = row.index
+            win.rms = self.rms_cal.loc[idx, 'rms'].values[0]
+            win.cal = self.rms_cal.loc[idx, 'cal'].values[0]
 
     @property
     def file_spec(self):
