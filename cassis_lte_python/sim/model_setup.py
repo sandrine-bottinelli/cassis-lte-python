@@ -591,13 +591,45 @@ class ModelConfiguration:
             cpt_info.pop(config_key[0])
             try:
                 with open(cpt_config_file) as f:
-                    lines = f.readlines()
+                    all_lines = f.readlines()
+                    line_sp_infos = 0
+                    for i, line in enumerate(all_lines):
+                        if line.startswith('tag'):
+                            line_sp_infos = i
+                            break
+
+                    if line_sp_infos == 0:
+                        lines = all_lines
+                    else:
+                        lines = all_lines[:line_sp_infos]
+                        n_hdr = len([line for line in lines if not line.startswith('#') and line.strip() != ""])
+                        self.species_infos = utils.read_species_info(cpt_config_file, header=n_hdr)
+
                     interacting = [line for line in lines if '_interacting' in line]
+                    species = [line for line in lines if '_species' in line]
                     for line in interacting:
                         cname = line.split('_')[0]
                         if cname not in cpt_info:
-                            cpt_info[cname] = {'interacting': line.split()[1].strip == "True"}
-                cpt_df = pd.read_csv(cpt_config_file, sep='\t', comment='#', header=len(interacting))
+                            cpt_info[cname] = {'interacting': line.split()[1].strip() == "True"}
+                        else:
+                            cpt_info[cname]['interacting'] = line.split()[1].strip() == "True"
+                    for line in species:
+                        cname = line.split('_')[0]
+                        label = line.split('\t')[1].strip()
+                        try:
+                            tags = self.species_dict[label]
+                            if not isinstance(tags, list):
+                                tags = [tags]
+                            if cname not in cpt_info:
+                                cpt_info[cname] = {'species': tags}
+                            else:
+                                cpt_info[cname]['species'] = tags
+                        except KeyError:
+                            raise IndexError("No tags found for species '{}'".format(label))
+
+                nrows_comps = len([line for line in lines if not line.startswith('#')]) - len(interacting) - len(species) - 1
+                cpt_df = pd.read_csv(cpt_config_file, sep='\t', comment='#', header=len(interacting)+len(species),
+                                     nrows=nrows_comps)
                 cpt_df = cpt_df.rename(columns=lambda x: x.strip())
                 cpt_names = [name.split('_')[0] for name in cpt_df['name']]
                 cpt_names = list(set(cpt_names))
