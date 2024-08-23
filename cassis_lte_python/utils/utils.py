@@ -525,7 +525,7 @@ def read_noise_info(noise_file):
     return noise_info
 
 
-def read_species_info(sp_file, header=None):
+def read_species_info(sp_file, header='infer'):
     df = pd.read_csv(sp_file, delimiter='\t', comment='#', index_col=0, dtype=str, header=header)
     # perform check on number of columns for components
     ncols_cpt = [col for col in df.columns if col.startswith('c')]

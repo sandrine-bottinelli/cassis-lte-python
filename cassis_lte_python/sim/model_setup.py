@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import io
+
 from cassis_lte_python.utils import utils
 from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
@@ -629,9 +631,8 @@ class ModelConfiguration:
                     if line_sp_infos == 0:
                         lines = all_lines
                     else:
-                        lines = all_lines[:line_sp_infos]
-                        n_hdr = len([line for line in lines if not line.startswith('#') and line.strip() != ""])
-                        self.species_infos = utils.read_species_info(cpt_config_file, header=n_hdr)
+                        lines = [line.rstrip() for line in all_lines[:line_sp_infos]]
+                        self.species_infos = utils.read_species_info(io.StringIO("".join(all_lines[line_sp_infos:])))
 
                     interacting = [line for line in lines if '_interacting' in line]
                     species = [line for line in lines if '_species' in line]
@@ -667,9 +668,15 @@ class ModelConfiguration:
                         else:
                             cpt_info[cname]['species'] = tags
 
-                nrows_comps = len([line for line in lines if not line.startswith('#')]) - len(interacting) - len(species) - 1
-                cpt_df = pd.read_csv(cpt_config_file, sep='\t', comment='#', header=len(interacting)+len(species),
-                                     nrows=nrows_comps)
+                n_start_comps = 0
+                for j, line in enumerate(lines):
+                    if line.startswith('name'):
+                        n_start_comps = j
+                        break
+                rows_comps = lines[n_start_comps:line_sp_infos]
+                rows_comps = [line.rstrip() for line in rows_comps]
+                fcomp = io.StringIO("\n".join(rows_comps))
+                cpt_df = pd.read_csv(fcomp, sep='\t', comment='#')
                 cpt_df = cpt_df.rename(columns=lambda x: x.strip())
                 cpt_names = [name.split('_')[0] for name in cpt_df['name']]
                 cpt_names = list(set(cpt_names))
