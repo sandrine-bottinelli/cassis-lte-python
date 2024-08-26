@@ -8,7 +8,7 @@ from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from cassis_lte_python.sim.parameters import create_parameter, parameter_infos
-from cassis_lte_python.utils.settings import TELESCOPE_DIR, VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF
+from cassis_lte_python.utils.settings import VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF
 import os
 import pandas as pd
 import numpy as np
@@ -619,6 +619,8 @@ class ModelConfiguration:
         if len(config_key) > 0:
             cpt_config_file = cpt_info[config_key[0]]
             cpt_info.pop(config_key[0])
+            ntot_min_fact = None
+            ntot_max_fact = None
             try:
                 with open(cpt_config_file) as f:
                     all_lines = f.readlines()
@@ -628,12 +630,13 @@ class ModelConfiguration:
                             line_sp_infos = i
                             break
 
-                    if line_sp_infos == 0:
+                    if line_sp_infos == 0:  # only component info, no thresholds per species
                         lines = all_lines
-                    else:
+                    else:  # both component and species infos -> separate them
                         lines = [line.rstrip() for line in all_lines[:line_sp_infos]]
                         self.species_infos = utils.read_species_info(io.StringIO("".join(all_lines[line_sp_infos:])))
 
+                    # get species list per component and whether component is interacting
                     interacting = [line for line in lines if '_interacting' in line]
                     species = [line for line in lines if '_species' in line]
                     for line in interacting:
@@ -668,12 +671,19 @@ class ModelConfiguration:
                         else:
                             cpt_info[cname]['species'] = tags
 
+                # Component parameters (size, tex, vlsr, fwhm)
                 n_start_comps = 0
                 for j, line in enumerate(lines):
                     if line.startswith('name'):
                         n_start_comps = j
                         break
-                rows_comps = lines[n_start_comps:line_sp_infos]
+                n_end_comps = n_start_comps + 1
+                for j, line in enumerate(lines[n_start_comps+1:]):
+                    if line.startswith('c'):
+                        n_end_comps += 1
+                        continue
+                    break
+                rows_comps = lines[n_start_comps:n_end_comps]
                 rows_comps = [line.rstrip() for line in rows_comps]
                 fcomp = io.StringIO("\n".join(rows_comps))
                 cpt_df = pd.read_csv(fcomp, sep='\t', comment='#')
@@ -691,6 +701,14 @@ class ModelConfiguration:
                     cpt_name, par_name = row['name'].split('_')
                     cpt_info[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
                                                                    vary=row['vary'])
+
+                # Default ntot factors
+                ntot_factors = [line for line in lines if "ntot_m" in line]
+                for elt in ntot_factors:
+                    if "min" in elt:
+                        ntot_min_fact = float(elt.split("=")[-1])
+                    if "max" in elt:
+                        ntot_max_fact = float(elt.split("=")[-1])
 
             except FileNotFoundError:
                 raise FileNotFoundError(f"{cpt_config_file} was not found.")
@@ -712,10 +730,34 @@ class ModelConfiguration:
                 # we have a list of tags and infos from file
                 species_list = []
                 for sp in sp_list:
+                    ntot = self.species_infos.at[int(sp), f'{cname}_ntot']
+                    ntot_min = ntot_min_fact
+                    ntot_max = ntot_max_fact
+                    is_factor = True
+
+                    if f'{cname}_ntot_min_fact' in self.species_infos.keys():
+                        ntot_min = self.species_infos.at[int(sp), f'{cname}_ntot_min_fact']
+                        if ntot_min == 0. or ntot_min == '*':
+                            ntot_min = ntot_min_fact
+                    if f'{cname}_ntot_max_fact' in self.species_infos.keys():
+                        ntot_max = self.species_infos.at[int(sp), f'{cname}_ntot_max_fact']
+                        if ntot_max == 0. or ntot_max == '*':
+                            ntot_max = ntot_max_fact
+
+                    if f'{cname}_ntot_min' in self.species_infos.keys() or f'{cname}_ntot_max' in self.species_infos.keys():
+                        is_factor = False
+                        if f'{cname}_ntot_min' in self.species_infos.keys():
+                            ntot_min = self.species_infos.at[int(sp), f'{cname}_ntot_min']
+                            if ntot_min == 0. or ntot_min == '*':
+                                ntot_min = ntot_min_fact * ntot
+                        if f'{cname}_ntot_max' in self.species_infos.keys():
+                            ntot_max = self.species_infos.at[int(sp), f'{cname}_ntot_max']
+                            if ntot_max == 0. or ntot_max == '*':
+                                ntot_max = ntot_max_fact * ntot
+
                     sp_dict = {
                         'tag': str(sp),
-                        'ntot': parameter_infos(value=self.species_infos.at[int(sp), f'{cname}_ntot'],
-                                                min=1e-2, max=1e2, factor=True)
+                        'ntot': parameter_infos(value=ntot, min=ntot_min, max=ntot_max, factor=is_factor)
                     }
                     if cpt_info[cname]['fwhm'] is None:
                         if f'{cname}_fwhm_min_d' in self.species_infos.keys():

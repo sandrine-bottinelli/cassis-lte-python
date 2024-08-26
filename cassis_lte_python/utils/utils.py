@@ -528,10 +528,10 @@ def read_noise_info(noise_file):
 def read_species_info(sp_file, header='infer'):
     df = pd.read_csv(sp_file, delimiter='\t', comment='#', index_col=0, dtype=str, header=header)
     # perform check on number of columns for components
-    ncols_cpt = [col for col in df.columns if col.startswith('c')]
-    if len(ncols_cpt) % 4 != 0:  # ncols_cpt must be a multiple of 4
-        raise ValueError(f"Number of columns for components in {sp_file} "
-                         f"is not a multiple of 4.")
+    # ncols_cpt = [col for col in df.columns if col.startswith('c')]
+    # if len(ncols_cpt) % 4 != 0:  # ncols_cpt must be a multiple of 4
+    #     raise ValueError(f"Number of columns for components in {sp_file} "
+    #                      f"is not a multiple of 4.")
     if df.index.has_duplicates:
         dup = df.index[df.index.duplicated()]
         raise ValueError('Duplicate species infos detected for tags :',
