@@ -1748,8 +1748,7 @@ class ModelSpectrum(object):
     def write_cassis_file(self, filename, dirname=None, datafile=None):
         def lam_item(name, value):
             if isinstance(value, float) and value != 0.:
-                fmt = '{:.3e}' if (value >= 1.e4 or value <= 1.e-2) else '{:.2f}'
-                return '{}={}\n'.format(name, fmt.format(value))
+                return f'{name}={utils.format_float(value, nb_digits=4)}\n'
             return '{}={}\n'.format(name, value)
 
         ext = 'ltm' if self.x_file is None else 'lam'
