@@ -735,7 +735,10 @@ class ModelSpectrum(object):
         if 'method' in fit_kws:
             fit_kws.pop('method')
 
-        cb = fit_callback if self.print_report else None
+        cb = None
+        if self.print_report and method != "emcee":
+            cb = fit_callback
+
         self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=self.log,
                                         # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
                                         # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
