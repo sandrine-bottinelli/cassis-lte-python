@@ -566,11 +566,12 @@ class ModelConfiguration:
                 elif next(iter(self._rms_cal_user))[0] == '[':  # info by frequency range
                     frange, fmin, fmax, rms, cal = [], [], [], [], []
                     for k, v in self._rms_cal_user.items():
-                        k = k.strip('[').strip(']').strip()  # remove brackets and spaces ; could be improved
-                        k = k.split(',')
-                        frange.append([float(elt) for elt in k])
-                        fmin.append(float(k[0]))
-                        fmax.append(float(k[1]))
+                        range = k.strip('[').strip(']').strip()  # remove brackets and spaces ; could be improved
+                        range = [float(elt) for elt in range.split(',')]  # convert comma-separated values to float
+                        range.sort()  # make sure it is order by increasing values
+                        frange.append(range)
+                        fmin.append(range[0])
+                        fmax.append(range[1])
                         rms_val = float(v[0])
                         if rms_val == 0.:
                             rms_val = np.nan
