@@ -32,7 +32,7 @@ import copy
 
 def generate_lte_model_func(config):
 
-    def lte_model_func(fmhz, log=False, cpt=None, line_center_only=False, return_tau=False, **params):
+    def lte_model_func(fmhz, log=False, cpt='from_config', line_center_only=False, return_tau=False, **params):
         norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
         vlsr_file = config.get('vlsr_file', 0.)
         tc = config['tc'](fmhz)
@@ -45,8 +45,8 @@ def generate_lte_model_func(config):
         cpt_list = config['cpt_list']
         if not isinstance(cpt_list, list):
             cpt_list = [cpt_list]
-        if cpt is not None:
-            cpt_list = [cpt]
+        if cpt != 'from_config':
+            cpt_list = cpt if isinstance(cpt, list) else [cpt]
         tau_max = config.get('tau_max', None)
         file_rejected = config.get('file_rejected', None)
         tc = tc * jypb2k  # if jypb2k not 1, data, and so tc, are in Jy/beam -> convert to K
@@ -739,10 +739,16 @@ class ModelSpectrum(object):
         if self.print_report and method != "emcee":
             cb = fit_callback
 
+        """NB: nan_policy:
+        'raise': Raise a ValueError (default)
+        'propagate': Do not check for NaNs or missing values. The fit will try to ignore them.
+        'omit': Remove NaNs or missing observations in data."""
         self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=self.log,
                                         # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
                                         # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
-                                        cpt=None, line_center_only=False, return_tau=False,
+                                        nan_policy='omit',  #
+                                        cpt='from_config',
+                                        line_center_only=False, return_tau=False,
                                         weights=wt,
                                         method=method,
                                         max_nfev=max_nfev, fit_kws=fit_kws,
