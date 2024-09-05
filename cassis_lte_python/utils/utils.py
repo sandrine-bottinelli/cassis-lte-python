@@ -89,7 +89,7 @@ class DataFile:
                 raise TypeError("Cannot open this fits file.")
 
     def read_cassis(self):
-        self.get_header(comment='//')
+        self.get_header()
 
         data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), names=True)
         self._xdata = data['FreqLsb']
@@ -116,13 +116,19 @@ class DataFile:
         else:
             print("Unknown extension.")
 
-    def get_header(self, comment='#'):
+    def get_header(self, comments=('#', '//')):
         with open(self.filepath) as f:
             raw_header = []
             header = {}
             line = f.readline()
-            while line.startswith(comment) or len(line.strip()) == 0:
+            try:
+                iter(comments)
+            except TypeError:
+                comments = [comments]
+
+            while any([line.startswith(comment) for comment in comments]) or len(line.strip()) == 0:
                 raw_header.append(line)
+                comment = [c for c in comments if line.startswith(c)][0]
                 if ":" in line and 'Point' not in line:
                     info = line.lstrip(comment).split(":", maxsplit=1)
                     header[info[0].strip()] = info[1].strip()
@@ -256,9 +262,11 @@ class DataFile:
                 print(f"Cannot convert from {self._yunit} to {value}, nothing done.")
 
 
-def open_data_file(filepath):
+def open_data_file(filepath, continuum=False):
     """Deprecated - for backward compatibility"""
     data = DataFile(filepath)
+    if continuum:
+        return data.xdata_mhz, data.ydata
     return data.xdata_mhz, data.ydata, data.vlsr
 
 
@@ -279,7 +287,7 @@ def retrieve_unit(infos: str | list, unit_type='xaxis') -> str:
 
     for unit in units:
         for s in infos:
-            if f'({unit})' in s or f'[{unit}]' in s:
+            if unit.lower() in s.lower():
                 return unit
 
 
