@@ -378,7 +378,7 @@ class ModelConfiguration:
             try:
                 # cont_info is a CASSIS continuum file : MHz [tab] K
                 # f_cont, t_cont = np.loadtxt(self.cont_info, delimiter='\t', comments=['#', '//'], unpack=True)
-                f_cont, t_cont = utils.open_data_file(self.cont_info, continuum=True)
+                f_cont, t_cont = utils.open_continuum_file(self.cont_info)
                 self._tc = interp1d(f_cont, t_cont, kind='linear')  # nearest??
             except FileNotFoundError:
                 raise FileNotFoundError(f"{os.path.isfile(self.cont_info)} not found.")

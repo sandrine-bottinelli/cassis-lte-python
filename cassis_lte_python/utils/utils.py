@@ -17,8 +17,8 @@ from datetime import timedelta
 import warnings
 
 
-class DataFile:
-    def __init__(self, filepath, telescope=None):
+class File:
+    def __init__(self, filepath, default_xunit='MHz', default_yunit='K'):
         self.filepath = filepath
         self._ext = os.path.splitext(filepath)[-1]
         self._raw_header = None
@@ -28,29 +28,57 @@ class DataFile:
         self._ydata = None
         self._xunit = None
         self._yunit = None
-        self.vlsr = 0.
-        self.bmaj = None
-        self.bmin = None
-        self._telescope = telescope
 
-        self.open_data_file()  # read header, x and y data, and set the units
-        self.get_vlsr()
+        self.get_header()
+        self.get_data()
+
         if self.xunit is None:
-            xunit = input(f"X-axis unit not found, please provide it : ")
-            self._xunit = xunit
+            # xunit = input(f"X-axis unit not found, please provide it : ")
+            print(f"INFO - X-axis unit not found in {self.filepath}, setting it to {default_xunit}.")
+            print("INFO - To choose a different unit, e.g., GHz, "
+                  "please add the following line at the beginning of your file:")
+            print("       // unitx: GHz")
+            self._xunit = 'MHz'
         if self.yunit is None:
-            yunit = input(f"Y-axis unit not found, please provide it : ")
-            self._yunit = yunit
+            # yunit = input(f"Y-axis unit not found, please provide it : ")
+            print(f"INFO - Y-axis unit not found in {self.filepath}, setting it to {default_yunit}.")
+            print("INFO - To choose a different unit, e.g., Jy/beam, "
+                  "please add the following line at the beginning of your file:")
+            print("       // unity: Jy/beam")
+            self._yunit = 'K'
 
         if self.xunit != 'MHz':
             self._xdata_mhz = (self.xdata * u.Unit(self.xunit)).to('MHz').value
         else:
             self._xdata_mhz = self.xdata
 
-        if self.yunit in UNITS['flux']:
-            self.read_beam()
+    def get_header(self, comments=('#', '//')):
+        if self._ext == '.fits':
+            with fits.open(self.filepath) as hdu:
+                self.header = hdu[1].header
 
-    def open_data_file(self):
+        else:
+            with open(self.filepath) as f:
+                raw_header = []
+                header = {}
+                line = f.readline()
+                try:
+                    iter(comments)
+                except TypeError:
+                    comments = [comments]
+
+                while any([line.startswith(comment) for comment in comments]) or len(line.strip()) == 0:
+                    raw_header.append(line)
+                    comment = [c for c in comments if line.startswith(c)][0]
+                    if ":" in line and 'Point' not in line:
+                        info = line.lstrip(comment).split(":", maxsplit=1)
+                        header[info[0].strip()] = info[1].strip()
+                    line = f.readline()
+
+            self._raw_header = raw_header
+            self.header = header
+
+    def get_data(self):
         if self._ext == '.fits':
             self.read_fits()
 
@@ -60,7 +88,6 @@ class DataFile:
         else:
             # print('Unknown extension.')
             # return None
-            self.get_header()
             data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), usecols=[0, 1], unpack=True)
             data = data[~np.isnan(data).any(axis=1)]  # TODO : check this line is working correctly
 
@@ -89,8 +116,6 @@ class DataFile:
                 raise TypeError("Cannot open this fits file.")
 
     def read_cassis(self):
-        self.get_header()
-
         data = np.genfromtxt(self.filepath, skip_header=len(self._raw_header), names=True)
         self._xdata = data['FreqLsb']
         self._xunit = 'MHz'
@@ -116,26 +141,60 @@ class DataFile:
         else:
             print("Unknown extension.")
 
-    def get_header(self, comments=('#', '//')):
-        with open(self.filepath) as f:
-            raw_header = []
-            header = {}
-            line = f.readline()
+    @property
+    def xdata(self):
+        return self._xdata
+
+    @property
+    def xdata_mhz(self):
+        return self._xdata_mhz
+
+    @property
+    def ydata(self):
+        return self._ydata
+
+    @property
+    def xunit(self):
+        return self._xunit
+
+    @xunit.setter
+    def xunit(self, value):
+        if value != self._xunit:
+            # convert x-axis
+            self._xdata = self._xdata * u.Unit(self._xunit).to(value).value
+            # update header
+            if self.header is not None:
+                if isinstance(self.header, dict):
+                    self.header['xLabel'].replace(self._xunit, value)
+                else:  # assume header from fits
+                    if 'CUNIT1' in self.header:
+                        self.header['CUNIT1'] = value
+                    else:
+                        self.header['TUNIT1'] = value
             try:
-                iter(comments)
-            except TypeError:
-                comments = [comments]
+                self.header['WAVE'] = (self.header['WAVE'], f'[{value}]')
+            except KeyError:
+                pass
+            # set new unit
+            self._xunit = value
 
-            while any([line.startswith(comment) for comment in comments]) or len(line.strip()) == 0:
-                raw_header.append(line)
-                comment = [c for c in comments if line.startswith(c)][0]
-                if ":" in line and 'Point' not in line:
-                    info = line.lstrip(comment).split(":", maxsplit=1)
-                    header[info[0].strip()] = info[1].strip()
-                line = f.readline()
+    @property
+    def yunit(self):
+        return self._yunit
 
-        self._raw_header = raw_header
-        self.header = header
+
+class DataFile(File):
+    def __init__(self, filepath, telescope=None):
+        super().__init__(filepath)  # read header, x and y data, and set the units
+        self.vlsr = 0.
+        self.bmaj = None
+        self.bmin = None
+        self._telescope = telescope
+
+        self.get_vlsr()
+
+        if self.yunit in UNITS['flux']:
+            self.read_beam()
 
     def get_vlsr(self):
         for k, v in self.header.items():
@@ -174,43 +233,6 @@ class DataFile:
 
     def beam(self):
         return self.bmaj, self.bmin
-
-    @property
-    def xdata(self):
-        return self._xdata
-
-    @property
-    def xdata_mhz(self):
-        return self._xdata_mhz
-
-    @property
-    def ydata(self):
-        return self._ydata
-
-    @property
-    def xunit(self):
-        return self._xunit
-
-    @xunit.setter
-    def xunit(self, value):
-        if value != self._xunit:
-            # convert x-axis
-            self._xdata = self._xdata * u.Unit(self._xunit).to(value).value
-            # update header
-            if self.header is not None:
-                if isinstance(self.header, dict):
-                    self.header['xLabel'].replace(self._xunit, value)
-                else:  # assume header from fits
-                    if 'CUNIT1' in self.header:
-                        self.header['CUNIT1'] = value
-                    else:
-                        self.header['TUNIT1'] = value
-            try:
-                self.header['WAVE'] = (self.header['WAVE'], f'[{value}]')
-            except KeyError:
-                pass
-            # set new unit
-            self._xunit = value
 
     @property
     def yunit(self):
@@ -262,11 +284,14 @@ class DataFile:
                 print(f"Cannot convert from {self._yunit} to {value}, nothing done.")
 
 
+def open_continuum_file(filepath):
+    data = File(filepath)
+    return data.xdata_mhz, data.ydata
+
+
 def open_data_file(filepath, continuum=False):
     """Deprecated - for backward compatibility"""
     data = DataFile(filepath)
-    if continuum:
-        return data.xdata_mhz, data.ydata
     return data.xdata_mhz, data.ydata, data.vlsr
 
 
