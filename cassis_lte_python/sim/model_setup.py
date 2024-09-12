@@ -203,6 +203,7 @@ class ModelConfiguration:
             self.constraints = constraints_dict
 
         self.ref_pixel_info = None
+        self.latest_valid_params = None
         self.minimize = configuration.get('minimize', False)
         self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)

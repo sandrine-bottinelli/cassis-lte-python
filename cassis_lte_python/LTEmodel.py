@@ -27,7 +27,7 @@ from astropy.wcs import WCS
 from time import process_time
 from warnings import warn
 from typing_extensions import Literal
-import copy
+import math
 
 
 def generate_lte_model_func(config):
@@ -548,6 +548,10 @@ class ModelSpectrum(object):
             for parname in self.params:
                 self.params[parname] = start_pars[parname]
 
+        if self.model_config.latest_valid_params is not None:
+            for parname in self.params:
+                self.params[parname] = self.model_config.latest_valid_params[parname]
+
         # if self.model is None:
         #     self.generate_lte_model()
         self.generate_lte_model()
@@ -606,7 +610,18 @@ class ModelSpectrum(object):
         self.log = False
 
         # save parameters for re-use
-        # self.model_config.jparams = self.params.dumps()
+        # if self.model_config.jparams is None:
+        #     self.model_config.jparams = self.params.dumps()
+        if self.model_config.latest_valid_params is None:
+            self.model_config.latest_valid_params = self.params.copy()
+        else:
+            REL_TOL = 1e-3
+            for parname, par in self.params.items():
+                tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
+                if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
+                                            for extrem in [par.min, par.max]]):
+                # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
+                    self.model_config.latest_valid_params[parname] = self.params[parname]
 
         if print_report:
             print(self.fit_report(report_kws=report_kws))
@@ -1491,11 +1506,12 @@ class ModelSpectrum(object):
 
     def use_ref_pixel(self, tag_list=None):
         params = self.ref_pixel_info['params'].copy()
+        self.model_config.latest_valid_params = params
         # self.model = self.ref_pixel_info['model']
         if tag_list is not None:
             self.update_params_dict(params, tag_list)
             self.generate_lte_model()
-        self.params = params
+        # self.params = params
 
     def save_model(self, filename, dirname=None, ext='txt', full_spectrum=True):
         """
