@@ -30,8 +30,21 @@ from typing_extensions import Literal
 import math
 
 
-def generate_lte_model_func(config):
-
+def generate_lte_model_func(config: dict):
+    """
+    Function to generate the model function using information provided in config.
+    The generated function depends on the frequency in MHz and on a set of lmfit parameters.
+    :param config: a dictionary containing :
+        - the following frequency-dependent functions:
+            - tc : continuum values ; no default
+            - beam_sizes : 1-D equivalent beam size ; no default
+            - tmb2ta : conversion factor from Tmb to Ta* scale ; default to 1
+            - jypb2k : conversion factor from Jy/beam to K ; default to 1
+            - noise : rms noise values ; default to 0
+        - line_list : list of transitions to be modeled
+        - cpt_list : list of components
+    :return: The model function to be minimized.
+    """
     def lte_model_func(fmhz, log=False, cpt='from_config', line_center_only=False, return_tau=False, **params):
         norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
         vlsr_file = config.get('vlsr_file', 0.)
@@ -66,7 +79,6 @@ def generate_lte_model_func(config):
 
             sum_tau = 0
             for isp, tag in enumerate(cpt.tag_list):
-                tran_list = []
                 if isinstance(line_list, list):
                     tran_list = line_list
                 else:  # assume it is a DataFrame
@@ -119,7 +131,7 @@ def generate_lte_model_func(config):
 
         if return_tau:
             intensity = (intensity, sum_tau)
-        return intensity  #, sum_tau if return_tau else intensity
+        return intensity
 
     return lte_model_func
 
