@@ -874,7 +874,7 @@ def read_crtf(file, use_region=None):
         return None
 
 
-def get_mask(wcs: WCS, file, exclude=False):
+def get_single_mask(wcs: WCS, file, exclude=False):
     wcs_image = reduce_wcs_dim(wcs)
     nx = wcs_image.array_shape[0]
     ny = wcs_image.array_shape[1]
@@ -889,6 +889,15 @@ def get_mask(wcs: WCS, file, exclude=False):
             mask = np.logical_not(mask)
     except TypeError:
         print('Invalid region or region file. No masking.')
+    return mask
+
+
+def get_mask(wcs: WCS, file, exclude=False):
+    if not isinstance(file, list):
+        return get_single_mask(wcs, file, exclude=exclude)
+    mask = get_single_mask(wcs, file[0], exclude=exclude)
+    for f in file[1:]:
+        mask &= get_single_mask(wcs, f, exclude=exclude)
     return mask
 
 
