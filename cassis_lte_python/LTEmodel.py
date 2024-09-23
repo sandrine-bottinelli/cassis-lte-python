@@ -499,8 +499,8 @@ class ModelSpectrum(object):
 
         self.params = params
 
-        if self.model_config.jparams is None:
-            self.model_config.jparams = self.params.dumps()
+        # if self.model_config.jparams is None:
+        #     self.model_config.jparams = self.params.dumps()
 
         norm_factors = {self.params[parname].name: 1. for parname in self.params}
         if normalize:

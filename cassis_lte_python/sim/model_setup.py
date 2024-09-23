@@ -617,93 +617,319 @@ class ModelConfiguration:
             else:
                 raise TypeError("rms_cal must be a dictionary or a path to an appropriate file.")
 
+    def get_tag_list_from_sp_dict(self, labels):
+        if not isinstance(labels, list):
+            labels = [labels]
+        tags = []
+        for label in labels:
+            try:
+                # check if the label can be converted to an integer
+                # if so, we directly have a tag, append it as a string
+                int(label)
+                tags.append(label)
+            except ValueError:
+                # the label is not numeric, search for the corresponding tag(s) in the user's dictionary
+                try:
+                    tags_temp = self.species_dict[label]
+                    if not isinstance(tags_temp, list):
+                        tags_temp = [tags_temp]
+                    tags.extend(tags_temp)
+                except KeyError:
+                    raise IndexError("No tags found for species '{}'".format(label))
+        return tags
+
+    def read_comp_infos(self, lines_from_file, cpt_dict=None):
+        if cpt_dict is None:
+            cpt_dict = {}
+        # get species list per component and whether component is interacting
+        interacting = [line for line in lines_from_file if '_interacting' in line]
+        species = [line for line in lines_from_file if '_species' in line]
+        for line in interacting:
+            cname = line.split('_')[0]
+            if cname not in cpt_dict:
+                cpt_dict[cname] = {'interacting': line.split()[1].strip() == "True"}
+            else:
+                cpt_dict[cname]['interacting'] = line.split()[1].strip() == "True"
+        for line in species:
+            cname = line.split('_')[0]
+            labels = line.split('\t')[1]
+            labels = [elt.strip() for elt in labels.split(',')]
+            tags = self.get_tag_list_from_sp_dict(labels)
+
+            if cname not in cpt_dict:
+                cpt_dict[cname] = {'species': tags}
+            else:
+                cpt_dict[cname]['species'] = tags
+
+        return cpt_dict
+
+    def read_comp_params(self, lines_from_file, cpt_dict=None):
+        if cpt_dict is None:
+            cpt_dict = {}
+
+        # Component parameters (size, tex, vlsr, fwhm)
+        n_start_comps = 0
+        for j, line in enumerate(lines_from_file):
+            if line.startswith('name'):
+                n_start_comps = j
+                break
+        n_end_comps = n_start_comps + 1
+        for j, line in enumerate(lines_from_file[n_start_comps + 1:]):
+            if line.startswith('c'):
+                n_end_comps += 1
+                continue
+            break
+        rows_comps = lines_from_file[n_start_comps:n_end_comps]
+        rows_comps = [line.rstrip() for line in rows_comps]
+        fcomp = io.StringIO("\n".join(rows_comps))
+        cpt_df = pd.read_csv(fcomp, sep='\t', comment='#')
+        cpt_df = cpt_df.rename(columns=lambda x: x.strip())
+        cpt_names = [name.split('_')[0] for name in cpt_df['name']]
+        cpt_names = list(set(cpt_names))
+        cpt_names.sort()
+        # cpt_info = {cname: {'interacting': True} for cname in cpt_names}
+        for cname in cpt_names:
+            if cname not in cpt_dict:
+                cpt_dict[cname] = {}
+            if 'interacting' not in cpt_dict[cname]:
+                cpt_dict[cname]['interacting'] = True
+        for i, row in cpt_df.iterrows():
+            cpt_name, par_name = row['name'].split('_')
+            cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
+                                                           vary=row['vary'])
+
+        return cpt_dict
+
+    def read_sp_table(self, cpt_dict=None, **kwargs):
+        # species infos are given as a table, stored in self.species_infos :
+        # tag   eup_min ...     c1_ntot     c1_ntot_min ...
+        if cpt_dict is None:
+            cpt_dict = {}
+        ntot_min_fact = kwargs.get('ntot_min_fact', 1e-3)
+        ntot_max_fact = kwargs.get('ntot_max_fact', 1e3)
+        # self.species_infos[[col for col in self.species_infos.columns if not col.startswith('c')]]
+        cpt_names = [key for key in cpt_dict.keys() if key[1].isdigit()]
+        for cname in cpt_names:
+            cname_dic = cpt_dict[cname]
+            sp_list = cname_dic.get('species', None)
+            if sp_list is None and self.species_infos is None:
+                    raise Exception("Missing species info.")
+            if not isinstance(sp_list, list):  # make sure it is a list
+                sp_list = [sp_list]
+            species_list = []
+            for sp in sp_list:
+                ntot = self.species_infos.at[int(sp), f'{cname}_ntot']
+                ntot_min = ntot_min_fact
+                ntot_max = ntot_max_fact
+                is_factor = True
+
+                if f'{cname}_ntot_min_fact' in self.species_infos.keys():
+                    ntot_min = self.species_infos.at[int(sp), f'{cname}_ntot_min_fact']
+                    if ntot_min == 0. or ntot_min == '*':
+                        ntot_min = ntot_min_fact
+                if f'{cname}_ntot_max_fact' in self.species_infos.keys():
+                    ntot_max = self.species_infos.at[int(sp), f'{cname}_ntot_max_fact']
+                    if ntot_max == 0. or ntot_max == '*':
+                        ntot_max = ntot_max_fact
+
+                if f'{cname}_ntot_min' in self.species_infos.keys() or f'{cname}_ntot_max' in self.species_infos.keys():
+                    is_factor = False
+                    if f'{cname}_ntot_min' in self.species_infos.keys():
+                        ntot_min = self.species_infos.at[int(sp), f'{cname}_ntot_min']
+                        if ntot_min == 0. or ntot_min == '*':
+                            ntot_min = ntot_min_fact * ntot
+                    if f'{cname}_ntot_max' in self.species_infos.keys():
+                        ntot_max = self.species_infos.at[int(sp), f'{cname}_ntot_max']
+                        if ntot_max == 0. or ntot_max == '*':
+                            ntot_max = ntot_max_fact * ntot
+
+                sp_dict = {
+                    'tag': str(sp),
+                    'ntot': parameter_infos(value=ntot, min=ntot_min, max=ntot_max, factor=is_factor)
+                }
+                if cpt_dict[cname]['fwhm'] is None:
+                    if f'{cname}_fwhm_min_d' in self.species_infos.keys():
+                        diff = True
+                        min_f = self.species_infos.at[int(sp), f'{cname}_fwhm_min_d']
+                        max_f = self.species_infos.at[int(sp), f'{cname}_fwhm_max_d']
+                    elif f'{cname}_fwhm_min' in self.species_infos.keys():
+                        diff = False
+                        min_f = self.species_infos.at[int(sp), f'{cname}_fwhm_min']
+                        max_f = self.species_infos.at[int(sp), f'{cname}_fwhm_max']
+                    else:
+                        raise Exception("Missing fwhm info.")
+                    sp_dict['fwhm'] = parameter_infos(value=self.species_infos.at[int(sp), f'{cname}_fwhm'],
+                                                      min=min_f, max=max_f, difference=diff)
+                species_list.append(sp_dict)
+
+            cname_dic['species'] = species_list
+
+        return cpt_dict
+
+    def read_sp_block(self, blocks_from_file, cpt_dict=None):
+        # species infos are given as one "block" per species :
+        # tag   eup_min     ...
+        # name   min    value   max vary
+        # c1_ntot   ...
+        if cpt_dict is None:
+            cpt_dict = {}
+        cpt_names = [key for key in cpt_dict.keys() if key[1].isdigit()]
+        sp_list_by_cpt = {}
+        for c_name in cpt_names:
+            if 'species' in cpt_dict[c_name]:
+                species_labels = cpt_dict[c_name]['species']
+                sp_list_by_cpt[c_name] = self.get_tag_list_from_sp_dict(species_labels)
+                cpt_dict[c_name]['species'] = []
+
+        sp_dfs = []
+        sp_names = []
+        for block in blocks_from_file:
+            sp_name = block[1].split()[0]
+            sp_names.append(sp_name)
+            sp_df = pd.read_csv(io.StringIO("\n".join(block[2:])), sep='\t', comment='#', index_col=0)
+            sp_df = sp_df.rename(columns=lambda x: x.strip())
+            sp_dfs.append(sp_df)
+        df = pd.concat(sp_dfs, axis=1, keys=sp_names)
+        # print(df)
+        for cname, sp_list in sp_list_by_cpt.items():
+            for tag in sp_list:
+                sp_dict = {'tag': tag}
+                pars = ['ntot', 'fwhm']
+                for par in pars:
+                    if f'{cname}_{par}' in df.index:
+                        pmin, val, pmax, var = df.loc[f'{cname}_{par}'][tag].values
+                        factor = False
+                        if par == 'ntot' and df.loc[f'{cname}_{par}'][tag]['max'] < 1.e6:
+                            factor = True
+                            pmin = val * pmin
+                            pmax = val * pmax
+                        sp_dict[par] = parameter_infos(value=df.loc[f'{cname}_{par}'][tag]['value'],
+                                                       min=df.loc[f'{cname}_{par}'][tag]['min'],
+                                                       max=df.loc[f'{cname}_{par}'][tag]['max'],
+                                                       vary=df.loc[f'{cname}_{par}'][tag]['vary'],
+                                                       factor=factor)
+                cpt_dict[cname]['species'].append(sp_dict)
+
+        return cpt_dict
+
     def get_components(self, cpt_info):
-        config_key = [key for key in cpt_info.keys() if 'config' in key]
+        """
+        Creates the components.
+        :param cpt_info: dictionary with the components' information ; can contain an item providing a config file
+        :return: None
+        Possible formats for the config file :
+        1. (componentConfig.txt)
+           Whether a component is interacting and infos (min, value, max, vary) on size, tex, vlsr, fwhm
+           e.g.:
+            c1_interacting	True
+            [...]
+            # Add at least 3 lines per component (size, tex, vlsr) ; can add a 4th line with fwhm info
+            name	min	value	max	vary # do not change this line
+            c1_size	1	2	3	True
+            c1_tex	100	200	300	True
+            c1_vlsr	0	3	5	True
+            c1_fwhm	2.0	5.0	12.0	True
+
+        2. (infosComponentSpecies.txt)
+           List of species (or key) per component
+           Whether component is interacting
+           Infos (min, value, max, vary) on size, tex, vlsr, fwhm
+           Table with thresholds and column density info
+           e.g.:
+            c1_species	CH3OHs
+            [...]
+            c1_interacting	True
+            [...]
+            name	min	value	max	vary # do not change this line
+            c1_size	1	1	3	False
+            c1_tex	100	350	1000	True
+            c1_vlsr	5	6.7	8	True
+            c1_fwhm	1.5	3.5	6.5	False
+            c2_size	1	1	50	False
+            c2_tex	5	160	450	True
+            c2_vlsr	5	7	8	True
+            c2_fwhm	0.9	1.8	4.4	False
+            [...]
+            tag	    eup_min	eup_max	aij_min	aij_max	err_max	c1_ntot	c1_ntot_min_fact	c1_ntot_max_fact
+            28503	0.0	    300.0	1.0e-6	*	    3	    6.0e17	1e-3                1e3
+
+        3. (infosComponentSpecies.txt)
+           Infos (min, value, max, vary) on size, tex, vlsr, fwhm plus
+           one block per species with thresholds and column density
+           (species and interacting are in the user's script)
+           e.g.:
+            name	min	value	max	vary # do not change this line
+            c1_size	1	6	10	False
+            c1_tex	50	100	150	False
+            c1_vlsr	2	4	6	True
+            c1_fwhm	2.0	4.5	12.0	False
+            [...]
+            tag	eup_min	eup_max	aij_min	aij_max	err_max
+            44501	0.0	600.0	1.0e-6	*	3
+            name	min	    value	max	vary # do not change this line
+            c1_ntot	1e-3	1.0e15	1e3	True
+            c2_ntot	1e-3	1.0e14	1e3	True
+            c3_ntot	1e-3	1.0e14	1e3	True
+        """
+        config_key = [key for key in cpt_info.keys() if 'config' in key]  # look for key indicating a config file
         if len(config_key) > 0:
             cpt_config_file = cpt_info[config_key[0]]
-            cpt_info.pop(config_key[0])
+            cpt_info.pop(config_key[0])  # remove the config item
             ntot_min_fact = None
             ntot_max_fact = None
             try:
                 with open(cpt_config_file) as f:
                     all_lines = f.readlines()
                     line_sp_infos = 0
+                    sp_table = True  # assume 2nd format with species infos (thresholds, column density) as table
                     for i, line in enumerate(all_lines):
-                        if line.startswith('tag'):
+                        if 'SPECIES INFOS' in line:  # 3rd format
+                            sp_table = False
+                        if 'SPECIES INFOS' in line or line.startswith('tag'):
+                            # fmt 2 or 3 : identify where the species information starts
                             line_sp_infos = i
                             break
 
                     if line_sp_infos == 0:  # only component info, no thresholds per species
                         lines = all_lines
                     else:  # both component and species infos -> separate them
-                        lines = [line.rstrip() for line in all_lines[:line_sp_infos]]
-                        self.species_infos = utils.read_species_info(io.StringIO("".join(all_lines[line_sp_infos:])))
+                        lines = [line.rstrip() for line in all_lines[:line_sp_infos]]  # comp info, dealt with later
+                        # here, deal with species infos
+                        lines_sp = all_lines[line_sp_infos:]
+                        for _ in range(len(lines_sp)):
+                            if lines_sp[0].startswith('#'):
+                                lines_sp.pop(0)  # remove the comment lines at the beginning of the block
+                            else:
+                                break
 
-                    # get species list per component and whether component is interacting
-                    interacting = [line for line in lines if '_interacting' in line]
-                    species = [line for line in lines if '_species' in line]
-                    for line in interacting:
-                        cname = line.split('_')[0]
-                        if cname not in cpt_info:
-                            cpt_info[cname] = {'interacting': line.split()[1].strip() == "True"}
+                        if sp_table:
+                            self.species_infos = utils.read_species_info(io.StringIO("".join(lines_sp)))
                         else:
-                            cpt_info[cname]['interacting'] = line.split()[1].strip() == "True"
-                    for line in species:
-                        cname = line.split('_')[0]
-                        labels = line.split('\t')[1]
-                        labels = [elt.strip() for elt in labels.split(',')]
-                        tags = []
-                        for label in labels:
-                            try:
-                                # check if the label can be converted to an integer
-                                # if so, we directly have a tag, append it as a string
-                                int(label)
-                                tags.append(label)
-                            except ValueError:
-                                # the label is not numeric, search for the corresponding tag(s) in the user's dictionary
-                                try:
-                                    tags_temp = self.species_dict[label]
-                                    if not isinstance(tags_temp, list):
-                                        tags_temp = [tags_temp]
-                                    tags.extend(tags_temp)
-                                except KeyError:
-                                    raise IndexError("No tags found for species '{}'".format(label))
+                            # species infos by block : first need to separate each block
+                            infos_by_sp = []  # list of list containing species infos
+                            infos_sp = []
+                            for i, line in enumerate(lines_sp):
+                                if line.startswith('#'):  # comment line
+                                    continue  # ignore it
+                                if line.strip() != '':  # info line (not blank line)
+                                    infos_sp.append(line.rstrip() + "\n")  # append info to the species list
+                                if line.strip() == '' or i == len(lines_sp) - 1:
+                                    # blank line or end of list : end of a species block
+                                    infos_by_sp.append(infos_sp)
+                                    infos_sp = []
+                                    continue
 
-                        if cname not in cpt_info:
-                            cpt_info[cname] = {'species': tags}
-                        else:
-                            cpt_info[cname]['species'] = tags
+                            self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
 
-                # Component parameters (size, tex, vlsr, fwhm)
-                n_start_comps = 0
-                for j, line in enumerate(lines):
-                    if line.startswith('name'):
-                        n_start_comps = j
-                        break
-                n_end_comps = n_start_comps + 1
-                for j, line in enumerate(lines[n_start_comps+1:]):
-                    if line.startswith('c'):
-                        n_end_comps += 1
-                        continue
-                    break
-                rows_comps = lines[n_start_comps:n_end_comps]
-                rows_comps = [line.rstrip() for line in rows_comps]
-                fcomp = io.StringIO("\n".join(rows_comps))
-                cpt_df = pd.read_csv(fcomp, sep='\t', comment='#')
-                cpt_df = cpt_df.rename(columns=lambda x: x.strip())
-                cpt_names = [name.split('_')[0] for name in cpt_df['name']]
-                cpt_names = list(set(cpt_names))
-                cpt_names.sort()
-                # cpt_info = {cname: {'interacting': True} for cname in cpt_names}
-                for cname in cpt_names:
-                    if cname not in cpt_info:
-                        cpt_info[cname] = {}
-                    if 'interacting' not in cpt_info[cname]:
-                        cpt_info[cname]['interacting'] = True
-                for i, row in cpt_df.iterrows():
-                    cpt_name, par_name = row['name'].split('_')
-                    cpt_info[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
-                                                                   vary=row['vary'])
+                            thresholds = [infos_by_sp[0][0]]  # column names
+                            for infos_sp in infos_by_sp:
+                                thresholds.append(infos_sp[1])  # for each species block, thresholds are at index 1
+                                # sp = infos_sp[1].split()[0]
+                                # sp_df =
+                            self.species_infos = utils.read_species_info(io.StringIO("".join(thresholds)))
+
+                    cpt_info = self.read_comp_infos(lines, cpt_dict=cpt_info)
+                    cpt_info = self.read_comp_params(lines, cpt_dict=cpt_info)
 
                 # Default ntot factors
                 ntot_factors = [line for line in lines if "ntot_m" in line]
@@ -720,63 +946,16 @@ class ModelConfiguration:
             if 'fwhm' not in cpt_info[cname]:
                 cpt_info[cname]['fwhm'] = None
 
+        if sp_table:
+            cpt_info = self.read_sp_table(cpt_dict=cpt_info, **{'ntot_min_fact': ntot_min_fact,
+                                                                'ntot_max_fact': ntot_max_fact})
+
         for cname, cpt_dic in cpt_info.items():
             sp_list = cpt_dic.get('species', None)
             if sp_list is None:
-                if self.species_infos is not None:
-                    pass
-                else:
                     raise Exception("Missing species info.")
             if not isinstance(sp_list, list):  # make sure it is a list
                 sp_list = [sp_list]
-            if isinstance(sp_list[0], (int, str)) and self.species_infos is not None:
-                # we have a list of tags and infos from file
-                species_list = []
-                for sp in sp_list:
-                    ntot = self.species_infos.at[int(sp), f'{cname}_ntot']
-                    ntot_min = ntot_min_fact
-                    ntot_max = ntot_max_fact
-                    is_factor = True
-
-                    if f'{cname}_ntot_min_fact' in self.species_infos.keys():
-                        ntot_min = self.species_infos.at[int(sp), f'{cname}_ntot_min_fact']
-                        if ntot_min == 0. or ntot_min == '*':
-                            ntot_min = ntot_min_fact
-                    if f'{cname}_ntot_max_fact' in self.species_infos.keys():
-                        ntot_max = self.species_infos.at[int(sp), f'{cname}_ntot_max_fact']
-                        if ntot_max == 0. or ntot_max == '*':
-                            ntot_max = ntot_max_fact
-
-                    if f'{cname}_ntot_min' in self.species_infos.keys() or f'{cname}_ntot_max' in self.species_infos.keys():
-                        is_factor = False
-                        if f'{cname}_ntot_min' in self.species_infos.keys():
-                            ntot_min = self.species_infos.at[int(sp), f'{cname}_ntot_min']
-                            if ntot_min == 0. or ntot_min == '*':
-                                ntot_min = ntot_min_fact * ntot
-                        if f'{cname}_ntot_max' in self.species_infos.keys():
-                            ntot_max = self.species_infos.at[int(sp), f'{cname}_ntot_max']
-                            if ntot_max == 0. or ntot_max == '*':
-                                ntot_max = ntot_max_fact * ntot
-
-                    sp_dict = {
-                        'tag': str(sp),
-                        'ntot': parameter_infos(value=ntot, min=ntot_min, max=ntot_max, factor=is_factor)
-                    }
-                    if cpt_info[cname]['fwhm'] is None:
-                        if f'{cname}_fwhm_min_d' in self.species_infos.keys():
-                            diff = True
-                            min_f = self.species_infos.at[int(sp), f'{cname}_fwhm_min_d']
-                            max_f = self.species_infos.at[int(sp), f'{cname}_fwhm_max_d']
-                        elif f'{cname}_fwhm_min' in self.species_infos.keys():
-                            diff = False
-                            min_f = self.species_infos.at[int(sp), f'{cname}_fwhm_min']
-                            max_f = self.species_infos.at[int(sp), f'{cname}_fwhm_max']
-                        else:
-                            raise Exception("Missing fwhm info.")
-                        sp_dict['fwhm'] = parameter_infos(value=self.species_infos.at[int(sp), f'{cname}_fwhm'],
-                                                          min=min_f, max=max_f, difference=diff)
-                    species_list.append(sp_dict)
-                sp_list = species_list
             if 'set_fwhm' in cpt_dic and cpt_dic['set_fwhm'] is not None:
                 tag_ref = str(cpt_dic['set_fwhm'])
                 expr = f'{cname}_fwhm_{tag_ref}'
