@@ -713,7 +713,7 @@ class ModelConfiguration:
             cname_dic = cpt_dict[cname]
             sp_list = cname_dic.get('species', None)
             if sp_list is None and self.species_infos is None:
-                    raise Exception("Missing species info.")
+                raise Exception("Missing species info.")
             if not isinstance(sp_list, list):  # make sure it is a list
                 sp_list = [sp_list]
             species_list = []
@@ -939,6 +939,10 @@ class ModelConfiguration:
                     if "max" in elt:
                         ntot_max_fact = float(elt.split("=")[-1])
 
+                if sp_table:
+                    cpt_info = self.read_sp_table(cpt_dict=cpt_info, **{'ntot_min_fact': ntot_min_fact,
+                                                                        'ntot_max_fact': ntot_max_fact})
+
             except FileNotFoundError:
                 raise FileNotFoundError(f"{cpt_config_file} was not found.")
 
@@ -946,16 +950,15 @@ class ModelConfiguration:
             if 'fwhm' not in cpt_info[cname]:
                 cpt_info[cname]['fwhm'] = None
 
-        if sp_table:
-            cpt_info = self.read_sp_table(cpt_dict=cpt_info, **{'ntot_min_fact': ntot_min_fact,
-                                                                'ntot_max_fact': ntot_max_fact})
-
         for cname, cpt_dic in cpt_info.items():
             sp_list = cpt_dic.get('species', None)
             if sp_list is None:
                     raise Exception("Missing species info.")
             if not isinstance(sp_list, list):  # make sure it is a list
                 sp_list = [sp_list]
+            if isinstance(sp_list[0], (int, str)):
+                cpt_info = self.read_sp_table(cpt_dict=cpt_info)
+                sp_list = cpt_dic['species']
             if 'set_fwhm' in cpt_dic and cpt_dic['set_fwhm'] is not None:
                 tag_ref = str(cpt_dic['set_fwhm'])
                 expr = f'{cname}_fwhm_{tag_ref}'

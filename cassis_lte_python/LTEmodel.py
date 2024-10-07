@@ -636,6 +636,7 @@ class ModelSpectrum(object):
                     self.model_config.latest_valid_params[parname] = self.params[parname]
 
         if print_report:
+            # print(self.model_fit.fit_report())
             print(self.fit_report(report_kws=report_kws))
 
         self.do_savings()
