@@ -558,6 +558,9 @@ class ModelConfiguration:
         # extract rms/cal info
         if self._rms_cal_user is not None:
             if isinstance(self._rms_cal_user, dict):
+                # make sure we have floats:
+                for key, val in self._rms_cal_user.items():
+                    self._rms_cal_user[key] = [float(elt) for elt in val]
                 if '*' in self._rms_cal_user:
                     self._rms_cal = pd.DataFrame({'freq_range': [[min(self.x_file), max(self.x_file)]],
                                                   'fmin': [min(self.x_file)],
