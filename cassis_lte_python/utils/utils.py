@@ -110,8 +110,13 @@ class File:
                 self._xunit = hdu[1].columns.columns[0].unit
                 self._yunit = hdu[1].columns.columns[1].unit
                 # do the following to be able to use in a DataFrame
-                self._xdata = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()
-                self._ydata = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
+                # self._xdata = data[hdu[1].columns.columns[0].name].byteswap().newbyteorder()
+                # self._ydata = data[hdu[1].columns.columns[1].name].byteswap().newbyteorder()
+                dat = []
+                for i in range(2):
+                    A = data[hdu[1].columns.columns[i].name]
+                    dat.append(A.view(A.dtype.newbyteorder()).byteswap())
+                self._xdata, self._ydata = dat
             else:
                 raise TypeError("Cannot open this fits file.")
 
