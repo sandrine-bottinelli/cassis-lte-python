@@ -209,7 +209,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
                     borderpad=0.2,
                     handlelength=0, handletextpad=0, borderaxespad=0)
     # leg.get_frame().set_facecolor('white')
-    for item in leg.legendHandles:
+    for item in leg.legend_handles:
         item.set_visible(False)
     for text in leg.get_texts():
         col = win.tag_colors[text.get_text()]
@@ -235,7 +235,7 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
         text.set_color(col)
         # text.set_weight('bold')
 
-    for item in sat_leg.legendHandles:
+    for item in sat_leg.legend_handles:
         item.set_visible(False)
 
     # Manually add the first legend back
