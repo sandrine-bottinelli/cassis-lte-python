@@ -10,6 +10,7 @@ import os
 import astropy.io.fits as fits
 from astropy import units as u
 import pandas as pd
+from spectral_cube import SpectralCube
 from regions import Regions, PixCoord, EllipseSkyRegion
 from astropy.wcs import WCS
 from scipy.interpolate import interp1d
@@ -849,6 +850,29 @@ def compute_jypb2k(freq_mhz: float | int | list | np.ndarray,
     omega *= np.pi / (4 * np.log(2))
     conv_fact = C_LIGHT ** 2 / (2 * K_B * omega) * 1.e-26
     return conv_fact / (freq_mhz * 1.e6)**2
+
+
+def get_cubes(file_list, check_spatial_shape=None):
+    """
+    Retrieve data as SpectralCube objects. Checks whether the cubes in file_list have the same spatial shape.
+    :param self:
+    :param file_list: the list of files (absolute paths)
+    :param check_spatial_shape: a two-element tuple representing the spatial shape of some other cube.
+    :return: a list of SpectralCube objects
+    """
+    hduls = [fits.open(f) for f in file_list]
+
+    # check that cubes have the same number of pixels in RA and Dec:
+    nx_list = set([hdul[0].shape[-2] for hdul in hduls])
+    ny_list = set([hdul[0].shape[-1] for hdul in hduls])
+    if len(nx_list) > 1 or len(ny_list) > 1:
+        raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
+
+    if check_spatial_shape is not None:
+        if (next(iter(nx_list)), next(iter(ny_list))) != check_spatial_shape:
+            raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
+
+    return [SpectralCube.read(h) for h in hduls]
 
 
 def reduce_wcs_dim(wcs):

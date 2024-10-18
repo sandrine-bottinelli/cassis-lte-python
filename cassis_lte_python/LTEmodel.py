@@ -240,11 +240,13 @@ class ModelSpectrum(object):
 
         self.params = None
         self.norm_factors = None
-        self.model = None
         self.log = False
+        self.normalize = False
+        # self.make_params()
+
+        self.model = None
         self.model_fit = None
         self.model_fit_cpt = []
-        self.normalize = False
         self.figure = None
 
         self.tag_colors = None
@@ -2001,46 +2003,137 @@ class ModelSpectrum(object):
         self.write_cassis_file(filename, dirname=dirname)
 
 
-class ModelCube:  # TODO : needs to be updated
-    def __init__(self, configuration):
-        self._data_path = configuration.get('data_path', './')
-        self._data_file = configuration.get('data_file', None)
+class ModelCube(object):
+    def __init__(self, configuration, verbose=False):
+
+        try:
+            self._data_file = configuration['data_file']
+        except KeyError:
+            raise KeyError("Keyword data_file is mandatory")
         if not isinstance(self._data_file, list):
             self._data_file = [self._data_file]
 
-        self._source = configuration.get('source', None)
-        self.win_list = None
+        self._data_path = configuration.get('data_path', None)
+        if self._data_path is not None:
+            self._data_file = [os.path.join(self._data_path, f) for f in self._data_file]
 
-        cont_info = configuration.get('cont_info', 0.)
+        self.output_dir = configuration.get('output_dir', 'outputs')
+
+        self._cubes = utils.get_cubes(self._data_file)
+        self.cubeshape = self._cubes[0].shape
+        self.wcs = self._cubes[0].wcs
+        self.hdr = self._cubes[0].header
+
+        self.fmhz_ranges = self.read_frequencies()
+
+        # Extract the intensity units
+        yunits = self.hdr['BUNIT']
+        IntensityTastar = False
+        if 'K' in yunits:
+             yunits = 'Kelvins'
+        if 'Ta.' in yunits:
+             IntensityTastar = True
+        configuration['t_a*'] = IntensityTastar
+        configuration['yunits'] = yunits
+
+        # Extract the Vlsr if present in the fits files (to be check out, does not work yet)
+        # --------------------------------------------------------------------------------------------------------------------------
+        # if 'VELO-LSR' in hdr :
+        #     vlsr_obs          = hdr['VELO-LSR'] * u.m / u.s
+        #     vlsr_obs          = vlsr_obs.value / 1e3
+        #     print('vlsr_obs  = ', vlsr_obs)
+
+        tuning_info = configuration['tuning_info']
+        if not isinstance(tuning_info, dict):
+            configuration['tuning_info'] = {tuning_info: self.fmhz_ranges}
+
+        self._noise_info = configuration['noise_info']
+        self._cal = configuration.get('calibration', 15.)
+        if isinstance(self._noise_info[0], str):
+            self._cubes_noise = utils.get_cubes(self._noise_info, check_spatial_shape=self.cubeshape[-2:])
+        else:
+            self._cubes_noise = []
+
+        configuration['minimize'] = False
+        configuration['x_obs'] = np.concatenate([dat.spectral_axis.value / 1.e6 for dat in self._cubes])  # in MHz
+
+        self._pix_info = configuration.get('pix_info', None)
+        if self._pix_info is None:
+            self.pix_list = []
+        else:
+            (xref, yref, delta) = self._pix_info
+            # Define the snake loop extent
+            if delta == -1:
+                ymax, xmax = self.cubeshape[-2:]
+                self.pix_list = utils.pixels_snake_loop(xref, yref, xmax - 1, ymax - 1)
+            else:
+                self.pix_list = utils.pixels_snake_loop(xref, yref, xref + delta, yref + delta, xmin=xref - delta,
+                                                        ymin=yref - delta)
+
+        self._model = ModelSpectrum(configuration, verbose=verbose)
+        # self._model_configuration = ModelConfiguration(configuration, verbose=verbose)
+        self._model_configuration = self._model.model_config
+
+        self.tags = self._model.model_config.tag_list
+        nb_cpt = len(self._model.model_config.cpt_list)
+        # create arrays of Nans for the output parameters, ensure to make for all components
+        array_dict = {'redchi2': np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)}
+        err_dict = dict()
+        for param in self._model.param_names():
+            array_dict['{}'.format(param)] = np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)
+            err_dict['{}'.format(param)] = np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)
+        self.array_dict = array_dict
+        self.err_dict = err_dict
+
+        # self._source = configuration.get('source', None)
+        # self.win_list = None
+
+        cont_info = configuration.get('cont_info', [])
         # retrieving the continuum
-        if isinstance(cont_info, dict):
-            for key, val in cont_info.items():
-                if isinstance(val, str):
-                    cont_file = os.path.join(self._data_path, val)
-                    if os.path.isfile(cont_file):  # assume it is a fits file
-                        cont_info[key] = fits.open(cont_file)[0]
+        # if isinstance(cont_info, dict):
+        #     for key, val in cont_info.items():
+        #         if isinstance(val, str):
+        #             cont_file = os.path.join(self._data_path, val)
+        #             if os.path.isfile(cont_file):  # assume it is a fits file
+        #                 cont_info[key] = fits.open(cont_file)[0]
+        if len(cont_info) > 0:
+            cont_info = utils.get_cubes(cont_info, check_spatial_shape=self.cubeshape[-2:])
         self._cont_info = cont_info
-
-        # retrieving the source data and information
-        hduls = [fits.open(os.path.join(self._data_path, f)) for f in self._data_file]
-        self._cubes = [SpectralCube.read(h) for h in hduls]
-        # datfile = fits.open(os.path.join(myPath, file_list[0]))
-        # dat = SpectralCube.read(datfile)
-        self._wcs = WCS(hduls[0][0].header)  # RA and DEC info from WCS in header
-        # hdr = datfile[0].header
-
-        # check that cubes have the same number of pixels in RA and Dec:
-        nx_list = [dat.shape[1] for dat in self._cubes]
-        ny_list = [dat.shape[2] for dat in self._cubes]
-        if len(set(nx_list)) > 1 or len(set(ny_list)) > 1:
-            raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
-
-        self._nx = next(iter(set(nx_list)))
-        self._ny = next(iter(set(ny_list)))
 
         # conversion factors : T = (conv_fact / nu^2) * I , with :
         # conv_fact = c^2 / (2*k_B*omega) * 1.e-26 (to convert Jy to mks)
         # omega = pi*bmaj*min/(4*ln2)
+        # 'jypb_MHz2': 1.e-26 * const.c.value ** 2 / 1.e12 / (2. * const.k_B.value * omega)})
+
+        # configuration['beam_info'] = self.get_beams()
+
+        # Mask:
+        mask_info = configuration.get('mask_info', None)
+        if mask_info is None:
+            self.masked_pix_list = None
+        else:
+            self.masked_pix_list = utils.get_mask(self.wcs, mask_info['file'], exclude=mask_info.get('exclude',True))
+
+            # file1 = os.path.join(self._data_path, masks[0])
+            # file2 = None
+            # if len(masks) > 1:
+            #     file2 = os.path.join(self._data_path, masks[1])
+            # self._masked_pix_list = utils.get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
+
+        # self._model_configuration = ModelConfiguration(configuration)
+        self._model_configuration_user = configuration
+
+        # params = ['redchi']
+        # for cpt in self._model_configuration.cpt_list:
+        #     params.extend([par.name for par in cpt.parameters])
+        #     params.extend([par.name for sp in cpt.species_list for par in sp.parameters])
+        #
+        # # create arrays of zeros for the output parameters
+        # self._param_arrays = dict()
+        # for param in params:
+        #     self._param_arrays['{}_arr'.format(param)] = np.zeros((self._nx, self._ny))
+
+    def get_beams(self):  # keep? (can get beam from spectralCube object)
         beams = {'f_mhz': [], 'beam_omega': []}  # np.ones(len(file_list))
         for h, cube in enumerate(self._cubes):
             try:
@@ -2064,34 +2157,242 @@ class ModelCube:  # TODO : needs to be updated
                 sp = (cube.spectral_axis.to(u.MHz)).value
                 beams['f_mhz'].append(sp)
                 beams['beam_omega'].append([omega for _ in sp])
-                # 'jypb_MHz2': 1.e-26 * const.c.value ** 2 / 1.e12 / (2. * const.k_B.value * omega)})
 
-        configuration['beam_info'] = beams
+        return beams
 
-        # Mask:
-        masks = configuration.get('masks', None)
-        if masks is None:
-            self._masked_pix_list = None
-        else:
-            file1 = os.path.join(self._data_path, masks[0])
-            file2 = None
-            if len(masks) > 1:
-                file2 = os.path.join(self._data_path, masks[1])
-            self._masked_pix_list = utils.get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
+    def read_frequencies(self):
+        # Read the data cubes and start and end frequencies of each cube :
+        dats = []
+        start_frequencies_MHz = []
+        end_frequencies_MHz = []
+        fmhz_ranges = []
 
-        self._model_configuration = ModelConfiguration(configuration)
+        for i, f in enumerate(self._data_file):
+            hduls = fits.open(f)
+            dats.append(SpectralCube.read(hduls))
 
-        params = ['redchi']
-        for cpt in self._model_configuration.cpt_list:
-            params.extend([par.name for par in cpt.parameters])
-            params.extend([par.name for sp in cpt.species_list for par in sp.parameters])
+            # Extract the first and last frequency values of each cube
+            first_value = dats[i].spectral_axis[0]
+            last_value = dats[i].spectral_axis[-1]
 
-        # create arrays of zeros for the output parameters
-        self._param_arrays = dict()
+            start_freq_MHz = round(first_value.to(u.MHz).value, 3)
+            end_freq_MHz = round(last_value.to(u.MHz).value, 3)
+
+            # If this is not the first cube, check whether start_freq_MHz is larger than the previous end_freq_MHz
+            if i > 0 and start_freq_MHz <= end_frequencies_MHz[i - 1]:
+                start_freq_MHz = end_frequencies_MHz[i - 1] + 1e-3
+
+            start_frequencies_MHz.append(start_freq_MHz)
+            end_frequencies_MHz.append(end_freq_MHz)
+            fmhz_ranges.append([start_freq_MHz, end_freq_MHz])
+
+        return fmhz_ranges
+
+    def do_minimization(self, pix_list=None, printDebug=True):
+        if not os.path.isdir(os.path.abspath(self.output_dir)):
+            os.makedirs(os.path.abspath(self.output_dir))
+
+        if pix_list is None:
+            pix_list = self.pix_list
+
+        mask = self.masked_pix_list
+        # Create the components masks (one for each component, for Tex, Vlsr, FWHM and X2, and initialize all values to False
+        # --------------------------------------------------------------------------------------------------------------------------
+        # mask_comp = np.full((cubeshape[-3:]), False)
+        # masks_ntot = np.full((*cubeshape[-3:], len(tags)), False)
+
+        # If one noise value per map :
+        # (otherwise, rms_cal will be defined at each pixel)
+        if isinstance(self._noise_info[0], (float, int)):
+            rms_cal = {'[{:.1f}, {:.1f}]'.format(start, end): [noise, self._cal] for [start, end], noise in
+                       zip(self.fmhz_ranges, self._noise_info)}
+
+        # Start the snake loop
+        model = self._model
+        for pix in pix_list:
+            t1_start = process_time()
+            i, j = pix
+            if mask is not None and not mask[j, i]:
+                # the pixel is masked, go to the next one
+                continue
+            data = np.concatenate([dat[:, j, i].array for dat in self._cubes])
+            data = np.nan_to_num(data)
+            if len(set(data)) == 1:
+                print(f'Not enough data to compute the model at pixel {pix}.')
+                continue
+
+            if len(self._cubes_noise) > 0:
+                noiseValues = np.concatenate([dat[:, j, i].array for dat in self._cubes_noise])
+                rms_cal = {'[{:.1f}, {:.1f}]'.format(start, end): [noise, self._cal] for [start, end], noise in
+                           zip(self.fmhz_ranges, noiseValues)}
+            #        print('rms_cal = ', rms_cal)
+
+            plot_name = "plot_{}_{}".format(i, j)
+
+            # ascii files to be saved in output_dir
+            config_name = "config_{}_{}".format(i, j)
+            model_name = "model_{}_{}".format(i, j)
+            result_name = "result_{}_{}".format(i, j)
+            spec_name = "spectrum_{}_{}".format(i, j)
+            output_files = {
+                'results': result_name,
+                'lam': config_name,
+                'obs': spec_name,
+                'model': model_name
+            }
+
+            cont_name = self.output_dir + "continuum_{}_{}".format(i, j) + ".txt"
+
+            if len(self._cont_info) != 0:
+                with open(cont_name, 'w') as fileout:
+                    fileout.write('{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[0][0] - 10.0), 0.0))
+                    for k, cont_data in enumerate(self._cont_info):
+                        continuum = cont_data[0, 0, j, i].array
+                        print("j =", j, " i =", i, 'continuum[j,i] =', continuum)
+                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][0], continuum))
+                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][1], continuum))
+                    fileout.write(
+                        '{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[-1][-1] + 10.0), 0.0))
+
+                tc = cont_name
+            else:
+                tc = 0.0
+
+            # update the observed values and name of pdf file
+            # ---------------------------------------------------------------
+            model.model_config.y_file = data
+            model.model_config.cont_info = tc
+            model.model_config.rms_cal = rms_cal
+            model.model_config.output_files = output_files
+            model.model_config.file_kws['filename'] = plot_name + ".pdf"
+            # ---------------------------------------------------------------
+
+            if pix == self._pix_info[:2]:
+
+                if model.model_fit is None:  # create the model on the first (brightest) pixel
+                    print("Fitting ref pixel : ", pix)
+
+                    # Run the model
+                    model.model_config.minimize = True
+                    model.do_minimization()
+
+                    # Save the model
+                    model.save_ref_pixel()
+
+                    # for itag, tages in enumerate(self.tags):
+                        # masks_ntot[j, i, itag] = True  # Mind, I do not mask the pixels with that !!!
+                    for par in model.params:
+                        param = model.params[par]
+                        self.array_dict['{}'.format(param.name)][j, i] = param.value
+                        self.err_dict['{}'.format(param.name)][j, i] = param.stderr
+                    self.array_dict['redchi2'][j, i] = model.model_fit.redchi
+
+                else:
+                    print("Back to ref : ", pix, " - Do not fit again")
+                    model.use_ref_pixel()
+
+                continue
+
+                # noise_pixel varying with fmhz_ranges.
+            # --------------------------------------------------------------------------------------------------------------------------
+            fluxes_freq_range = model.model_config.rms_cal.copy()
+            for tag_i in self.tags:  # add two columns for each tag (total flux, number of points)
+                fluxes_freq_range[str(tag_i) + '_Fmax'] = [0.] * len(fluxes_freq_range)
+                fluxes_freq_range[str(tag_i) + '_Nwin'] = [0.] * len(fluxes_freq_range)
+
+            for win in model.win_list_fit:
+                fmhz = win.transition.f_trans_mhz
+                tc = model.get_tc(fmhz)
+                tag_i = win.transition.tag
+                row = get_df_row_from_freq_range(fluxes_freq_range, fmhz)
+                idx = row.index
+                fluxes_freq_range.loc[idx, str(tag_i) + '_Fmax'] += max(win.y_fit - tc)
+                fluxes_freq_range.loc[idx, str(tag_i) + '_Nwin'] += 1
+
+            # create a dictionary to store the rounded SNR values
+            snr_tag = {}
+            for tag_i in self.tags:
+                snr = fluxes_freq_range[str(tag_i) + '_Fmax'] / fluxes_freq_range[str(tag_i) + '_Nwin'] / \
+                      fluxes_freq_range['rms']
+                snr_tag[tag_i] = snr.mean()
+
+            if 'constraint' in self._model_configuration_user:
+                # This considers only rflux[0] values when constraints is True
+                tags_new = self.tags if list(snr_tag.values())[0] >= self._model_configuration_user['snr'] else []
+            else:
+                # Consider all rflux values when constraints is False
+                tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
+
+            snr_fmt = {key: f'{val:.2f}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
+
+            if len(tags_new) > 0:
+                # mask_comp[j, i] = True
+                # update tag list
+                model.update_tag_list(tags_new)
+
+                # fit with the updated config
+                model.do_minimization()
+
+                self.array_dict['redchi2'][j, i] = model.model_fit.redchi
+
+                for par in model.params:
+                    param = model.params[par]
+                    self.array_dict['{}'.format(param.name)][j, i] = param.value
+                    self.err_dict['{}'.format(param.name)][j, i] = param.stderr
+
+                t1_stop = process_time()
+                print(
+                    f'S/N = {", ".join(snr_fmt.values())} at pixel : {pix}, Execution time : {t1_stop - t1_start:.2f} seconds')
+            else:
+                print(f'S/N = {", ".join(snr_fmt.values())} at pixel : {pix}, too low to compute a model')
+
+            print('tags_new = ', tags_new)  # new tag list with S/N ≥ signal2noise
+            # --------------------------------------------------------------------------------------------------------------------------
+
+            # Printouts for debugging
+            # --------------------------------------------------------------------------------------------------------------------------
+            if printDebug:
+                print('plot_name = ', plot_name)
+                print('config_name = ', config_name)
+                print('model_name = ', model_name)
+                print('result_name = ', result_name)
+                print('spec_name = ', spec_name)
+                print('tc = ', tc)
+                print("Fitting pixel : ", pix)
+                print("current list : model.tag_list = ", model.tag_list)  # current tag list
+                print('tags_new = ', tags_new)  # new tag list with S/N ≥ signal2noise
+                # print("mask_comp shape:", mask_comp.shape)
+                # print("masks_ntot shape:", masks_ntot.shape)
+
+    def make_maps(self):
+        params = self.array_dict.keys()
+        print('params = ', params)
+        units = {
+            'tex': 'Kelvin',
+            'vlsr': 'km/s',
+            'size': 'arcsec',
+            'fwhm': 'km/s',
+            'ntot': 'cm^-2',
+            'redchi2': 'Reduced chi-squared'
+        }
         for param in params:
-            self._param_arrays['{}_arr'.format(param)] = np.zeros((self._nx, self._ny))
+            # Split the parameter name into a list of substrings
+            if param.startswith('c'):  # we have a component
+                param_type = param.split('_')[1]
+            else:  # reduced chi2
+                param_type = param
 
-    def do_minimization(self, pix_nb=None, single_pix=True, size=None):
+            for arr, ext in zip([self.array_dict, self.err_dict], ['.fits', '_err.fits']):
+                try:
+                    hdu = fits.PrimaryHDU(arr['{}'.format(param)], header=self.hdr)
+                    hdu.header.set('BUNIT', units[param_type])
+                    hdul = fits.HDUList([hdu])
+                    hdul.writeto(os.path.join(self.output_dir, param + ext), overwrite=True)
+                except KeyError:
+                    pass  # do nothing
+
+
+    def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
         if size is None:
             size = max(self._nx, self._ny)
             imin, imax = 0, self._nx
@@ -2182,7 +2483,7 @@ class ModelCube:  # TODO : needs to be updated
             t2_stop = process_time()
             print("Execution time : {:.2f} seconds".format(t2_stop - t2_start))
 
-    def make_maps(self):
+    def make_maps_old(self):
         # read out parameter arrays into fits files
         units = {'tex': 'K', 'vlsr': 'km/s', 'fwhm': 'km/s', 'ntot': 'cm^-2', 'size': 'arcsec'}
         hdr = utils.reduce_wcs_dim(self._wcs).to_header()
