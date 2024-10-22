@@ -23,11 +23,12 @@ import pandas as pd
 import datetime
 import json
 from spectral_cube import SpectralCube
-from astropy.wcs import WCS
+# from astropy.wcs import WCS
 from time import process_time
 from warnings import warn
 from typing_extensions import Literal
 import math
+import copy
 
 
 def generate_lte_model_func(config: dict):
@@ -2070,12 +2071,13 @@ class ModelCube(object):
                 self.pix_list = utils.pixels_snake_loop(xref, yref, xref + delta, yref + delta, xmin=xref - delta,
                                                         ymin=yref - delta)
 
+        self._model_configuration_user = copy.deepcopy(configuration)
         self._model = ModelSpectrum(configuration, verbose=verbose)
         # self._model_configuration = ModelConfiguration(configuration, verbose=verbose)
         self._model_configuration = self._model.model_config
 
         self.tags = self._model.model_config.tag_list
-        nb_cpt = len(self._model.model_config.cpt_list)
+
         # create arrays of Nans for the output parameters, ensure to make for all components
         array_dict = {'redchi2': np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)}
         err_dict = dict()
@@ -2088,7 +2090,8 @@ class ModelCube(object):
         # self._source = configuration.get('source', None)
         # self.win_list = None
 
-        cont_info = configuration.get('cont_info', [])
+        self.cont_info = configuration.get('cont_info', [])
+        self._cont_data = []
         # retrieving the continuum
         # if isinstance(cont_info, dict):
         #     for key, val in cont_info.items():
@@ -2096,9 +2099,9 @@ class ModelCube(object):
         #             cont_file = os.path.join(self._data_path, val)
         #             if os.path.isfile(cont_file):  # assume it is a fits file
         #                 cont_info[key] = fits.open(cont_file)[0]
-        if len(cont_info) > 0:
-            cont_info = utils.get_cubes(cont_info, check_spatial_shape=self.cubeshape[-2:])
-        self._cont_info = cont_info
+        if len(self.cont_info) > 0:
+            cont_info = utils.get_cubes(self.cont_info, check_spatial_shape=self.cubeshape[-2:])
+            self._cont_data = cont_info
 
         # conversion factors : T = (conv_fact / nu^2) * I , with :
         # conv_fact = c^2 / (2*k_B*omega) * 1.e-26 (to convert Jy to mks)
@@ -2120,9 +2123,6 @@ class ModelCube(object):
             #     file2 = os.path.join(self._data_path, masks[1])
             # self._masked_pix_list = utils.get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
 
-        # self._model_configuration = ModelConfiguration(configuration)
-        self._model_configuration_user = configuration
-
         # params = ['redchi']
         # for cpt in self._model_configuration.cpt_list:
         #     params.extend([par.name for par in cpt.parameters])
@@ -2132,6 +2132,9 @@ class ModelCube(object):
         # self._param_arrays = dict()
         # for param in params:
         #     self._param_arrays['{}_arr'.format(param)] = np.zeros((self._nx, self._ny))
+
+        if configuration.get('print_info', True):
+            self.print_infos()
 
     def get_beams(self):  # keep? (can get beam from spectralCube object)
         beams = {'f_mhz': [], 'beam_omega': []}  # np.ones(len(file_list))
@@ -2188,9 +2191,11 @@ class ModelCube(object):
 
         return fmhz_ranges
 
-    def do_minimization(self, pix_list=None, printDebug=True):
+    def do_minimization(self, pix_list=None):
         if not os.path.isdir(os.path.abspath(self.output_dir)):
             os.makedirs(os.path.abspath(self.output_dir))
+
+        printDebug = self._model_configuration_user.get('print_debug', True)
 
         if pix_list is None:
             pix_list = self.pix_list
@@ -2243,10 +2248,10 @@ class ModelCube(object):
 
             cont_name = self.output_dir + "continuum_{}_{}".format(i, j) + ".txt"
 
-            if len(self._cont_info) != 0:
+            if len(self._cont_data) != 0:
                 with open(cont_name, 'w') as fileout:
                     fileout.write('{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[0][0] - 10.0), 0.0))
-                    for k, cont_data in enumerate(self._cont_info):
+                    for k, cont_data in enumerate(self._cont_data):
                         continuum = cont_data[0, 0, j, i].array
                         print("j =", j, " i =", i, 'continuum[j,i] =', continuum)
                         fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][0], continuum))
@@ -2391,7 +2396,6 @@ class ModelCube(object):
                 except KeyError:
                     pass  # do nothing
 
-
     def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
         if size is None:
             size = max(self._nx, self._ny)
@@ -2438,7 +2442,7 @@ class ModelCube(object):
                 spec.append((dat.spectral_axis.to(u.MHz)).value)
 
             self._model_configuration.get_data({'x_obs': spec, 'y_obs': data})
-            self._model_configuration.get_continuum({'tc': self._cont_info})
+            self._model_configuration.get_continuum({'tc': self._cont_data})
 
             if self._model_configuration.win_list is None:
                 self._model_configuration.get_linelist()
@@ -2515,9 +2519,42 @@ class ModelCube(object):
             hdul.writeto(os.path.join(self._data_path, self._source + '_' + self._tag + '_' + param + '.fits'),
                          overwrite=True)
 
+    def print_infos(self):
+        print('output_dir = ', self.output_dir)
+        # print('input_dir = ', self.input_dir)  # NB input_dir not provided in config
+        print('file_cube_list = ', self._data_file)
+        print('file_cont_list = ', self.cont_info)
+        print('cubeshape = ', self.cubeshape)
+        print('yunit = ', self.yunit)
+        print('fmhz_ranges = ', self.fmhz_ranges)
+        print('pix_list = ', self.pix_list)  # To check the list of pixels
+        if not self.masked_pix_list.all():
+            print('mask = ', self.masked_pix_list)
+        print('')
+        print('tags = ', self.tags)
+        print('velocity ranges = ', self._model_configuration_user['v_range'])
+        print('componentConfig = ', self._model_configuration_user['components']['config'])
+        try:
+            print('otherSpecies = ', self._model_configuration_user['plot_kws']['gui+file']['other_species'])
+        except KeyError:
+            print('otherSpecies not found')
+        if 'constraints' in self._model_configuration_user:
+            print("constraints = ", self._model_configuration_user['constraints'])
+        print('params = ', self.params)
+        print('array_dict = ', self.array_dict.keys())
+        print('err_dict = ', self.err_dict.keys())
+
     @property
-    def param_arrays(self):
-        return self._param_arrays
+    def params(self):
+        return self._model.param_names()
+
+    @property
+    def yunit(self):
+        return self._model.yunit
+
+    # @property
+    # def param_arrays(self):
+    #     return self._param_arrays
 
 
 # def frange(start, stop, step):
