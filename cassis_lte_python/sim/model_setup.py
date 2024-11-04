@@ -629,7 +629,7 @@ class ModelConfiguration:
                 # check if the label can be converted to an integer
                 # if so, we directly have a tag, append it as a string
                 int(label)
-                tags.append(label)
+                tags.append(str(label))
             except ValueError:
                 # the label is not numeric, search for the corresponding tag(s) in the user's dictionary
                 try:
@@ -779,7 +779,7 @@ class ModelConfiguration:
         cpt_names = [key for key in cpt_dict.keys() if key[1].isdigit()]
         sp_list_by_cpt = {}
         for c_name in cpt_names:
-            if 'species' in cpt_dict[c_name]:
+            if 'species' in cpt_dict[c_name] and isinstance(cpt_dict[c_name]['species'][0], (int, str)):
                 species_labels = cpt_dict[c_name]['species']
                 sp_list_by_cpt[c_name] = self.get_tag_list_from_sp_dict(species_labels)
                 cpt_dict[c_name]['species'] = []
