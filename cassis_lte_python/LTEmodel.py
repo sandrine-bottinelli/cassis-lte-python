@@ -323,14 +323,15 @@ class ModelSpectrum(object):
             'plot_kws': self.user_plot_kws,
             'exec_time': self.exec_time,
             'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list},
-            'params': self.params.dumps()
+            'params': self.params.dumps(cls=utils.CustomJSONizer)
         }
         if self.model_fit is not None:
-            config_save['model_fit'] = self.model_fit.dumps()
+            config_save['model_fit'] = self.model_fit.dumps(cls=utils.CustomJSONizer)
         return config_save
 
     def save_config(self, filename, dirname=None):
-        json_dump = json.dumps(self.save_config_dict(), indent=4)  # separators=(', \n', ': '))
+        json_dump = json.dumps(self.save_config_dict(), indent=4,
+                               cls=utils.CustomJSONizer)  # separators=(', \n', ': '))
 
         if dirname is not None:
             if not os.path.isdir(os.path.abspath(dirname)):
