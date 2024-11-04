@@ -691,15 +691,17 @@ class ModelConfiguration:
         cpt_names = list(set(cpt_names))
         cpt_names.sort()
         # cpt_info = {cname: {'interacting': True} for cname in cpt_names}
-        for cname in cpt_names:
-            if cname not in cpt_dict:
-                cpt_dict[cname] = {}
-            if 'interacting' not in cpt_dict[cname]:
-                cpt_dict[cname]['interacting'] = True
+        # for cname in cpt_names:
+        #     if cname not in cpt_dict:  # ignore
+        #         # cpt_dict[cname] = {}
+        #         continue
+            # if 'interacting' not in cpt_dict[cname]:
+            #     cpt_dict[cname]['interacting'] = True
         for i, row in cpt_df.iterrows():
             cpt_name, par_name = row['name'].split('_')
-            cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
-                                                           vary=row['vary'])
+            if cpt_name in cpt_dict:
+                cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
+                                                               vary=row['vary'])
 
         return cpt_dict
 
@@ -796,6 +798,8 @@ class ModelConfiguration:
         # print(df)
         for cname, sp_list in sp_list_by_cpt.items():
             for tag in sp_list:
+                if tag not in sp_names:
+                    raise KeyError(f'Tag {tag} not found in the component configuration.')
                 sp_dict = {'tag': tag}
                 pars = ['ntot', 'fwhm']
                 for par in pars:
