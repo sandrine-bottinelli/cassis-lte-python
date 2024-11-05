@@ -1050,6 +1050,16 @@ class ModelConfiguration:
             win = Window(name='Full spectrum')
             win.x_file = self.x_file
             win.y_file = self.y_file
+            if win.x_file is not None:
+                x_mod = []
+                for i, row in self.tuning_info.iterrows():
+                    x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
+                    if len(x_sub) == 0:
+                        continue
+                    x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+                win.x_mod = np.array(x_mod)
+            else:
+                pass
             win.f_ranges_nofit = self.fit_freq_except
             rms = np.empty(len(f_fit), dtype=float)
             cal = np.empty(len(f_fit), dtype=float)

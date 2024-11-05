@@ -669,7 +669,10 @@ class ModelSpectrum(object):
         if (self.modeling or self.minimize) and self.save_configs:
             # must be last to make sure we have appropriate data file in memory
             if 'lam' in self.model_config.output_files:
-                self.write_lam(self.model_config.output_files['lam'])
+                if 'Full spectrum' in self.model_config.win_list[0].name:
+                    self.write_ltm(self.model_config.output_files['lam'])
+                else:
+                    self.write_lam(self.model_config.output_files['lam'])
             if 'config' in self.model_config.output_files:
                 self.save_config(self.model_config.output_files['config'])
 
@@ -975,6 +978,9 @@ class ModelSpectrum(object):
         if params is None:
             params = self.params
 
+        if cpt is None:
+            cpt = self.model_config.cpt_list
+
         return self.model.func(x_values, log=False, cpt=cpt, line_center_only=line_center_only, return_tau=False,
                                **params)
         # if cpt is not None:
@@ -1058,17 +1064,17 @@ class ModelSpectrum(object):
             plot_pars = self.params
             # win.x_mod, win.y_mod = select_from_ranges(self.x_mod, win.f_range_plot, y_values=self.y_mod)
             # TODO: check if following is necessary
-            if win.x_file is not None:
-                x_mod = []
-                for i, row in self.tuning_info.iterrows():
-                    x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
-                    if len(x_sub) == 0:
-                        continue
-                    x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
-                win.x_mod = np.array(x_mod)
-
-            else:
-                pass
+            # if win.x_file is not None:
+            #     x_mod = []
+            #     for i, row in self.tuning_info.iterrows():
+            #         x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
+            #         if len(x_sub) == 0:
+            #             continue
+            #         x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+            #     win.x_mod = np.array(x_mod)
+            #
+            # else:
+            #     pass
             line_list = select_transitions(self.line_list_all, xrange=[min(win.x_mod), max(win.x_mod)])
             with open(os.path.join(self.output_dir, 'linelist.txt'), "a") as f:
                 f.write(f"{win.name} : model species within thresholds\n")
@@ -1787,13 +1793,13 @@ class ModelSpectrum(object):
         with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
             f.writelines(self.fit_report(report_kws={'show_correl': True}))
 
-    def write_cassis_file(self, filename, dirname=None, datafile=None):
+    def write_cassis_file(self, filename, ext, dirname=None, datafile=None):
         def lam_item(name, value):
             if isinstance(value, float) and value != 0.:
                 return f'{name}={utils.format_float(value, nb_digits=4)}\n'
             return '{}={}\n'.format(name, value)
 
-        ext = 'ltm' if self.x_file is None else 'lam'
+        # ext = 'ltm' if self.x_file is None else 'lam'
 
         filebase = self.set_filepath(filename, dirname)
 
@@ -1809,7 +1815,7 @@ class ModelSpectrum(object):
                 'minValue': min(self.x_mod) / 1000.,
                 'maxValue': max(self.x_mod) / 1000.,
                 'valUnit': 'GHZ',
-                'lineValue': '115.5',
+                'lineValue': 'NaN',
                 'dsbSelected': 'false',
                 'dsb': 'LSB',
                 'loFreq': '121.5',
@@ -1817,7 +1823,8 @@ class ModelSpectrum(object):
                 'bandwidth': (max(self.x_mod) - min(self.x_mod)) / 1000.,
                 'bandUnit': 'GHZ',
                 'resolution': self.dfmhz,
-                'resolutionUnit': 'MHZ'
+                'resolutionUnit': 'MHZ',
+                'freqRef': '115500.0'
             }
         else:
             if datafile is not None:
@@ -1908,6 +1915,7 @@ class ModelSpectrum(object):
                 'Comp1Enabled': 'true',
                 'Comp1Interacting': 'false',
                 'Comp1ContinuumSelected': cont_type,
+                'Comp1ContinuumYUnit': self.model_config.yunit,
                 'Comp1Continuum': cont,
                 'Comp1ContinuumSize': cont_size
             }
@@ -1930,6 +1938,9 @@ class ModelSpectrum(object):
                     'Geometry': 'SPHERE_MODE',
                     'Vlsr': params['{}_vlsr'.format(cpt.name)].value,
                     'VlsrUnit': 'km/s',
+                    'Tex': params['{}_tex'.format(cpt.name)].value,
+                    'TKin': 10.,
+                    'Size': params['{}_size'.format(cpt.name)].value,
                     'NbMol': len(cpt.tag_list)
                     }
             for isp, sp in enumerate(cpt.species_list):
@@ -1993,7 +2004,13 @@ class ModelSpectrum(object):
                     f.write('\n')
 
     def write_ltm(self, filename, dirname=None):
-        self.write_cassis_file(filename, dirname=dirname)
+        """
+        Writes a LTE model configuration file for CASSIS
+        :param filename: the name of the file
+        :param dirname: the directory where to save the file
+        :return: None
+        """
+        self.write_cassis_file(filename, 'ltm', dirname=dirname)
 
     def write_lam(self, filename, dirname=None):
         """
@@ -2002,7 +2019,7 @@ class ModelSpectrum(object):
         :param dirname: the directory where to save the file
         :return: None
         """
-        self.write_cassis_file(filename, dirname=dirname)
+        self.write_cassis_file(filename, 'lam', dirname=dirname)
 
 
 class ModelCube(object):
