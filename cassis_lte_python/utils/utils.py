@@ -330,22 +330,29 @@ def retrieve_unit(infos: str | list, unit_type='xaxis') -> str:
                 return unit
 
 
-def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=NB_DECIMALS):
+def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=NB_DECIMALS, min_exponent=-2):
     """
 
     :param value:
     :param fmt: the format to use, e.g., "{:.3e}"
-    :param nb_digits:
+    :param nb_digits: max exponent
     :param nb_signif_digits:
+    :param min_exponent:
     :return:
     """
     if fmt:
         return fmt.format(value)
 
     power = np.log10(abs(value)) if value != 0 else 0.
-    rpst = "e" if (power < -2 or power > nb_digits) else "f"
-    f = "{:." + str(nb_signif_digits) + rpst + "}"
-    return f.format(value)
+    rpst = "e" if (power < min_exponent or power > nb_digits) else "f"
+    if nb_signif_digits is None:
+        if rpst == "e":
+            return np.format_float_scientific(value)
+        else:
+            return np.format_float_positional(value)
+    else:
+        f = "{:." + str(nb_signif_digits) + rpst + "}"
+        return f.format(value)
 
 
 def format_time(t_sec):

@@ -1979,9 +1979,9 @@ class ModelSpectrum(object):
                     tuning['telescope'] = tel_path
                 lte_radex['telescope'] = tel_path
                 tel_info = self.model_config.tuning_info[self.model_config.tuning_info.telescope == tel]
-                if 'minValue' in tuning:
+                if len(tels) > 1 and 'minValue' in tuning:
                     tuning['minValue'] = tel_info.fmhz_min.min() / 1000
-                if 'maxValue' in tuning:
+                if len(tels) > 1 and 'maxValue' in tuning:
                     tuning['maxValue'] = tel_info.fmhz_max.max() / 1000
                 f.writelines(all_lines)
                 if ext == 'ltm':
