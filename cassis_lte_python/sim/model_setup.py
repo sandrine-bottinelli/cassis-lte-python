@@ -915,9 +915,12 @@ class ModelConfiguration:
                             # species infos by block : first need to separate each block
                             infos_by_sp = []  # list of list containing species infos
                             infos_sp = []
+
+                            # First remove all comment lines
+                            # (otherwise there is an issue if the last line is a comment line)
+                            lines_sp = [line for line in lines_sp if not line.startswith('#')]
+
                             for i, line in enumerate(lines_sp):
-                                if line.startswith('#'):  # comment line
-                                    continue  # ignore it
                                 if line.strip() != '':  # info line (not blank line)
                                     infos_sp.append(line.rstrip() + "\n")  # append info to the species list
                                 if line.strip() == '' or i == len(lines_sp) - 1:
