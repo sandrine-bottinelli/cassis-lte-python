@@ -288,6 +288,7 @@ class ModelSpectrum(object):
             name_config = os.path.abspath(self.name_config)
         except TypeError:
             name_config = self.name_config
+
         config_save = {
             'creation-date': datetime.datetime.now().strftime("%Y-%m-%d,  %H:%M:%S"),
             'data_file': os.path.abspath(self.data_file) if self.data_file is not None else None,
@@ -327,20 +328,30 @@ class ModelSpectrum(object):
         }
         if self.model_fit is not None:
             config_save['model_fit'] = self.model_fit.dumps(cls=utils.CustomJSONizer)
+
         return config_save
 
     def save_config(self, filename, dirname=None):
-        json_dump = json.dumps(self.save_config_dict(), indent=4,
-                               cls=utils.CustomJSONizer)  # separators=(', \n', ': '))
+        try:
+            json_dump = json.dumps(self.save_config_dict(), indent=4,
+                                   cls=utils.CustomJSONizer)  # separators=(', \n', ': '))
 
-        if dirname is not None:
-            if not os.path.isdir(os.path.abspath(dirname)):
-                os.makedirs(os.path.abspath(dirname))
-        else:
-            dirname = self.output_dir
-        path = os.path.join(dirname, filename)
-        with open(path, 'w') as f:
-            f.write(json_dump)
+            if dirname is not None:
+                if not os.path.isdir(os.path.abspath(dirname)):
+                    os.makedirs(os.path.abspath(dirname))
+            else:
+                dirname = self.output_dir
+            path = os.path.join(dirname, filename)
+            with open(path, 'w') as f:
+                f.write(json_dump)
+        except Exception as e:
+            logfile = os.path.join(self.model_config.output_dir,
+                                   f'log{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")}.txt')
+            with open(logfile, 'w') as f:
+                f.write(str(e))
+            print("Encountered error while writing the json config : skipping this step.")
+            print(f"See {logfile} for details.")
+            pass
 
     def update_configuration(self, config):  # TODO : needs to be updated
         # update components only
