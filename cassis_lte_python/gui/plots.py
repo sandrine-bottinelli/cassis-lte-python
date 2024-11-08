@@ -422,14 +422,6 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         if nplots < ncols:
             nrows, ncols = 1, nplots
 
-    fontsize = 6  # round(20 / ncols)
-    plt.rcParams.update({'font.size': fontsize})  # to change font size of all items : does not work for axes/ticks??
-    # To change the size of specific items, use one or more of the following :
-    plt.rc('font', size=fontsize)
-    plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
-    plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
-
     # determine if more than one page
     if len(win_per_sp) == 1 and nplots <= (nrows * ncols):  # one page : keep user's extension
         file_path = lte_model.set_filepath(filename, dirname=dirname)
@@ -446,7 +438,39 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         'bottom': 0.4  # bottom margin
     }
 
-    fig_w, fig_h = file_fig_size(nrows, ncols, **margins)
+    if lte_model.model_config.bandwidth is None or lte_model.model_config.fit_freq_except is not None:
+        # fill A4 in landscape
+        fontsize = 30
+        lw = 2
+        fig_w = 0.9 * 29.7
+        fig_h = 0.9 * 21
+        plt.rcParams.update(
+            {'font.size': fontsize})  # to change font size of all items : does not work for axes/ticks??
+        # To change the size of specific items, use one or more of the following :
+        plt.rc('font', size=fontsize)
+        plt.rc('axes', labelsize=fontsize, linewidth=lw*2)  # fontsize of the x and y labels
+        plt.rc(('xtick', 'ytick'), labelsize=fontsize)
+        plt.rc(('xtick.major', 'ytick.major'), width=lw, size=10)
+
+        fig, axes = plt.subplots(figsize=(fig_w, fig_h),
+                                 dpi=dpi)
+        plot_window(lte_model, list(win_per_sp.values())[0][0], ax=axes, lw=lw, axes_labels=True, auto=True)
+        plt.tight_layout()
+        # fig.subplots_adjust(left=0.1, right=0.9, bottom=0.1, top=0.95)
+        plt.savefig(file_path)
+        return
+
+    else:
+        fig_w, fig_h = file_fig_size(nrows, ncols, **margins)
+        fontsize = 6  # round(20 / ncols)
+        lw = 0.5
+
+    plt.rcParams.update({'font.size': fontsize})  # to change font size of all items : does not work for axes/ticks??
+    # To change the size of specific items, use one or more of the following :
+    plt.rc('font', size=fontsize)
+    plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
+    plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
     fig, axes = plt.subplots(nrows, ncols,
                              figsize=(fig_w, fig_h),
@@ -512,7 +536,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
                         continue
 
                     win = win_list[plot_ind]
-                    plot_window(lte_model, win, ax=ax, ax2=ax2, lw=0.5, axes_labels=False, auto=False)
+                    plot_window(lte_model, win, ax=ax, ax2=ax2, lw=lw, axes_labels=False, auto=False)
 
                 # Update position of common labels for the last page
                 if p == (nb_pages - 1):
