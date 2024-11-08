@@ -216,7 +216,7 @@ class ModelConfiguration:
         self._name_lam = configuration.get('name_lam', self.base_name)  # do not add extension here
         self._name_config = configuration.get('name_config', self.base_name + '_config.txt')
         self.save_results = configuration.get('save_results', True) or configuration.get('save_res_configs', True)
-        save_model = False
+        save_model = configuration.get('save_res_configs', True)
         if 'save_spec' in configuration:
             warnings.warn("'save_spec' is deprecated, use 'save_model' instead.")
             save_model = configuration['save_spec']
