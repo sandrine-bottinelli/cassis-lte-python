@@ -717,10 +717,10 @@ class ModelSpectrum(object):
                         win_list = self.model_config.win_list_file
 
                     if len(win_list) > 0:
-                        if self.bandwidth is not None:
-                            self.setup_plot_la(win_list, **self.file_kws)
-                        else:
+                        if self.bandwidth is None or self.fit_freq_except is not None:
                             self.setup_plot_fus()
+                        else:
+                            self.setup_plot_la(win_list, **self.file_kws)
                     # Compute errors if necessary
                     if self.model_fit.covar is not None:
                         for win in self.model_config.win_list_file:

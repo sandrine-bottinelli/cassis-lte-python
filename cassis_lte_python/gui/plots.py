@@ -407,10 +407,12 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if nplots == 0:
         raise IndexError("Nothing to plot.")
 
-    if lte_model.model_config.bandwidth is None:
+    if lte_model.model_config.bandwidth is None or lte_model.model_config.fit_freq_except is not None:
         win_per_sp = {'*': lte_model.win_list_file}
+        bottom_label = "Frequency [MHz]"
     else:
         win_per_sp = {sp: [win for win in lte_model.win_list_file if sp in win.name] for sp in lte_model.tag_list}
+        bottom_label = "Velocity [km/s]"
     win_per_sp = {k: v for k, v in win_per_sp.items() if len(v) > 0}
 
     if nplots == 1:
@@ -471,7 +473,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
             # Common labels
             fig.suptitle("Frequency [MHz]")
-            fig.supxlabel("Velocity [km/s]")
+            fig.supxlabel(bottom_label)
             fig.supylabel(f'Intensity [{lte_model.yunit}]')
 
             for p in range(nb_pages):
