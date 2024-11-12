@@ -680,10 +680,10 @@ class ModelSpectrum(object):
         if (self.modeling or self.minimize) and self.save_configs:
             # must be last to make sure we have appropriate data file in memory
             if 'lam' in self.model_config.output_files:
-                if 'Full spectrum' in self.model_config.win_list[0].name:
-                    self.write_ltm(self.model_config.output_files['lam'])
-                else:
-                    self.write_lam(self.model_config.output_files['lam'])
+                # save both ltm and lam
+                self.write_lam(self.model_config.output_files['lam'])
+                self.write_ltm(self.model_config.output_files['lam'])
+
             if 'config' in self.model_config.output_files:
                 self.save_config(self.model_config.output_files['config'])
 
