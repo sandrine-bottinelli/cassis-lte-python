@@ -697,8 +697,12 @@ class ModelConfiguration:
         #         continue
             # if 'interacting' not in cpt_dict[cname]:
             #     cpt_dict[cname]['interacting'] = True
+        valid_par_names = ['size', 'tex', 'vlsr', 'fwhm']
         for i, row in cpt_df.iterrows():
-            cpt_name, par_name = row['name'].split('_')
+            cpt_name, par_name = row['name'].rsplit('_', maxsplit=1)
+            # check validity of labels
+            if par_name not in valid_par_names:
+                raise Exception(f"Invalid parameter name {cpt_name}_{par_name}.")
             if cpt_name in cpt_dict:
                 cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
                                                                vary=row['vary'])
@@ -788,11 +792,17 @@ class ModelConfiguration:
 
         sp_dfs = []
         sp_names = []
+        pars = ['ntot', 'fwhm']
         for block in blocks_from_file:
             sp_name = block[1].split()[0]
             sp_names.append(sp_name)
             sp_df = pd.read_csv(io.StringIO("\n".join(block[2:])), sep='\t', comment='#', index_col=0)
             sp_df = sp_df.rename(columns=lambda x: x.strip())
+            # check validity of labels
+            for lbl in sp_df.index.tolist():
+                if lbl.split('_')[-1] not in pars:
+                    raise Exception(f"Invalid parameter name {lbl} for tag {sp_name}.")
+
             sp_dfs.append(sp_df)
         df = pd.concat(sp_dfs, axis=1, keys=sp_names)
         # print(df)
@@ -801,7 +811,6 @@ class ModelConfiguration:
                 if tag not in sp_names:
                     raise KeyError(f'Tag {tag} not found in the component configuration.')
                 sp_dict = {'tag': tag}
-                pars = ['ntot', 'fwhm']
                 for par in pars:
                     if f'{cname}_{par}' in df.index:
                         pmin, val, pmax, var = df.loc[f'{cname}_{par}'][tag].values
