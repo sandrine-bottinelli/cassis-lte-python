@@ -1848,10 +1848,10 @@ class ModelSpectrum(object):
                 'nameData': nameData,
                 'telescopeData': '',  # TBD when writing the lam file
                 'typeFrequency': 'SKY' if self.vlsr_file == 0. else 'REST',
-                # 'minValue': min(self.x_file) / 1000.,
-                # 'maxValue': max(self.x_file) / 1000.,
-                'minValue': '',  # TBD when writing the lam file
-                'maxValue': '',  # TBD when writing the lam file
+                'minValue': min(self.x_file) / 1000.,  # will be updated when writing lam file if multi tel
+                'maxValue': max(self.x_file) / 1000.,  # will be updated when writing lam file if multi tel
+                # 'minValue': min(self.x_mod) / 1000.,
+                # 'maxValue': max(self.x_mod) / 1000.,
                 'valUnit': 'GHZ',
                 'bandValue': self.bandwidth,
                 'bandUnit': 'KM_SEC_MOINS_1'
@@ -1990,9 +1990,9 @@ class ModelSpectrum(object):
                     tuning['telescope'] = tel_path
                 lte_radex['telescope'] = tel_path
                 tel_info = self.model_config.tuning_info[self.model_config.tuning_info.telescope == tel]
-                if len(tels) > 1 and 'minValue' in tuning:
+                if len(tels) > 1:
                     tuning['minValue'] = tel_info.fmhz_min.min() / 1000
-                if len(tels) > 1 and 'maxValue' in tuning:
+                if len(tels) > 1:
                     tuning['maxValue'] = tel_info.fmhz_max.max() / 1000
                 f.writelines(all_lines)
                 if ext == 'ltm':
