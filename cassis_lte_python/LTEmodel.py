@@ -1937,6 +1937,16 @@ class ModelSpectrum(object):
         # if self.best_params is not None and ext == 'lam':
         #     params = self.best_params
 
+        # Determine if some species are comp 2+ but not in comp 1
+        extra_sp = []
+        try:
+            for cpt in self.cpt_list[1:]:
+                for sp in cpt.species_list:
+                    if sp.tag not in self.cpt_list[0].tag_list:
+                        extra_sp.append(sp)
+        except IndexError:  # do nothing
+            pass
+
         for ic, cpt in enumerate(self.cpt_list):
             c_id = ic + 1
             c_num = ic + 2
@@ -1952,7 +1962,7 @@ class ModelSpectrum(object):
                     'Tex': params['{}_tex'.format(cpt.name)].value,
                     'TKin': 10.,
                     'Size': params['{}_size'.format(cpt.name)].value,
-                    'NbMol': len(cpt.tag_list)
+                    'NbMol': len(cpt.tag_list) if ic != 0 else len(cpt.tag_list) + len(extra_sp)
                     }
             for isp, sp in enumerate(cpt.species_list):
                 molname = 'Mol{}'.format(isp + 1)
@@ -1974,6 +1984,28 @@ class ModelSpectrum(object):
                     'Size': params['{}_size'.format(cpt.name)].value
                     }
                 cdic[molname] = {basename + molname + key: val for key, val in mol_dic.items()}
+
+            if ic == 0 and len(extra_sp) > 0:  # 1st component must contain all species => add fake species if necessary
+                for isp, sp in enumerate(extra_sp):
+                    molname = 'Mol{}'.format(len(cpt.species_list) + isp + 1)
+                    try:
+                        fwhm = params['{}_fwhm'.format(cpt.name)].value
+                    except KeyError:
+                        fwhm = params['{}_fwhm_{}'.format(cpt.name, sp.tag)].value
+                    mol_dic = {
+                        'Tag': sp.tag,
+                        'Species': sp.name,
+                        'Database': sp.database,
+                        'Collision': '-no -',
+                        'Compute': 'true',
+                        'NSp': 1e1,
+                        'Abundance': 1e1 / cdic['Density'],
+                        'Tex': params['{}_tex'.format(cpt.name)].value,
+                        'TKin': '10.0',
+                        'FWHM': fwhm,
+                        'Size': params['{}_size'.format(cpt.name)].value
+                    }
+                    cdic[molname] = {basename + molname + key: val for key, val in mol_dic.items()}
 
             components['# Component parameters {}'.format(c_num)] = {basename + key: val for key, val in cdic.items()}
 
