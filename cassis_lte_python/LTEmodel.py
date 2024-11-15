@@ -483,13 +483,42 @@ class ModelSpectrum(object):
             mini = cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin)
             maxi = cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax)
             if par.min < cpt.tmin and self.minimize:
-                print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
-                      f'(smallest temperature for which the partition function is defined for all species).')
+                sp_tmin = [sp for sp in cpt.species_list if min(sp.pf[0]) == cpt.tmin]
+                if len(sp_tmin) > 1:
+                    tags_tmin = ", ".join([sp.tag for sp in sp_tmin])
+                else:
+                    tags_tmin = sp_tmin[0].tag
+                message = [
+                    f'The requested lower boundary for Tex is {par.min} K, but the lowest temperature',
+                    f'for which the partition function (pf) is defined for all species is {cpt.tmin} K;',
+                    f'Species for which T_pf_min = {cpt.tmin} is/are: {tags_tmin}',
+                    f'-> limiting Tex search to temperatures > {cpt.tmin} \n'
+                ]
+                print(f'INFO - Component {cpt.name} :')
+                for line in message:
+                    print(" " * 6, line)
+                # print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
+                #       f'(smallest temperature for which the partition function is defined for all species).')
                 val = (mini + maxi) / 2
             if par.max > cpt.tmax and self.minimize:
-                print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
-                      f'(highest temperature for which the partition function is defined for all species).')
+                sp_tmax = [sp for sp in cpt.species_list if max(sp.pf[0]) == cpt.tmax]
+                if len(sp_tmax) > 1:
+                    tags_tmax = ", ".join([sp.tag for sp in sp_tmax])
+                else:
+                    tags_tmax = sp_tmax[0].tag
+                message = [
+                    f'The requested upper boundary for Tex is {par.max} K, but the highest temperature',
+                    f'for which the partition function (pf) is defined for all species is {cpt.tmax} K;',
+                    f'Species for which T_pf_max = {cpt.tmax} is/are: {tags_tmax}',
+                    f'-> limiting Tex search to temperatures < {cpt.tmax} \n'
+                ]
+                print(f'INFO - Component {cpt.name} :')
+                for line in message:
+                    print(" " * 6, line)
+                # print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
+                #       f'(highest temperature for which the partition function is defined for all species).')
                 val = (mini + maxi) / 2
+
             par.set(min=mini, max=maxi)
 
         # user constraints
