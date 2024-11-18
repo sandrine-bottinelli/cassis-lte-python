@@ -297,8 +297,8 @@ class ModelSpectrum(object):
             'tcmb': self.tcmb,
             'tuning_info': self.model_config._tuning_info_user,
             # 'v_range': self.model_config._v_range_user,
-            'v_range': {tag: {win.name.split()[-1]: win.v_range_fit for win in self.model_config.win_list_fit}
-                        for tag in self.model_config.tag_list},
+            'v_range': None,  # update later
+            'fit_freq_except': None,  # update later
             'rms_cal': self.model_config._rms_cal_user,
             'bandwidth': self.bandwidth,
             'oversampling': self.oversampling,
@@ -325,7 +325,14 @@ class ModelSpectrum(object):
             'exec_time': self.exec_time,
             'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list},
             'params': self.params.dumps(cls=utils.CustomJSONizer)
+            # 'params': self.params.dumps()
         }
+        if self.model_config.fit_freq_except is None:
+            config_save['v_range'] = {tag: {win.name.split()[-1]: win.v_range_fit
+                                            for win in self.model_config.win_list_fit}
+                                      for tag in self.model_config.tag_list}
+        else:
+            config_save['fit_freq_except'] = self.model_config._fit_freq_except_user
         if self.model_fit is not None:
             config_save['model_fit'] = self.model_fit.dumps(cls=utils.CustomJSONizer)
 
@@ -345,12 +352,12 @@ class ModelSpectrum(object):
             with open(path, 'w') as f:
                 f.write(json_dump)
         except Exception as e:
-            logfile = os.path.join(self.model_config.output_dir,
-                                   f'log{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")}.txt')
-            with open(logfile, 'w') as f:
-                f.write(str(e))
+            # logfile = os.path.join(self.model_config.output_dir,
+            #                        f'log{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")}.txt')
+            # with open(logfile, 'w') as f:
+            #     f.write(str(e))
             print("Encountered error while writing the json config : skipping this step.")
-            print(f"See {logfile} for details.")
+            # print(f"See {logfile} for details.")
             pass
 
     def update_configuration(self, config):  # TODO : needs to be updated
