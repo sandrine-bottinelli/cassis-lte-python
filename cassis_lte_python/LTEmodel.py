@@ -2000,7 +2000,7 @@ class ModelSpectrum(object):
         # Define continuum
         if isinstance(self.model_config.cont_info, (float, int)):
             cont_type = 'CONSTANT'
-            cont_size = f'{self.model_config.cont_info:.2g}'
+            cont_size = f'{self.model_config.cont_info}'
             cont = 'Continuum 0 [K]'  # default
         else:  # it is a file
             cont_type = 'FILE'
