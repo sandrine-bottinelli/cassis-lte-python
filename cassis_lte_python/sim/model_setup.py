@@ -32,7 +32,9 @@ class ModelConfiguration:
         self.fwhm_max = 0.
         self.tag_list = configuration.get('inspect', [])
         self.cpt_list = []
+        self.comp_config_file = None
         if 'components' in configuration:
+            self.comp_config_file = configuration['components'].get('config', None)
             self.get_components(configuration['components'])
 
         self.output_dir = configuration.get('output_dir', os.path.curdir)
@@ -216,6 +218,7 @@ class ModelConfiguration:
         self._name_lam = configuration.get('name_lam', self.base_name)  # do not add extension here
         self._name_config = configuration.get('name_config', self.base_name + '_config.txt')
         self.save_results = configuration.get('save_results', True) or configuration.get('save_res_configs', True)
+        self.save_infos_components = configuration.get('save_infos_components', True)
         save_model = configuration.get('save_res_configs', True)
         if 'save_spec' in configuration:
             warnings.warn("'save_spec' is deprecated, use 'save_model' instead.")
@@ -1035,6 +1038,8 @@ class ModelConfiguration:
 
                 if sp.tag not in self.tag_list:
                     self.tag_list.append(sp.tag)
+
+        self.tag_list.sort(key=int)
 
     def get_windows(self, verbose=True):
 

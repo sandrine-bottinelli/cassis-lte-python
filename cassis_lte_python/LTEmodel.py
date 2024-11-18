@@ -694,6 +694,64 @@ class ModelSpectrum(object):
             # filename = filename + 'fit_res'
             self.save_fit_results(self.model_config.output_files['results'])
 
+        if self.model_config.save_infos_components:  # save a new info components
+            if self.model_config.comp_config_file is not None:
+                comp_name, ext = os.path.splitext(self.model_config.comp_config_file)
+                comp_file_new = comp_name + '_from_results' + ext
+                # header1, header2 = None, None
+                with open(self.model_config.comp_config_file) as fin:
+                    all_lines = fin.readlines()
+                    hdr_comp_params = [(i, line) for i, line in enumerate(all_lines) if line.startswith('name')]
+                    hdr2_end, hdr_thr = [(i, line) for i, line in enumerate(all_lines) if line.startswith('tag')][0]
+                    col_names_thr = hdr_thr.split()
+                    header1 = all_lines[:hdr_comp_params[0][0]]
+                    hdr2_start = [i for i, line in enumerate(all_lines) if 'SPECIES INFOS' in line][0]
+                    header2 = all_lines[max(0, hdr2_start-1):hdr2_end]
+
+                n_digits = 2
+                with open(comp_file_new, 'w') as f:
+                    f.writelines(header1)
+                    f.write(hdr_comp_params[0][1])
+                    for comp in self.model_config.cpt_list:
+                        pars = [par for par in comp.parameters if 'ntot' not in par.name]
+                        for par in pars:
+                            pmin = par.min if abs(par.min) not in [np.inf, float("inf")] else par.value
+                            pmax = par.max if abs(par.max) not in [np.inf, float("inf")] else par.value
+                            line = "\t".join([par.name, utils.format_float(pmin, nb_signif_digits=n_digits),
+                                              utils.format_float(par.value, nb_signif_digits=n_digits),
+                                              utils.format_float(pmax, nb_signif_digits=n_digits), str(par.vary)])
+                            f.write(line + "\n")
+
+                    f.writelines(header2)
+
+                    for tag in self.model_config.tag_list:
+                        f.write(hdr_thr)
+                        thr = self.model_config.thresholds[tag]
+                        elts = [str(tag)]
+                        for name in col_names_thr[1:]:
+                            elt = thr[name]
+                            elts.append('*' if elt is None else utils.format_float(elt, nb_signif_digits=1))
+                        f.write("\t".join(elts) + "\n")
+                        f.write(hdr_comp_params[0][1])
+                        for comp in self.model_config.cpt_list:
+                            try:
+                                species = [sp for sp in comp.species_list if sp.tag == tag][0]
+                                Ntot = species.parameters[0]
+                                Nmin = utils.format_float(Ntot.min, nb_signif_digits=n_digits)
+                                Nmax = utils.format_float(Ntot.max, nb_signif_digits=n_digits)
+                                if Ntot.user_data is not None and 'factor' in Ntot.user_data:
+                                    Nmin = utils.format_float(Ntot.user_data['min_fact'], fmt='{:.1e}')
+                                    Nmax = utils.format_float(Ntot.user_data['max_fact'], fmt='{:.1e}')
+                                line = "\t".join([f"{comp.name}_ntot", Nmin,
+                                                  utils.format_float(Ntot.value, nb_signif_digits=n_digits), Nmax,
+                                                  str(Ntot.vary)])
+                                f.write(line + "\n")
+
+                            except IndexError:
+                                pass  # do nothing
+
+                        f.write("\n")
+
         if self.model is not None and self.save_model_spec:
             filename, ext = os.path.splitext(self.model_config.output_files['model'])
             if len(ext) == 0:
