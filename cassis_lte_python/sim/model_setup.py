@@ -139,6 +139,8 @@ class ModelConfiguration:
         self._tuning_info_user = configuration.get('tuning_info', None)
         self.tuning_info = []
 
+        self.f_err_mhz_max = configuration.get('f_err_mhz_max', None)
+
         if 'thresholds' in configuration and configuration['thresholds'] is not None:
             self.thresholds = get_species_thresholds(configuration['thresholds'],
                                                      select_species=self.tag_list,
@@ -507,11 +509,17 @@ class ModelConfiguration:
             x_vals = self.x_mod
 
         self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=[[min(x_vals), max(x_vals)]])
+        print(f"INFO - {len(self.line_list_all)} transitions found (no thresholds).")
+        if self.f_err_mhz_max is not None:
+            self.line_list_all = self.line_list_all[self.line_list_all.f_err_mhz <= self.f_err_mhz_max]
+            print(f"INFO - {len(self.line_list_all)} transitions found with f_err_mhz <= {self.f_err_mhz_max}.")
+
         self.tr_list_by_tag = {tag: list(self.line_list_all[self.line_list_all.tag == tag].transition)
                                for tag in self.tag_list}
 
         if self.fit_freq_except is not None:
-            print("INFO - Fitting an entire spectrum except a few frequency ranges : no thresholds applied.")
+            print("INFO - Fitting an entire spectrum except a few frequency ranges : no thresholds applied,")
+            print("       except the maximum error on the line frequency if provided (f_err_mhz_max).")
 
         else:  # get linelist w/i thresholds
             tr_list_tresh = get_transition_df(self.tag_list, [[min(x_vals), max(x_vals)]], **self.thresholds)
