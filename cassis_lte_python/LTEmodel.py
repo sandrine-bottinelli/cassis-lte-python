@@ -1181,10 +1181,23 @@ class ModelSpectrum(object):
             # else:
             #     pass
             line_list = select_transitions(self.line_list_all, xrange=[min(win.x_mod), max(win.x_mod)])
-            with open(os.path.join(self.output_dir, 'linelist.txt'), "a") as f:
-                f.write(f"{win.name} : model species within thresholds\n")
-                f.writelines(line_list[cols].to_string(index=False))
-                f.write("\n\n")
+
+            # Create file for saving the lines
+            with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+                title = f"{win.name} : list of modelled lines"
+                if self.model_config.minimize:
+                    if self.model_config.f_err_mhz_max is not None:
+                        title += f"with f_err_mhz <= {self.model_config.f_err_mhz_max}"
+                else:
+                    title += "within thresholds"
+                f.write(title + "\n\n")
+                # f.writelines(line_list[cols].to_string(index=False))
+                for itag, tag in enumerate(self.model_config.tag_list):
+                    line_list_tag = line_list[line_list.tag == tag]
+                    line_list_tag = line_list_tag.reset_index(drop=True)
+                    line_list_tag.index += 1
+                    f.writelines(line_list_tag[cols].to_string(index=True))
+                    f.write("\n\n")
             win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
                                                        line_list=self.line_list_all)
             if len(self.cpt_list) > 1:
@@ -1399,14 +1412,17 @@ class ModelSpectrum(object):
                 t_win += datetime.timedelta(seconds=prep_time)
                 print(f"    Expected end time for {len(win_list)} windows: {t_win.strftime('%H:%M:%S')}")
 
-            with open(os.path.join(self.output_dir, 'linelist.txt'), "a") as f:
-                    f.write(f"{win.name} : model species within thresholds (top lines)\n")
-                    f.writelines(win.main_lines_display[0][cols].to_string(index=False))
+            # Create file for saving the lines
+            with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+                f.write("List of plotted lines\n\n")
+
+                f.write(f"{win.name} : model species within thresholds (top lines)\n")
+                f.writelines(win.main_lines_display[0][cols].to_string(index=False))
+                f.write("\n\n")
+                if len(win.other_species_display) > 0:
+                    f.write(f"{win.name} : other species within thresholds (bottom lines)\n")
+                    f.writelines(win.other_species_display[cols].to_string(index=False))
                     f.write("\n\n")
-                    if len(win.other_species_display) > 0:
-                        f.write(f"{win.name} : other species within thresholds (bottom lines)\n")
-                        f.writelines(win.other_species_display[cols].to_string(index=False))
-                        f.write("\n\n")
 
     def get_lines_plot_params(self, line_list: pd.DataFrame, vlsr: float, f_ref: float,
                               tag_colors: dict):
@@ -1526,10 +1542,6 @@ class ModelSpectrum(object):
             thresholds_other = None
 
         self.thresholds_other = thresholds_other
-
-        # Create file for saving the lines
-        with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
-            f.write("List of plotted lines\n")
 
         if self.bandwidth is None or self.model_config.fit_freq_except is not None:
             self.model_config.win_list_plot = self.win_list
