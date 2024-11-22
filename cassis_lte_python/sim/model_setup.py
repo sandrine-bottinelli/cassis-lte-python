@@ -165,6 +165,8 @@ class ModelConfiguration:
         self.line_list_all = None
         self.tr_list_by_tag = None  # w/i thresholds
 
+        self.snr_threshold = configuration.get('snr_threshold', None)
+
         self.bandwidth = configuration.get('bandwidth', None)  # km/s ; None for 1 window with entire spectrum
 
         self.oversampling = int(configuration.get('oversampling', 3))

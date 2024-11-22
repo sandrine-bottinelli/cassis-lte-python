@@ -694,6 +694,8 @@ class ModelSpectrum(object):
         self.do_plots()
 
     def do_savings(self):
+        self.save_line_list_cassis("linelist_cassis", snr_threshold=self.model_config.snr_threshold)
+
         if self.model_fit is not None and self.save_results:
             # filename = ''
             # if self.name_lam is not None:
@@ -1182,22 +1184,25 @@ class ModelSpectrum(object):
             #     pass
             line_list = select_transitions(self.line_list_all, xrange=[min(win.x_mod), max(win.x_mod)])
 
-            # Create file for saving the lines
-            with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
-                title = f"{win.name} : list of modelled lines"
-                if self.model_config.minimize:
-                    if self.model_config.f_err_mhz_max is not None:
-                        title += f"with f_err_mhz <= {self.model_config.f_err_mhz_max}"
-                else:
+            # Create file for saving the lines if model only
+            if not self.model_config.minimize:
+                with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+                    title = f"{win.name} : list of modelled lines"
+                    # if self.model_config.minimize:
+                    #     if self.model_config.f_err_mhz_max is not None:
+                    #         title += f"with f_err_mhz <= {self.model_config.f_err_mhz_max}"
+                    # else:
+                    #     title += "within thresholds"
                     title += "within thresholds"
-                f.write(title + "\n\n")
-                # f.writelines(line_list[cols].to_string(index=False))
-                for itag, tag in enumerate(self.model_config.tag_list):
-                    line_list_tag = line_list[line_list.tag == tag]
-                    line_list_tag = line_list_tag.reset_index(drop=True)
-                    line_list_tag.index += 1
-                    f.writelines(line_list_tag[cols].to_string(index=True))
-                    f.write("\n\n")
+                    f.write(title + "\n\n")
+                    # f.writelines(line_list[cols].to_string(index=False))
+                    for itag, tag in enumerate(self.model_config.tag_list):
+                        line_list_tag = line_list[line_list.tag == tag]
+                        line_list_tag = line_list_tag.reset_index(drop=True)
+                        line_list_tag.index += 1
+                        f.writelines(line_list_tag[cols].to_string(index=True))
+                        f.write("\n\n")
+
             win.y_mod = self.compute_model_intensities(params=plot_pars, x_values=win.x_mod,
                                                        line_list=self.line_list_all)
             if len(self.cpt_list) > 1:
@@ -1866,45 +1871,62 @@ class ModelSpectrum(object):
             self.save_spectrum(f'{filename}_{cpt.name}', dirname=dirname, spec=(x_vals, y_vals), ext='fits',
                                vlsr=cpt.vlsr)
 
-    def save_line_list_cassis(self, filename, dirname=None):
+    def save_line_list_cassis(self, filename, dirname=None, snr_threshold=None):
         """
         Writes the list of lines for display in CASSIS. To be used when fitting the entire spectrum.
         :param filename:
         :param dirname:
         :return:
         """
-        if len(self.win_list) == 1:
-            self.win_list_plot = self.win_list
-            self.setup_plot_fus()
-            filebase = filename
-            nb_dec = '3'
-            for icpt, cpt in enumerate(self.cpt_list):
-                if len(self.cpt_list) > 1:
-                    filename = f'{filebase}_{cpt.name}'
-                with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
-                    f.write('# ')
-                    f.write('\t'.join(
-                        ['Transition', 'Tag', 'Frequency(MHz)', 'Eup(K)', 'Aij', 'Tau', 'Tex', 'Intensity(K)']))
-                    f.write('\n')
+        # if len(self.win_list) == 1:
+        #     self.win_list_plot = self.win_list
+        #     self.setup_plot_fus()
+        filebase = filename
+        nb_dec = '3'
+        line_list = self.model_config.line_list_all.sort_values('tag')
+        line_list.reset_index(drop=True, inplace=True)
+        for icpt, cpt in enumerate(self.cpt_list):
+            if len(self.cpt_list) > 1:
+                filename = f'{filebase}_{cpt.name}'
 
-                    for i, row in self.line_list_all.iterrows():
-                        line = row['transition']
-                        if line.tag in cpt.tag_list:
-                            tex = self.params[f"{cpt.name}_tex"].value
-                            try:
-                                fwhm = self.params[f"{cpt.name}_fwhm"].value
-                            except IndexError:
-                                fwhm = self.params[f"{cpt.name}_fwhm_{line.tag}"].value
-                            tau0 = utils.compute_tau0(line,
-                                                      self.params[f"{cpt.name}_ntot_{line.tag}"].value,
-                                                      fwhm,
-                                                      tex)
-                            ind0 = utils.find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
-                            f.write(f"{line.name} ({line.qn_lo}_{line.qn_hi})\t{line.tag}")
-                            f.write(f"\t{line.f_trans_mhz:.{nb_dec}f}")
-                            f.write(f"\t{line.eup:.{nb_dec}f}\t{line.aij:.{nb_dec}e}\t")
-                            f.write(f"{tau0:.{nb_dec}e}\t{tex:.{nb_dec}f}")
-                            f.write(f"\t{self.win_list[0].y_mod_cpt[cpt.name][ind0]:.{nb_dec}e}\n")
+            int0 = self.compute_model_intensities(x_values=line_list.fMHz.values,
+                                                  cpt=cpt,
+                                                  line_center_only=True)
+            rms = np.array([self.get_rms_cal(fmhz)[0] for fmhz in line_list.fMHz.values])
+            cont = np.array([self.get_tc(fmhz) for fmhz in line_list.fMHz.values])
+            snr = (int0 - cont) / rms
+            if snr_threshold is not None:
+                selected = [(snr_i >= snr_threshold) or (snr_i < 0) for snr_i in snr]
+            else:
+                selected = [True] * len(line_list)
+
+            with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
+                if snr_threshold is not None:
+                    f.write(f"# List of lines with S/N ratio of modelled intensity >= {snr_threshold}\n")
+                f.write('# ')
+                f.write('\t'.join(
+                    ['Transition', 'Tag', 'Frequency(MHz)', 'Eup(K)', 'Aij', 'Tau', 'Tex', 'Intensity(K)']))
+                f.write('\n')
+
+                for i, row in line_list.iterrows():
+                    line = row['transition']
+                    if line.tag in cpt.tag_list and selected[i]:
+                        tex = self.params[f"{cpt.name}_tex"].value
+                        try:
+                            fwhm = self.params[f"{cpt.name}_fwhm"].value
+                        except IndexError:
+                            fwhm = self.params[f"{cpt.name}_fwhm_{line.tag}"].value
+                        tau0 = utils.compute_tau0(line,
+                                                  self.params[f"{cpt.name}_ntot_{line.tag}"].value,
+                                                  fwhm,
+                                                  tex)
+                        ind0 = utils.find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
+                        f.write(f"{line.name} ({line.qn_lo}_{line.qn_hi})\t{line.tag}")
+                        f.write(f"\t{line.f_trans_mhz:.{nb_dec}f}")
+                        f.write(f"\t{line.eup:.{nb_dec}f}\t{line.aij:.{nb_dec}e}\t")
+                        f.write(f"{tau0:.{nb_dec}e}\t{tex:.{nb_dec}f}")
+                        # f.write(f"\t{self.win_list[0].y_mod_cpt[cpt.name][ind0]:.{nb_dec}e}\n")
+                        f.write(f"\t{int0[i]:.{nb_dec}e}\n")
 
     def save_fit_results(self, filename, dirname=None):
         with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
