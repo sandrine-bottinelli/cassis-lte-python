@@ -850,15 +850,15 @@ class ModelConfiguration:
                 for par in pars:
                     if f'{cname}_{par}' in df.index:
                         pmin, val, pmax, var = df.loc[f'{cname}_{par}'][tag].values
+                        if np.isnan(float(val)):
+                            raise ValueError(f"Missing {par} information for tag {tag}.")
                         factor = False
                         if par == 'ntot' and df.loc[f'{cname}_{par}'][tag]['max'] < 1.e6:
                             factor = True
-                            pmin = val * pmin
-                            pmax = val * pmax
-                        sp_dict[par] = parameter_infos(value=df.loc[f'{cname}_{par}'][tag]['value'],
-                                                       min=df.loc[f'{cname}_{par}'][tag]['min'],
-                                                       max=df.loc[f'{cname}_{par}'][tag]['max'],
-                                                       vary=df.loc[f'{cname}_{par}'][tag]['vary'],
+                        sp_dict[par] = parameter_infos(value=val,
+                                                       min=pmin,
+                                                       max=pmax,
+                                                       vary=var,
                                                        factor=factor)
                 cpt_dict[cname]['species'].append(sp_dict)
 
