@@ -407,7 +407,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     if nplots == 0:
         raise IndexError("Nothing to plot.")
 
-    if lte_model.model_config.bandwidth is None or lte_model.model_config.fit_freq_except is not None:
+    if lte_model.model_config.bandwidth is None or lte_model.model_config.fit_full_range:
         win_per_sp = {'*': lte_model.win_list_file}
         bottom_label = "Frequency [MHz]"
     else:
@@ -438,7 +438,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         'bottom': 0.4  # bottom margin
     }
 
-    if lte_model.model_config.bandwidth is None or lte_model.model_config.fit_freq_except is not None:
+    if lte_model.model_config.bandwidth is None or lte_model.model_config.fit_full_range:
         # fill A4 in landscape
         fontsize = 30
         lw = 2

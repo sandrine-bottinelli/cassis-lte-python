@@ -62,18 +62,24 @@ class ModelConfiguration:
         self.bmaj = None
         self.bmin = None
         self.beam = {'bmaj': 0, 'bmin': 0}
+
+        self.fit_full_range = False
+        self.fit_freq_except = []
         self._fit_freq_except_user = configuration.get('fit_freq_except', None)
         if self._fit_freq_except_user is not None:
+            self.fit_full_range = True
             if isinstance(self._fit_freq_except_user, str):
-                fmin, fmax = np.loadtxt(self._fit_freq_except_user, unpack=True)
-                self.fit_freq_except = [[f1, f2] for f1, f2 in zip(fmin, fmax)]
+                fmin, fmax = np.loadtxt(self._fit_freq_except_user, unpack=True, comments='#')
+                if len(fmin) > 0 and len(fmax) > 0:
+                    self.fit_freq_except = [[f1, f2] for f1, f2 in zip(fmin, fmax)]
             elif isinstance(self._fit_freq_except_user, list):
-                if not isinstance(self._fit_freq_except_user[0], list):
+                if len(self._fit_freq_except_user) == 2 and not isinstance(self._fit_freq_except_user[0], list):
+                    # "simple" list -> make it list of lists
                     self.fit_freq_except = [self._fit_freq_except_user]
+                else:
+                    self.fit_freq_except = self._fit_freq_except_user
             else:
-                raise TypeError("fit_freq_except must be a list or a path to an appropriate file.")
-        else:
-            self.fit_freq_except = None
+                raise TypeError("fit_freq_except must be a list of ranges or a path to an appropriate file.")
 
         self._v_range_user = configuration.get('v_range', None)
         self._rms_cal_user = configuration.get('rms_cal', None)
@@ -519,7 +525,7 @@ class ModelConfiguration:
         self.tr_list_by_tag = {tag: list(self.line_list_all[self.line_list_all.tag == tag].transition)
                                for tag in self.tag_list}
 
-        if self.fit_freq_except is not None:
+        if self.fit_full_range:
             print("INFO - Fitting an entire spectrum except a few frequency ranges : no thresholds applied,")
             print("       except the maximum error on the line frequency if provided (f_err_mhz_max).")
 

@@ -298,7 +298,8 @@ class ModelSpectrum(object):
             'tuning_info': self.model_config._tuning_info_user,
             # 'v_range': self.model_config._v_range_user,
             'v_range': None,  # update later
-            'fit_freq_except': None,  # update later
+            'fit_full_range': self.model_config.fit_full_range,
+            'fit_freq_except': self.model_config._fit_freq_except_user,
             'rms_cal': self.model_config._rms_cal_user,
             'bandwidth': self.bandwidth,
             'oversampling': self.oversampling,
@@ -327,12 +328,10 @@ class ModelSpectrum(object):
             'params': self.params.dumps(cls=utils.CustomJSONizer)
             # 'params': self.params.dumps()
         }
-        if self.model_config.fit_freq_except is None:
+        if not self.model_config.fit_full_range:
             config_save['v_range'] = {tag: {win.name.split()[-1]: win.v_range_fit
                                             for win in self.model_config.win_list_fit}
                                       for tag in self.model_config.tag_list}
-        else:
-            config_save['fit_freq_except'] = self.model_config._fit_freq_except_user
         if self.model_fit is not None:
             config_save['model_fit'] = self.model_fit.dumps(cls=utils.CustomJSONizer)
 
@@ -767,7 +766,7 @@ class ModelSpectrum(object):
                 ext = 'txt'
             self.save_model(filename, ext=ext)
 
-        if self.x_file is not None and self.save_obs_spec:
+        if len(self.x_file) > 0 and self.save_obs_spec:
             filename, ext = os.path.splitext(self.model_config.output_files['obs'])
             if len(ext) == 0:
                 ext = 'txt'
@@ -790,7 +789,7 @@ class ModelSpectrum(object):
             if self.plot_gui and len(self.model_config.win_list_gui) > 0:
                 t_start = process_time()
                 print("Preparing windows for GUI plot...")
-                if self.bandwidth is None or self.model_config.fit_freq_except is not None:
+                if self.bandwidth is None or self.model_config.fit_full_range:
                     self.setup_plot_fus()
                 else:
                     self.setup_plot_la(self.model_config.win_list_gui, **self.gui_kws)
@@ -813,7 +812,7 @@ class ModelSpectrum(object):
                         win_list = self.model_config.win_list_file
 
                     if len(win_list) > 0:
-                        if self.bandwidth is None or self.fit_freq_except is not None:
+                        if self.bandwidth is None or self.model_config.fit_full_range:
                             self.setup_plot_fus()
                         else:
                             self.setup_plot_la(win_list, **self.file_kws)
@@ -1548,7 +1547,7 @@ class ModelSpectrum(object):
 
         self.thresholds_other = thresholds_other
 
-        if self.bandwidth is None or self.model_config.fit_freq_except is not None:
+        if self.bandwidth is None or self.model_config.fit_full_range:
             self.model_config.win_list_plot = self.win_list
             if self.model_config.plot_gui:
                 self.model_config.win_list_gui = self.model_config.win_list_plot
