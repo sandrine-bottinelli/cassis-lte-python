@@ -303,8 +303,8 @@ class ModelSpectrum(object):
             'rms_cal': self.model_config._rms_cal_user,
             'bandwidth': self.bandwidth,
             'oversampling': self.oversampling,
-            'fghz_min': self.fmin_mhz / 1.e3,
-            'fghz_max': self.fmax_mhz / 1.e3,
+            # 'fghz_min': self.fmin_mhz / 1.e3,
+            # 'fghz_max': self.fmax_mhz / 1.e3,
             'df_mhz': self.dfmhz,
             'noise': np.mean(self.noise(self.x_mod)),  # TODO : write range
             'tau_max': self.tau_max,

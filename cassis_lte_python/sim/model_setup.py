@@ -20,6 +20,10 @@ class ModelConfiguration:
     def __init__(self, configuration, verbose=True, check_tel_range=False):
         self._configuration_dict = configuration
 
+        self.modeling = configuration.get('modeling', False)
+        self.minimize = configuration.get('minimize', False)
+        self.line_analysis = configuration.get('line_analysis', 'inspect' in configuration)
+
         self.jparams = configuration.get('params', None)
         self.jmodel_fit = configuration.get('model_fit', None)
 
@@ -46,8 +50,8 @@ class ModelConfiguration:
         self.xunit = 'MHz'
         yunit = configuration.get('yunit', 'K')
         self.yunit = yunit.strip()
-        self._x_file = None
-        self._y_file = None
+        self._x_file = []
+        self._y_file = []
         self.x_obs = configuration.get('x_obs', None)
         self.y_obs = configuration.get('y_obs', None)
         self.vlsr_file = 0.
@@ -55,6 +59,7 @@ class ModelConfiguration:
         self._cont_info = configuration.get('tc', 0.)
         self._tc = None
         self._telescope_data = {}
+        self.t_a_star = configuration.get('t_a*', False)
         self.tmb2ta = None
         if 'beam_info' in configuration:
             self.get_jypb(configuration)
@@ -98,24 +103,41 @@ class ModelConfiguration:
         self.x_mod = configuration.get('x_mod', None)
         self.y_mod = None
 
-        fmin_ghz = 115.
-        fmax_ghz = 116.
-        dfmhz = 0.1
-        if 'fmin_ghz' in configuration and configuration['fmin_ghz'] is not None:
-            fmin_ghz = configuration['fmin_ghz']
-        if 'fmax_ghz' in configuration and configuration['fmax_ghz'] is not None:
-            fmax_ghz = configuration['fmax_ghz']
-        self.fmin_mhz = fmin_ghz * 1.e3
-        self.fmax_mhz = fmax_ghz * 1.e3
-        if 'df_mhz' in configuration and configuration['df_mhz'] is not None:
-            dfmhz = configuration['df_mhz']
-        self.dfmhz = dfmhz
+        self.dfmhz = configuration.get('df_mhz', 0.1)
 
-        franges_ghz = configuration.get('franges_ghz', [[fmin_ghz, fmax_ghz]])
-        # make sure it is a list of lists
-        if not isinstance(franges_ghz[0], list):
-            franges_ghz = [franges_ghz]
+        if self.line_analysis and 'franges_ghz' not in configuration and 'tuning_info' not in configuration:
+            raise KeyError("You must provide a frequency range with the 'franges_ghz' keyword.")
+        if any([key in configuration for key in ['fmin_ghz', 'fmax_ghz']]):
+            print("The keywords 'fmin_ghz' and 'fmax_ghz' are deprecated.")
+            if self.minimize or self.modeling:
+                print("The model will be computed over the ranges in 'tuning_info'.")
+            else:
+                print("Data selection performed with 'tuning_info' or 'franges_ghz', whichever is provided.")
+
+        self.fmin_mhz = None #fmin_ghz * 1.e3
+        self.fmax_mhz = None #fmax_ghz * 1.e3
+
         self.franges_mhz = []
+        if 'tuning_info' in configuration:  # mandatory if model or fit
+            self._tuning_info_user = configuration.get('tuning_info')
+            self.tuning_info = []
+            self.get_tuning_info()
+        else:
+            if self.modeling or self.minimize:
+                raise KeyError("'tuning_info' is mandatory when modeling or minimizing.")
+
+        franges_ghz = configuration.get('franges_ghz', [])
+        if len(franges_ghz) > 0:
+            # make sure it is a list of lists
+            if not isinstance(franges_ghz[0], list):
+                franges_ghz = [franges_ghz]
+
+            if 'tuning_info' in configuration:
+                print("INFO - 'franges_ghz' supersedes the ranges in 'tuning_info' for model computation")
+                print("       make sure the ranges in tuning_info are wider than those in 'franges_ghz'")
+            self.franges_mhz = [[min(r) * 1000, max(r) * 1000] for r in franges_ghz]
+
+        self.mask = []
 
         if self.x_mod is None and self.data_file is None:
             # self.x_mod = np.arange(self.fmin_mhz, self.fmax_mhz + self.dfmhz, self.dfmhz)
@@ -135,15 +157,11 @@ class ModelConfiguration:
             noise = 1.e-3 * configuration.get('noise_mk', 0.)
         if isinstance(noise, (float, int)):
             self.noise = lambda x: noise
-        elif isinstance(noise, list):
+        elif isinstance(noise, list):  # TODO : check if this is used
             yvals = np.array([[n, n] for n in noise])
             self.noise = interp1d(np.concatenate(self.franges_mhz), np.concatenate(yvals), kind='nearest')
         else:
             print('Noise format not supported. Should be a integer, a float or a list.')
-
-        self.t_a_star = configuration.get('t_a*', False)
-        self._tuning_info_user = configuration.get('tuning_info', None)
-        self.tuning_info = []
 
         self.f_err_mhz_max = configuration.get('f_err_mhz_max', None)
 
@@ -190,8 +208,6 @@ class ModelConfiguration:
                               '\t'.join(['# Tag ', 'Ntot', 'Tex', 'FWHM', 'f_mhz', 'Eup', 'Aij', 'gup', 'tau'])
                               ])
 
-        self.modeling = configuration.get('modeling', False)
-
         self.constraints = configuration.get('constraints', None)
         if self.constraints is not None:
             constraints_dict_user = self.constraints
@@ -216,7 +232,6 @@ class ModelConfiguration:
 
         self.ref_pixel_info = None
         self.latest_valid_params = None
-        self.minimize = configuration.get('minimize', False)
         self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)
         self.fit_kws = configuration.get('fit_kws', None)
@@ -312,8 +327,6 @@ class ModelConfiguration:
 
         self.exec_time = configuration.get('exec_time', True)
 
-        self.get_tuning_info()
-
         if 'data_file' in self._configuration_dict or 'x_obs' in self._configuration_dict:
             self.get_data()
 
@@ -323,7 +336,7 @@ class ModelConfiguration:
         if 'tc' in self._configuration_dict:
             self.get_continuum()
 
-        if self.x_file is not None:
+        if len(self.x_file) > 0:
             self.get_linelist()
             self.get_windows()
         if self._v_range_user is not None:
@@ -350,28 +363,54 @@ class ModelConfiguration:
 
         self.vlsr_plot = self.vlsr_file
 
-        if self.x_file is not None and isinstance(self.x_file[0], np.ndarray):
+        if len(self.x_file) > 0 and isinstance(self.x_file[0], np.ndarray):
             self.x_file = np.concatenate(self.x_file)
         if self.y_file is not None and isinstance(self.y_file[0], np.ndarray):
             self.y_file = np.concatenate(self.y_file)
 
-        if self.x_file is not None:
+        if len(self.x_file) > 0:
             idx = self.x_file.argsort()
             self.x_file = self.x_file[idx]
             self.y_file = self.y_file[idx]
 
-        if self.x_file is not None and len(self.tuning_info) > 0:
-            # select data within telescope range
-            x_sub, y_sub = utils.select_from_ranges(self.x_file, self.tuning_info['fmhz_range'].array,
-                                                    y_values=self.y_file)
-            self.x_file, self.y_file = x_sub, y_sub
+        if len(self.x_file) > 0:
+            # first check if some ranges are below/above the data's min/max :
+            frange_mhz = []
+            for frange in self.franges_mhz:
+                if frange[1] < min(self.x_file):
+                    print(f"No data in {frange} (data start at {min(self.x_file)}) - skipping this range")
+                elif frange[0] > max(self.x_file):
+                    print(f"No data in {frange} (data end at {max(self.x_file)}) - skipping this range")
+                else:
+                    frange_mhz.append(frange)
+            self.franges_mhz = frange_mhz
+            # modify min of first range to be the greatest value between itself and min(x_file)
+            self.franges_mhz[0][0] = max(min(self.x_file), self.franges_mhz[0][0])
+            # modify max of last range to be the small value between itself and max(x_file)
+            self.franges_mhz[-1][-1] = min(max(self.x_file), self.franges_mhz[-1][-1])
+            # if necessary, cut out data below/above min/max frange_mhz
+            self.y_file = self.y_file[(self.x_file >= self.franges_mhz[0][0]) & (self.x_file <= self.franges_mhz[-1][-1])]
+            self.x_file = self.x_file[(self.x_file >= self.franges_mhz[0][0]) & (self.x_file <= self.franges_mhz[-1][-1])]
+            mask = np.full(len(self.x_file), False)
+            for r in self.franges_mhz:
+                mask[(min(r) <= self.x_file) & (self.x_file <= max(r))] = True
+
+            # if self.fit_freq_except is not None:
+            for r in self.fit_freq_except:
+                mask[(min(r) <= self.x_file) & (self.x_file <= max(r))] = False
+
+            self.mask = mask
+
+            # x_sub, y_sub = utils.select_from_ranges(self.x_file, self.franges_mhz,
+            #                                         y_values=self.y_file)
+            # self.x_file, self.y_file = x_sub, y_sub
 
             if self.oversampling == 1:
-                self.x_mod = self.x_file
+                self.x_mod = self.x_file[self.mask]
             else:
                 x_mod = []
-                for i, row in self.tuning_info.iterrows():
-                    x_sub = self.x_file[(self.x_file >= row['fmhz_min']) & (self.x_file <= row['fmhz_max'])]
+                for rg in self.franges_mhz:
+                    x_sub = self.x_file[(self.x_file >= min(rg)) & (self.x_file <= max(rg))]
                     if len(x_sub) == 0:
                         continue
                     x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
@@ -412,92 +451,92 @@ class ModelConfiguration:
         if config is None:
             config = self._configuration_dict
 
-        if 'tuning_info' in config:
-            if check_tel_range:  # check telescope ranges cover all data / all model values:
-                x_vals = self.x_file if self.x_file is not None else [min(self.x_mod), max(self.x_mod)]
-                extended = False
-                for x in x_vals:
-                    # is_in_range = [val[0] <= x <= val[1] for val in config['tuning_info'].values()]
-                    limits = list(config['tuning_info'].values())
-                    limits = [item for sublist in limits for item in sublist]
-                    if not utils.is_in_range(x, config['tuning_info'].values):
-                        # raise LookupError("Telescope ranges do not cover some of the data, e.g. at {} MHz.".format(x))
-                        extended = True
-                        nearest = utils.find_nearest(np.array(limits), x)
-                        for key, val in config['tuning_info'].items():
-                            # new_lo = 5. * np.floor(x / 5.) if val[0] == nearest else val[0]
-                            # new_hi = 5. * np.ceil(x / 5.) if val[1] == nearest else val[1]
-                            new_lo = np.floor(x) if val[0] == nearest else val[0]
-                            new_hi = np.ceil(x) if val[1] == nearest else val[1]
-                            config['tuning_info'][key] = [new_lo, new_hi]
-                if extended:
-                    print("Some telescope ranges did not cover some of the data ; ranges were extended to :")
-                    print(config['tuning_info'])
+        # if 'tuning_info' in config:
+        if check_tel_range:  # check telescope ranges cover all data / all model values:
+            x_vals = self.x_file if len(self.x_file) > 0 else [min(self.x_mod), max(self.x_mod)]
+            extended = False
+            for x in x_vals:
+                # is_in_range = [val[0] <= x <= val[1] for val in config['tuning_info'].values()]
+                limits = list(config['tuning_info'].values())
+                limits = [item for sublist in limits for item in sublist]
+                if not utils.is_in_range(x, config['tuning_info'].values):
+                    # raise LookupError("Telescope ranges do not cover some of the data, e.g. at {} MHz.".format(x))
+                    extended = True
+                    nearest = utils.find_nearest(np.array(limits), x)
+                    for key, val in config['tuning_info'].items():
+                        # new_lo = 5. * np.floor(x / 5.) if val[0] == nearest else val[0]
+                        # new_hi = 5. * np.ceil(x / 5.) if val[1] == nearest else val[1]
+                        new_lo = np.floor(x) if val[0] == nearest else val[0]
+                        new_hi = np.ceil(x) if val[1] == nearest else val[1]
+                        config['tuning_info'][key] = [new_lo, new_hi]
+            if extended:
+                print("Some telescope ranges did not cover some of the data ; ranges were extended to :")
+                print(config['tuning_info'])
 
-            for tel in config['tuning_info'].keys():
-                freq_user = config['tuning_info'][tel]
-                if isinstance(freq_user[0], list):
-                    freq_user = [el for li in freq_user for el in li]
-                tel_info = utils.read_telescope_file(utils.search_telescope_file(tel),
-                                                     fmin_mhz=min(freq_user),
-                                                     fmax_mhz=max(freq_user))
-                self._telescope_data[tel] = tel_info
-
-            tuning_info = {'fmhz_range': [], 'telescope': [], 'fmhz_min': [], 'fmhz_max': []}
-            for key, val in config['tuning_info'].items():
-                # make sure we have a list of frequency ranges
-                if len(val) == 0:  # empty list, use entire data range
-                    arr = [[min(self.x_file), max(self.x_file)]]
-                elif isinstance(val[0], list):
-                    arr = val
-                else:
-                    arr = [val]
-                # arr = np.array(val)  # convert list to array
-                # if len(arr.shape) == 1:
-                #     arr = np.array([val])
-                for r in arr:
-                    r_min, r_max = min(r), max(r)
-                    # if self.x_file is not None:
-                    #     x_sub = self.x_file[(self.x_file >= r_min) & (self.x_file <= r_max)]
-                    #     r_min = max(r_min, min(x_sub))
-                    #     r_max = min(r_max, max(x_sub))
-                    #     if len(self.x_file[(self.x_file >= r_min) & (self.x_file <= r_max)]) == 0:
-                    #         continue
-                    # # if self.fmax_mhz is not None and self.fmin_mhz is not None:
-                    # else:
-                    #     r_min = max(r_min, self.fmin_mhz)
-                    #     r_max = min(r_max, self.fmax_mhz)
-                    tuning_info['fmhz_range'].append([r_min, r_max])
-                    tuning_info['telescope'].append(key)
-                    tuning_info['fmhz_min'].append(r_min)
-                    tuning_info['fmhz_max'].append(r_max)
-            self.tuning_info = pd.DataFrame(tuning_info)
-
-            # tuning_data = pd.DataFrame()
-            #
-            # for i, row in self.tuning_info.iterrows():
-            #     tel_data = self._telescope_data[row['telescope']]
-            #     index_min = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_min']) - 1
-            #     # NB: searchsorted returns the index where value could be inserted and maintain order
-            #     index_max = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_max'])
-            #     tel_data_sub = tel_data.loc[index_min: index_max]
-            #     if tuning_data.empty:
-            #         tuning_data = tel_data_sub
-            #     else:
-            #         tuning_data = pd.concat([tuning_data, tel_data_sub])
-
-            tuning_data = pd.concat(list(self._telescope_data.values()))
-            tuning_data = tuning_data.sort_values(by=['Frequency (MHz)'])
-
-            if self.t_a_star:
-                self.tmb2ta = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Beff/Feff'])
+        tuning_info = {'fmhz_range': [], 'telescope': [], 'fmhz_min': [], 'fmhz_max': []}
+        for key, val in config['tuning_info'].items():
+            # make sure we have a list of frequency ranges
+            if len(val) == 0:  # empty list, use entire data range
+                arr = [[min(self.x_file), max(self.x_file)]]
+            elif isinstance(val[0], list):
+                arr = val
             else:
-                self.tmb2ta = lambda x: 1.
+                arr = [val]
+            # arr = np.array(val)  # convert list to array
+            # if len(arr.shape) == 1:
+            #     arr = np.array([val])
+            for r in arr:
+                r_min, r_max = min(r), max(r)
+                # if len(self.x_file) > 0:
+                #     x_sub = self.x_file[(self.x_file >= r_min) & (self.x_file <= r_max)]
+                #     r_min = max(r_min, min(x_sub))
+                #     r_max = min(r_max, max(x_sub))
+                #     if len(self.x_file[(self.x_file >= r_min) & (self.x_file <= r_max)]) == 0:
+                #         continue
+                # # if self.fmax_mhz is not None and self.fmin_mhz is not None:
+                # else:
+                #     r_min = max(r_min, self.fmin_mhz)
+                #     r_max = min(r_max, self.fmax_mhz)
+                tuning_info['fmhz_range'].append([r_min, r_max])
+                tuning_info['telescope'].append(key)
+                tuning_info['fmhz_min'].append(r_min)
+                tuning_info['fmhz_max'].append(r_max)
+        self.tuning_info = pd.DataFrame(tuning_info)
+        self.franges_mhz = tuning_info['fmhz_range']
 
-            self.beam = utils.beam_function(tuning_data)
+        for tel, freq_user in self._configuration_dict['tuning_info'].items():
+            if isinstance(freq_user[0], list):
+                freq_user = [el for li in freq_user for el in li]
+            tel_info = utils.read_telescope_file(utils.search_telescope_file(tel),
+                                                 fmin_mhz=min(freq_user),
+                                                 fmax_mhz=max(freq_user))
+            self._telescope_data[tel] = tel_info
 
-            if self.jypb is None:
-                self.jypb = lambda f: utils.compute_jypb2k(f, self.beam(f))
+        # tuning_data = pd.DataFrame()
+        #
+        # for i, row in self.tuning_info.iterrows():
+        #     tel_data = self._telescope_data[row['telescope']]
+        #     index_min = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_min']) - 1
+        #     # NB: searchsorted returns the index where value could be inserted and maintain order
+        #     index_max = tel_data['Frequency (MHz)'].searchsorted(row['fmhz_max'])
+        #     tel_data_sub = tel_data.loc[index_min: index_max]
+        #     if tuning_data.empty:
+        #         tuning_data = tel_data_sub
+        #     else:
+        #         tuning_data = pd.concat([tuning_data, tel_data_sub])
+
+        tuning_data = pd.concat(list(self._telescope_data.values()))
+        tuning_data = tuning_data.sort_values(by=['Frequency (MHz)'])
+
+        if self.t_a_star:
+            self.tmb2ta = interp1d(tuning_data['Frequency (MHz)'], tuning_data['Beff/Feff'])
+        else:
+            self.tmb2ta = lambda x: 1.
+
+        self.beam = utils.beam_function(tuning_data)
+
+        if self.jypb is None:
+            self.jypb = lambda f: utils.compute_jypb2k(f, self.beam(f))
 
     def get_linelist(self, verbose=True):
         """
@@ -511,13 +550,18 @@ class ModelConfiguration:
         If computing a model only or fitting by velocity, apply thresholds.
         """
 
-        if self.x_file is not None:
-            x_vals = self.x_file
-        else:
-            x_vals = self.x_mod
+        # if len(self.x_file) > 0:
+        #     x_vals = self.x_file
+        # else:
+        #     x_vals = self.x_mod
 
-        self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=[[min(x_vals), max(x_vals)]])
+        # self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=[[min(x_vals), max(x_vals)]])
+        self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=self.franges_mhz,
+                                               shift_kms=self.line_shift_kms)
         print(f"INFO - {len(self.line_list_all)} transitions found (no thresholds).")
+        line_list_all_by_tag = {tag: list(self.line_list_all[self.line_list_all.tag == tag].transition)
+                                for tag in self.tag_list}
+
         if self.f_err_mhz_max is not None:
             self.line_list_all = self.line_list_all[self.line_list_all.f_err_mhz <= self.f_err_mhz_max]
             print(f"INFO - {len(self.line_list_all)} transitions found with f_err_mhz <= {self.f_err_mhz_max}.")
@@ -530,13 +574,13 @@ class ModelConfiguration:
             print("       except the maximum error on the line frequency if provided (f_err_mhz_max).")
 
         else:  # get linelist w/i thresholds
-            tr_list_tresh = get_transition_df(self.tag_list, [[min(x_vals), max(x_vals)]], **self.thresholds)
+            tr_list_tresh = get_transition_df(self.tag_list, self.franges_mhz, **self.thresholds)
             if self.sort == 'frequency':
                 tr_list_tresh.sort_values('fMHz', inplace=True)
             else:
                 tr_list_tresh.sort_values(self.sort, inplace=True)
             # for comparison with CASSIS look for number of transitions w/i min/max of data :
-            if self.x_file is not None:
+            if len(self.x_file) > 0:
                 print(f"{len(tr_list_tresh)} transitions within thresholds ",
                       f"and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
             # else:
@@ -545,10 +589,11 @@ class ModelConfiguration:
             if len(self.tuning_info) > 1:
                 # more than one telescope range => search only in data within telescope ranges
                 # NB : this assumes that if only one range, it encompasses the data's min/max
-                f_range_search = []
-                for f_range in self.tuning_info['fmhz_range']:
-                    x_sub = x_vals[(x_vals >= min(f_range)) & (x_vals <= max(f_range))]
-                    f_range_search.append([min(x_sub), max(x_sub)])
+                # f_range_search = []
+                # for f_range in self.tuning_info['fmhz_range']:
+                #     x_sub = x_vals[(x_vals >= min(f_range)) & (x_vals <= max(f_range))]
+                #     f_range_search.append([min(x_sub), max(x_sub)])
+                f_range_search = self.franges_mhz  # telescope range - fit_except_range if applies
                 tr_list_tresh = select_transitions(tr_list_tresh, xrange=f_range_search)
                 print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
                       f"{self.tuning_info['fmhz_range'].tolist()}")
@@ -559,16 +604,28 @@ class ModelConfiguration:
                 # self.line_list_all = tr_list_tresh
 
             # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
-            self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition) for tag in self.tag_list}
+            self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition)
+                                   for tag in self.tag_list}
             if all([len(t_list) == 0 for t_list in self.tr_list_by_tag.values()]):
                 raise LookupError("No transition found within the thresholds.")
 
-            for tag, tr_list in self.tr_list_by_tag.items():
-                if verbose or verbose == 2:
-                    print('{} : {} transitions found within thresholds'.format(tag, len(tr_list)))
-                if verbose == 2:
-                    for it, tr in enumerate(tr_list):
-                        print('  {}. {}'.format(it + 1, tr))
+        ltag = max([len(t) for t in self.tag_list])  # max length for tags
+        lntr = max([len(l) for l in self.tr_list_by_tag.values()])  # max number of lines w/i thresholds
+        lntr = len(str(lntr))  # max length of number of lines
+        lntr_all = max([len(l) for l in line_list_all_by_tag.values()])  # max number of lines w/o thresholds
+        lntr_all = len(str(lntr_all))  # max length of number of lines
+        for tag, tr_list in self.tr_list_by_tag.items():
+            thr_info = "within thresholds"
+            if self.fit_full_range:
+                thr_info = ""
+                if self.f_err_mhz_max is not None:
+                    thr_info = f"with f_err_mhz <= {self.f_err_mhz_max}"
+            if verbose or verbose == 2:
+                print(f'{tag:>{ltag}s} : {len(tr_list):{lntr}d}'
+                      f'/{len(line_list_all_by_tag[tag]):{lntr_all}d} transitions found {thr_info}')
+            if verbose == 2:
+                for it, tr in enumerate(tr_list):
+                    print('  {}. {}'.format(it + 1, tr))
 
         for cpt in self.cpt_list:
             # cpt.transition_list = self.line_list_all[self.line_list_all['tag'].isin(cpt.tag_list)]
@@ -1081,52 +1138,69 @@ class ModelConfiguration:
 
         self.get_rms_cal_info()
 
-        if self.fit_freq_except is not None:  # fitting entire frequency range except a few windows
-            f_fit = self.x_file
-            y_fit = self.y_file
-            if len(self.fit_freq_except) > 0:
-                if not isinstance(self.fit_freq_except[0], list):
-                    self.fit_freq_except = [self.fit_freq_except]
-                fmin = min(self.x_file)
-                f2fit = []
-                for f_range in self.fit_freq_except:
-                    fmax = min(f_range)
-                    f2fit.append([fmin, fmax])
-                    fmin = max(f_range)
-                f2fit.append([fmin, max(self.x_file)])
-                f_fit, y_fit = utils.select_from_ranges(self.x_file, f2fit, y_values=self.y_file)
+        if self.fit_full_range:  # fitting entire frequency range except a few windows
+            # NB: windows already excluded in data selection
+            f_fit = self.x_file[self.mask]
+            y_fit = self.y_file[self.mask]
+            # if len(self.fit_freq_except) > 0:
+            #     if not isinstance(self.fit_freq_except[0], list):
+            #         self.fit_freq_except = [self.fit_freq_except]
+            #     fmin = min(self.x_file)
+            #     f2fit = []
+            #     for f_range in self.fit_freq_except:
+            #         fmax = min(f_range)
+            #         f2fit.append([fmin, fmax])
+            #         fmin = max(f_range)
+            #     f2fit.append([fmin, max(self.x_file)])
+            #     f_fit, y_fit = utils.select_from_ranges(self.x_file, f2fit, y_values=self.y_file)
 
             win = Window(name='Full spectrum')
             win.x_file = self.x_file
             win.y_file = self.y_file
-            if win.x_file is not None:
-                x_mod = []
-                for i, row in self.tuning_info.iterrows():
-                    x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
-                    if len(x_sub) == 0:
-                        continue
-                    x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
-                win.x_mod = np.array(x_mod)
-            else:
-                pass
+            win.x_mod = self.x_mod
+            # if win.x_file is not None:
+            #     x_mod = []
+            #     for i, row in self.tuning_info.iterrows():
+            #         x_sub = win.x_file[(win.x_file >= row['fmhz_min']) & (win.x_file <= row['fmhz_max'])]
+            #         if len(x_sub) == 0:
+            #             continue
+            #         x_mod.extend(np.linspace(min(x_sub), max(x_sub), num=self.oversampling * len(x_sub)))
+            #     win.x_mod = np.array(x_mod)
+            # else:
+            #     pass
             win.f_ranges_nofit = self.fit_freq_except
-            rms = np.empty(len(f_fit), dtype=float)
-            cal = np.empty(len(f_fit), dtype=float)
-            if 'freq_range' in self._rms_cal.columns:
-                for i, row in self._rms_cal.iterrows():
-                    indices = np.where((f_fit > row['fmin']) & (f_fit < row['fmax']))
-                    rms[indices] = row['rms']
-                    cal[indices] = row['cal']
 
-                if None in rms:
-                    raise ValueError("rms not defined for at least one frequency.")
-                if None in cal:
-                    raise ValueError("calibration error not defined for at least one frequency.")
-            else:
-                raise TypeError("rms and calibration information must be given in frequency ranges.")
+            rms_cal_array = []
+            for i, row in self._rms_cal.iterrows():
+                rms_cal_array.append([row['fmin'], row['rms'], row['cal']])
+                rms_cal_array.append([row['fmax'], row['rms'], row['cal']])
+            rms_cal_array = pd.DataFrame(np.array(rms_cal_array), columns=['freq', 'rms', 'cal'])
+            if min(f_fit) < rms_cal_array['freq'].min():
+                raise ValueError(f"At least one value ({min(f_fit)}) is below "
+                                 f"the minimum value of the interpolation range ({rms_cal_array['freq'].min()})")
+            if max(f_fit) > rms_cal_array['freq'].max():
+                raise ValueError(f"At least one value ({max(f_fit)}) is above "
+                                 f"the maximum value of the interpolation range ({rms_cal_array['freq'].max()})")
+            rms = interp1d(rms_cal_array['freq'], rms_cal_array['rms'])(f_fit)
+            cal = interp1d(rms_cal_array['freq'], rms_cal_array['cal'])(f_fit)
+            # rms = np.empty(len(f_fit), dtype=float)
+            # cal = np.empty(len(f_fit), dtype=float)
+            # if 'freq_range' in self._rms_cal.columns:
+            #     for i, row in self._rms_cal.iterrows():
+            #         indices = np.where((f_fit > row['fmin']) & (f_fit < row['fmax']))
+            #         rms[indices] = row['rms']
+            #         cal[indices] = row['cal']
+            #
+            #     if None in rms:
+            #         raise ValueError("rms not defined for at least one frequency.")
+            #     if None in cal:
+            #         raise ValueError("calibration error not defined for at least one frequency.")
+            # else:
+            #     raise TypeError("rms and calibration information must be given in frequency ranges.")
 
             win.x_fit = f_fit
             win.y_fit = y_fit
+            win.in_fit = True
             win.rms = rms
             win.cal = cal
             self.win_list = [win]
@@ -1145,7 +1219,7 @@ class ModelConfiguration:
                                               1. * self.bandwidth / 2 + self.vlsr_plot]]
                     f_range_plot.sort()
                     x_win, y_win = None, None
-                    if self.x_file is not None:
+                    if len(self.x_file) > 0:
                         x_win, y_win = utils.select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
                         if len(x_win) <= 5 or len(set(y_win)) == 1:
                             continue
@@ -1220,6 +1294,14 @@ class ModelConfiguration:
         if len(self.win_list_fit) > 0:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
+            print(f"\nNumber of points used for the minimization : {len(self.x_fit)}/{len(self.x_file)}")
+            if len(self.franges_mhz) > 1:
+                for frange in self.franges_mhz:
+                    print(f"    {frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
+                          f" / {len(self.x_file[(self.x_file >= min(frange)) & (self.x_file <= max(frange))])}"
+                          f" points used")
+                print("\n")
+
         else:
             self.x_fit, self.y_fit = None, None
 
