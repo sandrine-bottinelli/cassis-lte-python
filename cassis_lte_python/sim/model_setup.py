@@ -56,6 +56,7 @@ class ModelConfiguration:
         self.y_obs = configuration.get('y_obs', None)
         self.vlsr_file = 0.
         self.vlsr_plot = configuration.get('vlsr_plot', 0.)
+        self.line_shift_kms = configuration.get('line_shift_kms', 0.)
         self._cont_info = configuration.get('tc', 0.)
         self._tc = None
         self._telescope_data = {}

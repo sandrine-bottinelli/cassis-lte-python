@@ -88,7 +88,7 @@ def get_transition_list(species: list | str, fmhz_ranges, database=DATABASE_SQL,
         tr_list.sort(key=lambda x: x.f_trans_mhz)
 
 
-def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, **thresholds):
+def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, shift_kms=0., **thresholds):
     if len(species) == 0:
         return pd.DataFrame(columns=TRAN_DF_COLS)
 
@@ -127,7 +127,8 @@ def get_transition_df(species: list | str, fmhz_ranges, database=DATABASE_SQL, *
         sp_infos[sp_id] = sp_dic
         # sp_name = sp_dic['name']
         # Find transitions for each range of frequencies
-        for frange in fmhz_ranges:
+        for f_range in fmhz_ranges:
+            frange = [f + delta_v_to_delta_f(shift_kms, f) for f in f_range]
             # cmd = "SELECT * FROM transitions WHERE catdir_id = {} and fMhz < {} and fMhz > {}" \
             #       " and eup > {} and aint > {}".format(sp_id, max(frange), min(frange), eup_min, aij_min)
             cmd = f"SELECT {', '.join(fields)} FROM transitions WHERE catdir_id = {sp_id}"
