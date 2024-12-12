@@ -5,7 +5,7 @@ from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import NCOLS_DEF, NROWS_DEF, DPI_DEF, NB_DECIMALS
 from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
-from cassis_lte_python.database.species import get_species_thresholds
+from cassis_lte_python.database.species import get_species_thresholds, Species
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from cassis_lte_python.utils.settings import SQLITE_FILE
 from cassis_lte_python.utils.utils import get_df_row_from_freq_range
@@ -2075,13 +2075,17 @@ class ModelSpectrum(object):
         # if self.best_params is not None and ext == 'lam':
         #     params = self.best_params
 
-        # Determine if some species are comp 2+ but not in comp 1
+        # Determine if some species are in comp 2+ but not in comp 1
         extra_sp = []
         try:
-            for cpt in self.cpt_list[1:]:
-                for sp in cpt.species_list:
-                    if sp.tag not in self.cpt_list[0].tag_list:
-                        extra_sp.append(sp)
+            for tag in self.model_config.tag_list:
+                if tag not in self.cpt_list[0].tag_list:
+                    extra_sp.append(Species(tag, ntot=10, tex=self.model_config.cpt_list[0].tex,
+                                            fwhm=self.model_config.cpt_list[0].fwhm))
+            # for cpt in self.cpt_list[1:]:
+            #     for sp in cpt.species_list:
+            #         if sp.tag not in self.cpt_list[0].tag_list:
+            #             extra_sp.append(sp)
         except IndexError:  # do nothing
             pass
 
