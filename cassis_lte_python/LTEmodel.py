@@ -362,13 +362,10 @@ class ModelSpectrum(object):
             with open(path, 'w') as f:
                 f.write(json_dump)
         except Exception as e:
-            # logfile = os.path.join(self.model_config.output_dir,
-            #                        f'log{datetime.datetime.now().strftime("%Y%m%dT%H%M%S")}.txt')
-            # with open(logfile, 'w') as f:
-            #     f.write(str(e))
-            print("Encountered error while writing the json config : skipping this step.")
-            # print(f"See {logfile} for details.")
-            pass
+            print("WARNING - Encountered the following error while writing the json config : ")
+            print(e)
+            print("-> skipping this step.")
+            # pass
 
     def update_configuration(self, config):  # TODO : needs to be updated
         # update components only
@@ -854,7 +851,8 @@ class ModelSpectrum(object):
         def fit_callback(pars, iter, resid, *args, **kws):
             # Function called after each iteration to print the iteration number every 100 iterations
             if iter % 100 == 0:
-                print(f"    Iteration {int(iter // 100) * 100 + 1}...")
+                print(f"    Iteration {int(iter // 100) * 100 + 1} : chi2 = {sum(resid**2)} ; "
+                      f"reduced chi2 = {sum(resid**2) / (len(resid) - len([p for p in pars if pars[p].vary]))} ...")
 
         if self.log:  # take log10 for tex and ntot
             params = self.params
