@@ -46,6 +46,13 @@ def generate_lte_model_func(config: dict):
         - cpt_list : list of components
     :return: The model function to be minimized.
     """
+    line_list = config['line_list']
+    try:
+        tr_list_by_tag = {tag: list(line_list.loc[line_list['tag'] == tag].transition)
+                          for tag in line_list['tag'].unique()}
+    except KeyError:
+        raise TypeError("Not implemented yet, line_list should be a DataFrame.")
+
     def lte_model_func(fmhz, log=False, cpt='from_config', line_center_only=False, return_tau=False, **params):
         norm_factors = config.get('norm_factors', {key: 1. for key in params.keys()})
         vlsr_file = config.get('vlsr_file', 0.)
@@ -55,12 +62,13 @@ def generate_lte_model_func(config: dict):
         jypb2k = config.get('jypb2k', lambda x: 1.)(fmhz)
         noise = config.get('noise', lambda x: 0.)(fmhz)
         tcmb = config.get('tcmb', 2.73)
-        line_list = config['line_list']
+        # line_list = config['line_list']
         cpt_list = config['cpt_list']
         if not isinstance(cpt_list, list):
             cpt_list = [cpt_list]
         if cpt != 'from_config':
             cpt_list = cpt if isinstance(cpt, list) else [cpt]
+
         tau_max = config.get('tau_max', None)
         file_rejected = config.get('file_rejected', None)
         tc = tc * jypb2k  # if jypb2k not 1, data, and so tc, are in Jy/beam -> convert to K
@@ -80,10 +88,13 @@ def generate_lte_model_func(config: dict):
 
             sum_tau = 0
             for isp, tag in enumerate(cpt.tag_list):
-                if isinstance(line_list, list):
-                    tran_list = line_list
-                else:  # assume it is a DataFrame
-                    tran_list = list(line_list.loc[line_list['tag'] == tag].transition)
+                # if isinstance(line_list, list):
+                #     tran_list = line_list
+                # else:  # assume it is a DataFrame
+                #     tran_list = list(line_list.loc[line_list['tag'] == tag].transition)
+                if tag not in tr_list_by_tag.keys():
+                    continue
+                tran_list = tr_list_by_tag[tag]
                 ntot = params['{}_ntot_{}'.format(cpt.name, tag)] * norm_factors['{}_ntot_{}'.format(cpt.name, tag)]
                 if log:
                     ntot = 10. ** ntot
