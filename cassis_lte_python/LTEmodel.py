@@ -2476,11 +2476,19 @@ class ModelCube(object):
             if len(self._cont_data) != 0:
                 with open(cont_name, 'w') as fileout:
                     fileout.write('{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[0][0] - 10.0), 0.0))
-                    for k, cont_data in enumerate(self._cont_data):
-                        continuum = cont_data[0, 0, j, i].array
+                    cont_datas = self._cont_data
+                    if len(self._cont_data) == 1 and len(self.fmhz_ranges) > 1:
+                        # one continuum file for several cubes -> replicate the continuum
+                        cont_datas = cont_datas * len(self.fmhz_ranges)
+                    for k, cont_data in enumerate(cont_datas):
+                        try:
+                            continuum = cont_data[0, 0, j, i].array
+                        except IndexError:
+                            continuum = cont_data[0][j, i].value
                         print("j =", j, " i =", i, 'continuum[j,i] =', continuum)
                         fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][0], continuum))
                         fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][1], continuum))
+
                     fileout.write(
                         '{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[-1][-1] + 10.0), 0.0))
 
