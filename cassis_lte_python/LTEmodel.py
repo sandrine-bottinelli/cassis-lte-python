@@ -138,6 +138,8 @@ def generate_lte_model_func(config: dict):
                 intensity = ff * intensity_cpt
 
         intensity = intensity + intensity_before - utils.jnu(fmhz, tcmb)
+        if config.get('cont_free'):
+            intensity -= tc
         intensity += normal(0., noise, len(intensity))  # add gaussian noise
         intensity *= tmb2ta  # convert to Ta
         intensity /= jypb2k  # convert to Jy/beam
@@ -428,6 +430,7 @@ class ModelSpectrum(object):
     def model_info(self, cpt=None):
 
         mdl_info = {
+            'cont_free': self.cont_free,
             'tc': self.tc,
             'tcmb': self.tcmb,
             'vlsr_file': self.vlsr_file,
@@ -1325,7 +1328,8 @@ class ModelSpectrum(object):
                     win.y_res = win.y_file - win.y_mod
                 else:
                     win.y_res = win.y_file - self.model.eval(fmhz=win.x_file, **plot_pars)
-                win.y_res += self.get_tc(win.x_file)
+                if not self.model_config.cont_free:
+                    win.y_res += self.get_tc(win.x_file)
 
             if self.model_fit is not None:
                 if 'model_err' in kwargs and kwargs['model_err']:
@@ -2262,6 +2266,8 @@ class ModelCube(object):
         configuration['t_a*'] = IntensityTastar
         configuration['yunits'] = yunits
 
+        configuration['continuum_free'] = configuration.get('continuum_free', False)
+
         # Extract the Vlsr if present in the fits files (to be check out, does not work yet)
         # --------------------------------------------------------------------------------------------------------------------------
         # if 'VELO-LSR' in hdr :
@@ -2540,7 +2546,10 @@ class ModelCube(object):
 
             for win in model.win_list_fit:
                 fmhz = win.transition.f_trans_mhz
-                tc = model.get_tc(fmhz)
+                if self._model_configuration.cont_free:
+                    tc = 0.
+                else:
+                    tc = model.get_tc(fmhz)
                 tag_i = win.transition.tag
                 row = get_df_row_from_freq_range(fluxes_freq_range, fmhz)
                 idx = row.index

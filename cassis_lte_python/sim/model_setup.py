@@ -59,6 +59,7 @@ class ModelConfiguration:
         self.line_shift_kms = configuration.get('line_shift_kms', 0.)
         self._cont_info = configuration.get('tc', 0.)
         self._tc = None
+        self.cont_free = configuration.get('continuum_free', False)
         self._telescope_data = {}
         self.t_a_star = configuration.get('t_a*', False)
         self.tmb2ta = None
