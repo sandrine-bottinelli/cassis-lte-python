@@ -1891,50 +1891,73 @@ class ModelSpectrum(object):
         #     self.setup_plot_fus()
         filebase = filename
         nb_dec = '3'
-        line_list = self.model_config.line_list_all.sort_values('tag')
-        line_list.reset_index(drop=True, inplace=True)
+
         for icpt, cpt in enumerate(self.cpt_list):
+            line_list = self.model_config.line_list_all[self.model_config.line_list_all['tag'].isin(cpt.tag_list)]
+            line_list = line_list.sort_values('tag')
+            line_list.reset_index(drop=True, inplace=True)
+
             if len(self.cpt_list) > 1:
                 filename = f'{filebase}_{cpt.name}'
 
-            int0 = self.compute_model_intensities(x_values=line_list.fMHz.values,
-                                                  cpt=cpt,
+            # Compute the intensity at the *observed* frequency corresponding to the transition's frequency
+            x_vals = utils.velocity_to_frequency(cpt.vlsr, line_list.fMHz.values, vref_kms=self.model_config.vlsr_file)
+
+            int0 = self.compute_model_intensities(params=self.params, x_values=x_vals,
+                                                  line_list=self.line_list_all, cpt=cpt,
                                                   line_center_only=True)
-            rms = np.array([self.get_rms_cal(fmhz)[0] for fmhz in line_list.fMHz.values])
-            cont = np.array([self.get_tc(fmhz) for fmhz in line_list.fMHz.values])
+            rms = np.array([self.get_rms_cal(fmhz)[0] for fmhz in x_vals])
+            cont = np.array([self.get_tc(fmhz) for fmhz in x_vals])
             snr = (int0 - cont) / rms
             if snr_threshold is not None:
-                selected = [(snr_i >= snr_threshold) or (snr_i < 0) for snr_i in snr]
+                selected = np.full(len(line_list), False)
+                selected[snr >= snr_threshold] = True
+                selected[snr < 0] = True
             else:
-                selected = [True] * len(line_list)
+                selected = np.full(len(line_list), True)
+
+            line_list['selected'] = selected
+            line_list = line_list[line_list.selected == True]
+
+            line_list.sort_values(['tag', 'fMHz'], ascending=[True, True])
 
             with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
                 if snr_threshold is not None:
                     f.write(f"# List of lines with S/N ratio of modelled intensity >= {snr_threshold}\n")
                 f.write('# ')
                 f.write('\t'.join(
-                    ['Transition', 'Tag', 'Frequency(MHz)', 'Eup(K)', 'Aij', 'Tau', 'Tex', 'Intensity(K)']))
+                    # ['Transition', 'Tag', 'Frequency(MHz)', 'Eup(K)', 'Aij', 'Tau', 'Tex', 'Intensity(K)'])
+                    ['Component', 'Tag_Transition', 'Frequency(MHz)', 'Eup(K)', 'Aij',
+                     'FrequencyPlusError', 'Tex', 'Vlsr', 'Intensity(K)', 'Tau'])
+                )
                 f.write('\n')
 
                 for i, row in line_list.iterrows():
                     line = row['transition']
-                    if line.tag in cpt.tag_list and selected[i]:
-                        tex = self.params[f"{cpt.name}_tex"].value
-                        try:
-                            fwhm = self.params[f"{cpt.name}_fwhm"].value
-                        except IndexError:
-                            fwhm = self.params[f"{cpt.name}_fwhm_{line.tag}"].value
-                        tau0 = utils.compute_tau0(line,
-                                                  self.params[f"{cpt.name}_ntot_{line.tag}"].value,
-                                                  fwhm,
-                                                  tex)
-                        ind0 = utils.find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
-                        f.write(f"{line.name} ({line.qn_lo}_{line.qn_hi})\t{line.tag}")
-                        f.write(f"\t{line.f_trans_mhz:.{nb_dec}f}")
-                        f.write(f"\t{line.eup:.{nb_dec}f}\t{line.aij:.{nb_dec}e}\t")
-                        f.write(f"{tau0:.{nb_dec}e}\t{tex:.{nb_dec}f}")
-                        # f.write(f"\t{self.win_list[0].y_mod_cpt[cpt.name][ind0]:.{nb_dec}e}\n")
-                        f.write(f"\t{int0[i]:.{nb_dec}e}\n")
+                    # if line.tag in cpt.tag_list and selected[i]:
+                    tex = self.params[f"{cpt.name}_tex"].value
+                    try:
+                        fwhm = self.params[f"{cpt.name}_fwhm"].value
+                    except IndexError:
+                        fwhm = self.params[f"{cpt.name}_fwhm_{line.tag}"].value
+                    tau0 = utils.compute_tau0(line,
+                                              self.params[f"{cpt.name}_ntot_{line.tag}"].value,
+                                              fwhm,
+                                              tex)
+                    # ind0 = utils.find_nearest_id(self.win_list[0].x_mod, line.f_trans_mhz)
+                    line_elements = [
+                        f"{cpt.name[1:]}",
+                        f"{line.tag} {line.name} ({line.qn_lo}_{line.qn_hi})",
+                        f"{line.f_trans_mhz:.{nb_dec}f}",
+                        f"{line.eup:.{nb_dec}f}",
+                        f"{line.aij:.{nb_dec}e}",
+                        f"{line.f_trans_mhz + line.f_err_mhz:.{nb_dec}f}",
+                        f"{tex:.{nb_dec}f}",
+                        f"{cpt.vlsr:.{nb_dec}f}",
+                        f"\t{int0[i]:.{nb_dec}e}",
+                        f"{tau0:.{nb_dec}e}"
+                    ]
+                    f.write("\t".join(line_elements) + "\n")
 
     def save_fit_results(self, filename, dirname=None):
         with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
