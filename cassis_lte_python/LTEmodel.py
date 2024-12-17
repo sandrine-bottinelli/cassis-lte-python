@@ -2485,18 +2485,21 @@ class ModelCube(object):
                     fileout.write('// unitx: MHz\n')
                     fileout.write(f'// unity: {self.yunit}\n')
                     fileout.write('{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[0][0] - 10.0), 0.0))
-                    cont_datas = self._cont_data
-                    if len(self._cont_data) == 1 and len(self.fmhz_ranges) > 1:
-                        # one continuum file for several cubes -> replicate the continuum
-                        cont_datas = cont_datas * len(self.fmhz_ranges)
-                    for k, cont_data in enumerate(cont_datas):
+                    cont_values = []
+                    for k, cont_data in enumerate(self._cont_data):
                         try:
                             continuum = cont_data[0, 0, j, i].array
                         except IndexError:
-                            continuum = cont_data[0][j, i].value
-                        print("j =", j, " i =", i, 'continuum[j,i] =', continuum)
-                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][0], continuum))
-                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][1], continuum))
+                            continuum = cont_data[:, j, i][0].value
+                        cont_values.append(continuum)
+
+                    if len(self._cont_data) == 1 and len(self.fmhz_ranges) > 1:
+                        # one continuum file for several cubes -> replicate the continuum
+                        cont_values = cont_values * len(self.fmhz_ranges)
+                    for k, cont_val in enumerate(cont_values):
+                        print("j =", j, " i =", i, 'continuum[j,i] =', cont_val, ';', self.fmhz_ranges[k])
+                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][0], cont_val))
+                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][1], cont_val))
 
                     fileout.write(
                         '{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[-1][-1] + 10.0), 0.0))
