@@ -2400,8 +2400,8 @@ class ModelCube(object):
             dats.append(SpectralCube.read(hduls))
 
             # Extract the first and last frequency values of each cube
-            first_value = dats[i].spectral_axis[0]
-            last_value = dats[i].spectral_axis[-1]
+            first_value = min(dats[i].spectral_axis)
+            last_value = max(dats[i].spectral_axis)
 
             start_freq_MHz = round(first_value.to(u.MHz).value, 3)
             end_freq_MHz = round(last_value.to(u.MHz).value, 3)
