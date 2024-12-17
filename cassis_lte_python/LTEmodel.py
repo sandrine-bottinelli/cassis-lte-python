@@ -705,7 +705,8 @@ class ModelSpectrum(object):
         self.do_plots()
 
     def do_savings(self):
-        self.save_line_list_cassis("linelist_cassis", snr_threshold=self.model_config.snr_threshold)
+        if self.model_config.fit_full_range:
+            self.save_line_list_cassis("linelist_cassis", snr_threshold=self.model_config.snr_threshold)
 
         if self.model_fit is not None and self.save_results:
             # filename = ''
