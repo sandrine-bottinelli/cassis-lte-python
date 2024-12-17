@@ -2493,11 +2493,16 @@ class ModelCube(object):
                             continuum = cont_data[:, j, i][0].value
                         cont_values.append(continuum)
 
-                    if len(self._cont_data) == 1 and len(self.fmhz_ranges) > 1:
-                        # one continuum file for several cubes -> replicate the continuum
-                        cont_values = cont_values * len(self.fmhz_ranges)
-                    for k, cont_val in enumerate(cont_values):
-                        print("j =", j, " i =", i, 'continuum[j,i] =', cont_val, ';', self.fmhz_ranges[k])
+                    for k, f_range in enumerate(self.fmhz_ranges):
+                        try:
+                            cont_val = cont_values[k]
+                        except IndexError:
+                            cont_val = cont_values[0]
+                        if len(cont_values) == 1:
+                            if k == 0:
+                                print("j =", j, " i =", i, 'continuum[j,i] =', cont_val)
+                        else:
+                            print("j =", j, " i =", i, 'continuum[j,i] =', cont_val, ';', self.fmhz_ranges[k])
                         fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][0], cont_val))
                         fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][1], cont_val))
 
