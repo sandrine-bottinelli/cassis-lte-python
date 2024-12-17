@@ -2761,7 +2761,7 @@ class ModelCube(object):
         print('yunit = ', self.yunit)
         print('fmhz_ranges = ', self.fmhz_ranges)
         print('pix_list = ', self.pix_list)  # To check the list of pixels
-        if not self.masked_pix_list.all():
+        if self.masked_pix_list is not None and not self.masked_pix_list.all():
             print('mask = ', self.masked_pix_list)
         print('')
         print('tags = ', self.tags)
