@@ -615,7 +615,10 @@ class ModelConfiguration:
         lntr = len(str(lntr))  # max length of number of lines
         lntr_all = max([len(l) for l in line_list_all_by_tag.values()])  # max number of lines w/o thresholds
         lntr_all = len(str(lntr_all))  # max length of number of lines
+        tags_no_tran = []
         for tag, tr_list in self.tr_list_by_tag.items():
+            if len(line_list_all_by_tag[tag]) == 0:
+                tags_no_tran.append(tag)
             thr_info = "within thresholds"
             if self.fit_full_range:
                 thr_info = ""
@@ -627,6 +630,18 @@ class ModelConfiguration:
             if verbose == 2:
                 for it, tr in enumerate(tr_list):
                     print('  {}. {}'.format(it + 1, tr))
+
+        if len(tags_no_tran) > 0:
+            print(f"No transitions found for the following species : {', '.join(tags_no_tran)}"
+                  f" - removing it/them from the analysis.")
+            for tag in tags_no_tran:
+                self.tag_list.remove(tag)
+                for cpt in self.cpt_list:
+                    try:
+                        cpt.tag_list.remove(tag)
+                        cpt.species_list = [sp for sp in cpt.species_list if sp.tag != tag]
+                    except ValueError:  # tag already not in component -> do nothing
+                        pass
 
         for cpt in self.cpt_list:
             # cpt.transition_list = self.line_list_all[self.line_list_all['tag'].isin(cpt.tag_list)]
