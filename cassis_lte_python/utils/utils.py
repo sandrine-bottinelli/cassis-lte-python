@@ -31,15 +31,15 @@ class File:
         self.filepath = filepath
         self._ext = os.path.splitext(filepath)[-1]
         self._raw_header = None
-        self.header = None
+        self.header = {}
         self._xdata_mhz = None
         self._xdata = None
         self._ydata = None
-        self._xunit = None
-        self._yunit = None
-
         self.get_header()
         self.get_data()
+
+        self._xunit = self.header.get('unitx', None)
+        self._yunit = self.header.get('unity', None)
 
         if self.xunit is None:
             # xunit = input(f"X-axis unit not found, please provide it : ")

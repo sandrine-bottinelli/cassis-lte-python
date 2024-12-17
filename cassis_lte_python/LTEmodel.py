@@ -2257,14 +2257,14 @@ class ModelCube(object):
         self.fmhz_ranges = self.read_frequencies()
 
         # Extract the intensity units
-        yunits = self.hdr['BUNIT']
+        yunit = self.hdr['BUNIT']
         IntensityTastar = False
-        if 'K' in yunits:
-             yunits = 'Kelvins'
-        if 'Ta.' in yunits:
+        if 'K' in yunit:
+             yunit = 'Kelvins'
+        if 'Ta.' in yunit:
              IntensityTastar = True
         configuration['t_a*'] = IntensityTastar
-        configuration['yunits'] = yunits
+        configuration['yunit'] = yunit
 
         configuration['continuum_free'] = configuration.get('continuum_free', False)
 
@@ -2481,6 +2481,8 @@ class ModelCube(object):
 
             if len(self._cont_data) != 0:
                 with open(cont_name, 'w') as fileout:
+                    fileout.write('// unitx: MHz\n')
+                    fileout.write(f'// unity: {self.yunit}\n')
                     fileout.write('{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[0][0] - 10.0), 0.0))
                     cont_datas = self._cont_data
                     if len(self._cont_data) == 1 and len(self.fmhz_ranges) > 1:
