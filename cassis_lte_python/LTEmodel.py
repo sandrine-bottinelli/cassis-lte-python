@@ -35,6 +35,7 @@ def generate_lte_model_func(config: dict):
     """
     Function to generate the model function using information provided in config.
     The generated function depends on the frequency in MHz and on a set of lmfit parameters.
+
     :param config: a dictionary containing :
         - the following frequency-dependent functions:
             - tc : continuum values ; no default

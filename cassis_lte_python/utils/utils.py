@@ -358,6 +358,7 @@ def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=NB_DECIMALS, min
 def format_time(t_sec):
     """
     Formats a time in seconds into the appropriate shape depending on its value.
+
     :param t_sec: time in seconds
     :return:
     """
@@ -408,6 +409,7 @@ def nearest_interp(xi: int | float | list | np.ndarray,
                    y: list | np.ndarray | tuple):
     """
     Find y values corresponding to the x value closest to xi.
+
     :param xi: new x values ; must be within x values
     :param x: reference values
     :param y: values to be interpolated ; if want to interpolate several arrays, must be given as a tuple
@@ -433,6 +435,7 @@ def nearest_interp(xi: int | float | list | np.ndarray,
 def find_nearest(arr, value):
     """
     Find the value in "arr" that is closest to "value".
+
     :param arr:
     :param value:
     :return:
@@ -444,6 +447,7 @@ def find_nearest(arr, value):
 def find_nearest_id(arr: np.ndarray | list, value):
     """
     Find the index of the value in "arr" that is closest to "value".
+
     :param arr:
     :param value:
     :return:
@@ -471,6 +475,7 @@ def is_in_range(fmhz, list_ranges):
 def concat_dict(d1: dict, d2: dict) -> dict:
     """
     Concatenate two dictionaries ; if a keyword is present in both, value from d2 is kept.
+
     :param d1: a dictionary
     :param d2: another dictionary whose keywords/values will be added to or will override those in d1
     :return: the concatenated dictionary
@@ -485,6 +490,7 @@ def concat_dict(d1: dict, d2: dict) -> dict:
 def expand_string(s: str) -> list:
     """
     Expand a string of the form '1, 3-5' into a list of integer [1, 3, 4, 5]
+
     :param s:
     :return:
     """
@@ -610,6 +616,7 @@ def compute_weight(intensity, rms, cal):
     """
     Returns the weight as 1./sqrt(rms**2 + cal_uncertainty**2) where cal_uncertainty is the calibration uncertainty
     in percent * the intensity at the given frequency.
+
     :param intensity: intensity
     :param rms: noise for the given intensity, in the same units
     :param cal: calibration uncertainty in percent
@@ -639,6 +646,7 @@ def delta_v_to_delta_f(value, fref_mhz, reverse=False):
 def velocity_to_frequency(value, fref_mhz, vref_kms=0., reverse=False):
     """
     Convert a velocity to a frequency.
+
     :param value: velocity to be converted, in the same unit as vref_kms (generally km/s)
     :param fref_mhz:
     :param vref_kms:
@@ -685,6 +693,7 @@ def search_telescope_file(tel):
 def read_telescope_file(telescope_file, fmin_mhz=None, fmax_mhz=None):
     """
     Read telescope file into dataframe
+
     :param telescope_file: CASSIS telescope file
     :param fmin_mhz: the lowest frequency to retrieve
     :param fmax_mhz: the highest frequency to retrieve
@@ -748,6 +757,7 @@ def get_telescope(fmhz, tuning_info: pd.DataFrame):
 def get_tmb2ta_factor(freq_mhz: float | int, tel_data: pd.DataFrame) -> float:
     """
     Retrieves the beam efficiency to convert from main-beam temperature to antenna temperature
+
     :param freq_mhz: frequency in MHz ; float
     :param tel_data: telescope dataframe containing "tuning" information
     :return:
@@ -775,6 +785,7 @@ def beam_function(tel_data: pd.DataFrame):
 def get_beam(freq_mhz: float | int, tel_data: pd.DataFrame):
     """
     Determine the beam at a given frequency
+
     :param freq_mhz:
     :param tel_data:
     :return:
@@ -790,6 +801,7 @@ def get_beam(freq_mhz: float | int, tel_data: pd.DataFrame):
 def get_beam_size(freq_mhz: float | int | np.ndarray, tel_diam: float):
     """
     Computes the beam size at the given frequency for the given telescope diameter
+
     :param freq_mhz: frequency in MHz ; float or numpy array
     :param tel_diam: telescope diameter in meters
     :return: the beam size in arcsec
@@ -803,6 +815,7 @@ def dilution_factors(source_size: float | int,
                      geometry: Literal['gaussian', 'disc'] = 'gaussian') -> float | np.ndarray:
     """
     Compute the dilution factors for a given source size and a list or array of beam sizes.
+
     :param source_size:
     :param beam:
     :param geometry:
@@ -818,6 +831,7 @@ def dilution_factor(source_size: float | int, beam: int | float | tuple,
                     geometry: Literal['gaussian', 'disc'] = 'gaussian') -> float:
     """
     Compute the dilution factor for the given source and beam sizes, depending on the geometry
+
     :param source_size: in arcsec
     :param beam: in arcsec
     :param geometry: gaussian (default) or disc
@@ -873,6 +887,7 @@ def compute_jypb2k(freq_mhz: float | int | list | np.ndarray,
 def get_cubes(file_list, check_spatial_shape=None):
     """
     Retrieve data as SpectralCube objects. Checks whether the cubes in file_list have the same spatial shape.
+
     :param self:
     :param file_list: the list of files (absolute paths)
     :param check_spatial_shape: a two-element tuple representing the spatial shape of some other cube.
@@ -904,6 +919,7 @@ def reduce_wcs_dim(wcs):
 def read_crtf(file, use_region=None):
     """
     Read a CRTF region file.
+
     :param file: a CRTF file
     :param region_number: if more than one region in the file, specify which region to use (starting at 0)
     :return: the region
@@ -951,6 +967,7 @@ def get_mask(wcs: WCS, file, exclude=False):
 def get_valid_pixels(wcs: WCS, file, file2=None, masked=False, snr=5., mask_operation='or'):
     """
     Obtain a list of valid or of masked pixels
+
     :param wcs: the WCS of the data (RA, Dec only)
     :param file: can be :
         an image of signal-to-noise ratios : valid pixels are pixel with signal-to-noise ratio greater than snr
@@ -1003,8 +1020,10 @@ def pixels_snake_loop(xref, yref, xmax, ymax, xmin=0, ymin=0):
     Compute the list of pixels that scans the array in the following way :
      - start on (xref, yref) then go right, up, left, up, right... -> computes top half of the map
      - go back to (xref, yref) then go left, down, right, down, left... -> compute bottom half of the map
+
      NB : the starting position is included twice, at the beginning and when changing direction (up/down)
      for easier detection of this change in direction.
+
     :param xref: starting x-position
     :param yref: starting y-position
     :param xmax: the upper limit in x-direction (included)
