@@ -38,8 +38,8 @@ class File:
         self.get_header()
         self.get_data()
 
-        self._xunit = self.header.get('unitx', None)
-        self._yunit = self.header.get('unity', None)
+        self._xunit = self.header.get('xUnit', None)
+        self._yunit = self.header.get('yUnit', None)
 
         if self.xunit is None:
             # xunit = input(f"X-axis unit not found, please provide it : ")
@@ -301,6 +301,21 @@ class DataFile(File):
 def open_continuum_file(filepath):
     data = File(filepath)
     return data.xdata_mhz, data.ydata
+
+
+def write_continuum_file(filepath, cont_data, xunit='MHz', yunit='K'):
+    with open(filepath, 'w') as fileout:
+        fileout.write(f'// xUnit: {xunit}\n')
+        fileout.write(f'// yUnit: {yunit}\n')
+        row = cont_data.iloc[0]
+        fileout.write('{:.4f}\t{:.4f}\n'.format(round(row['fmhz_range'][0] - 10.0), row['continuum']))
+
+        for i, row in cont_data.iterrows():
+            fileout.write('{:.4f}\t{:.4f}\n'.format(row['fmhz_range'][0], row['continuum']))
+            fileout.write('{:.4f}\t{:.4f}\n'.format(row['fmhz_range'][1], row['continuum']))
+
+        row = cont_data.iloc[-1]
+        fileout.write('{:.4f}\t{:.4f}\n'.format(round(row['fmhz_range'][1] + 10.0), row['continuum']))
 
 
 def open_data_file(filepath, continuum=False):

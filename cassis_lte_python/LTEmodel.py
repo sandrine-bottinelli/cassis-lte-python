@@ -784,6 +784,8 @@ class ModelSpectrum(object):
             if len(ext) == 0:
                 ext = 'txt'
             self.save_spectrum(filename, ext=ext, spectrum_type='observed')
+            if self.model_config.yunit in UNITS['flux']:
+                self.save_spectrum(filename + '_K', ext=ext, spectrum_type='observed', yunit='K')
 
         if (self.modeling or self.minimize) and self.save_configs:
             # must be last to make sure we have appropriate data file in memory
@@ -1749,9 +1751,11 @@ class ModelSpectrum(object):
     def save_spectrum(self, filename, dirname=None, ext='txt',
                       spec: None | tuple = None,
                       spectrum_type: Literal['observed', 'continuum', 'synthetic', ''] = '',
-                      vlsr: None | float | int = None):
+                      vlsr: None | float | int = None,
+                      yunit: None | str = None):
         """
         Write a spectrum (continuum, data or model, depending on the provided parameters) on a file.
+
         :param filename:
         :param dirname:
         :param ext:
@@ -1759,6 +1763,7 @@ class ModelSpectrum(object):
                      if not provided and continuum is false, stored model is written
         :param spectrum_type: 'continuum', 'observed', 'synthetic' or empty string '' (default)
         :param vlsr:
+        :param yunit:
         :return: the path to the file
         """
         spec_types = ['', 'observed', 'continuum', 'synthetic']
@@ -1783,6 +1788,10 @@ class ModelSpectrum(object):
             #     self.data_file = file_path
             #     x_values, y_values = self.x_file, self.y_file
             x_values, y_values = self.x_file, self.y_file
+            if yunit is None:
+                yunit = self.model_config.yunit
+            if self.model_config.yunit in UNITS['flux'] and yunit == 'K':
+                y_values = self.y_file * self.model_config.jypb(self.x_file)
 
         elif spectrum_type == 'synthetic':
             x_values, y_values = self.x_mod, self.y_mod
@@ -1830,7 +1839,7 @@ class ModelSpectrum(object):
         if ext == 'txt':
             with open(file_path, 'w') as f:
                 if spectrum_type != 'continuum':
-                    header = ['#title: Spectral profile\n',
+                    header = ['#title: ' + os.path.splitext(os.path.basename(file_path))[0] + '\n',
                               '#date: {}\n'.format(datetime.datetime.now().strftime("%c")),
                               '#database :{}\n'.format(SQLITE_FILE),
                               # '#coordinate: world\n'
@@ -1844,7 +1853,7 @@ class ModelSpectrum(object):
 
                     header.append(f'#vlsr [km/s]: {self.model_config.vlsr_file}\n')
                     header.extend(['#xLabel: frequency [MHz]\n',
-                                   f'#yLabel: [{self.model_config.yunit}] Mean\n'])
+                                   f'#yLabel: [{yunit}] Mean\n'])
                     if spectrum_type == 'synthetic':
                         header.extend(['#Columns : frequency, intensity (total), intensity of each component\n'])
                     else:
@@ -2076,14 +2085,20 @@ class ModelSpectrum(object):
             lte_radex = {'lteRadexSelected': 'true', **lte_radex, 'overSampling': self.oversampling}
 
         # Define continuum
-        if isinstance(self.model_config.cont_info, (float, int)):
+        if isinstance(self.model_config.cont_info, (float, int)) or self.model_config.cont_free:
             cont_type = 'CONSTANT'
-            cont_size = f'{self.model_config.cont_info}'
+            if self.model_config.cont_free:
+                cont_size = 0.0
+            else:
+                cont_size = f'{self.model_config.cont_info}'
             cont = 'Continuum 0 [K]'  # default
         else:  # it is a file
             cont_type = 'FILE'
             cont_size = '0.0'  # default
             cont = os.path.abspath(self.model_config.cont_info)
+            if self.model_config.yunit in UNITS['flux']:
+                base, ext = os.path.splitext(self.model_config.cont_info)
+                cont = os.path.abspath(base + '_K' + ext)
 
         components = {
             '# Component parameters 1': {
@@ -2091,7 +2106,8 @@ class ModelSpectrum(object):
                 'Comp1Enabled': 'true',
                 'Comp1Interacting': 'false',
                 'Comp1ContinuumSelected': cont_type,
-                'Comp1ContinuumYUnit': self.model_config.yunit,
+                # 'Comp1ContinuumYUnit': self.model_config.yunit,
+                'Comp1ContinuumYUnit': 'K',  # TODO: check whether to keep original unit in .ltm
                 'Comp1Continuum': cont,
                 'Comp1ContinuumSize': cont_size
             }
@@ -2481,35 +2497,38 @@ class ModelCube(object):
             cont_name = self.output_dir + "continuum_{}_{}".format(i, j) + ".txt"
 
             if len(self._cont_data) != 0:
-                with open(cont_name, 'w') as fileout:
-                    fileout.write('// unitx: MHz\n')
-                    fileout.write(f'// unity: {self.yunit}\n')
-                    fileout.write('{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[0][0] - 10.0), 0.0))
-                    cont_values = []
-                    for k, cont_data in enumerate(self._cont_data):
-                        try:
-                            continuum = cont_data[0, 0, j, i].array
-                        except IndexError:
-                            continuum = cont_data[:, j, i][0].value
-                        cont_values.append(continuum)
+                cont_values = []
+                for k, cont_data in enumerate(self._cont_data):
+                    try:
+                        continuum = cont_data[0, 0, j, i].array
+                    except IndexError:
+                        continuum = cont_data[:, j, i][0].value
+                    cont_values.append(continuum)
+                if len(self.fmhz_ranges) > 1 and len(self._cont_data):
+                    # only one continuum value for all frequency ranges -> replicate
+                    cont_values *= len(self.fmhz_ranges)
+                cont_df = pd.DataFrame({
+                    'fmhz_range': self.fmhz_ranges,
+                    'continuum': cont_values
+                })
+                # print to terminal
+                if len(cont_df['continuum'].unique()) == 1:
+                    print("j =", j, " i =", i, 'continuum[j,i] =', cont_df['continuum'].unique()[0], self.yunit)
+                else:
+                    for i, row in cont_df.iterrows():
+                        print("j =", j, " i =", i, 'continuum[j,i] =', row['continuum'], self.yunit, ';',
+                              row['fmhz_range'])
 
-                    for k, f_range in enumerate(self.fmhz_ranges):
-                        try:
-                            cont_val = cont_values[k]
-                        except IndexError:
-                            cont_val = cont_values[0]
-                        if len(cont_values) == 1:
-                            if k == 0:
-                                print("j =", j, " i =", i, 'continuum[j,i] =', cont_val)
-                        else:
-                            print("j =", j, " i =", i, 'continuum[j,i] =', cont_val, ';', self.fmhz_ranges[k])
-                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][0], cont_val))
-                        fileout.write('{:.4f}\t{:.4f}\n'.format(self.fmhz_ranges[k][1], cont_val))
-
-                    fileout.write(
-                        '{:.4f}\t{:.4f}\n'.format(round(self.fmhz_ranges[-1][-1] + 10.0), 0.0))
-
+                # save to file
+                utils.write_continuum_file(cont_name, cont_df, yunit=self.yunit)
                 tc = cont_name
+                if self.yunit in UNITS['flux']:
+                    base, ext = os.path.splitext(cont_name)
+                    cont_name = base + '_K' + ext
+                    mid_freq = [np.array(freq_range).mean() for freq_range in cont_df['fmhz_range']]
+                    cont_df['continuum'] = cont_df['continuum'] * self._model_configuration.jypb(mid_freq)
+                    utils.write_continuum_file(cont_name, cont_df, yunit='K')
+                    # tc = cont_name
             else:
                 tc = 0.0
 
