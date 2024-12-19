@@ -396,14 +396,16 @@ class ModelSpectrum(object):
             # update tag list and species list
             new_sp_list = []
             for tag in new_tags:
-                if tag in cpt.tag_list:
+                if tag in cpt.tag_list:  # species already in tag list, keep it
                     new_sp_list.append(list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0])
                 else:
-                    if self.model_config.ref_pixel_info is not None:
+                    if (self.model_config.ref_pixel_info is not None
+                            and tag in self.model_config.ref_pixel_info[cpt.name]):
+                        # we have info on a reference pixel and the species is in the original component, take it
                         new_sp_list.append(self.model_config.ref_pixel_info[cpt.name][tag])
 
             cpt.species_list = new_sp_list
-            cpt.tag_list = new_tags
+            cpt.tag_list = [sp.tag for sp in new_sp_list]
 
         self.model_config.tag_list = new_tags
 
