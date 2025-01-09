@@ -60,6 +60,9 @@ class ModelConfiguration:
         self._cont_info = configuration.get('tc', 0.)
         self._tc = None
         self.cont_free = configuration.get('continuum_free', False)
+        self.bl_corr = configuration.get('baseline_corr', False)
+        if self.bl_corr and not self.cont_free:
+            raise ValueError("'baseline_corr' can only be True if 'continuum_free' is also True.")
         self._telescope_data = {}
         self.t_a_star = configuration.get('t_a*', False)
         self.tmb2ta = None
@@ -1240,7 +1243,7 @@ class ModelConfiguration:
                         x_win, y_win = utils.select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
                         if len(x_win) <= 5 or len(set(y_win)) == 1:
                             continue
-                    win = Window(tr, len(win_list_tag) + 1)
+                    win = Window(tr, len(win_list_tag) + 1, bl_corr=self.bl_corr)
                     win.x_file, win.y_file = x_win, y_win
                     win_list_tag.append(win)
                     fwhm_mhz = utils.delta_v_to_delta_f(self.fwhm_max, tr.f_trans_mhz)
@@ -1577,7 +1580,7 @@ class Component:
 
 class Window:
     def __init__(self, transition=None, plot_nb=0, name="", v_range_fit=None, f_range_fit=None, rms=None, cal=None,
-                 x_mod=None):
+                 x_mod=None, bl_corr=False):
         self.transition = transition
         self.plot_nb = plot_nb
         self._name = name
@@ -1614,6 +1617,7 @@ class Window:
         self.tag_colors = {}
         self._y_min = np.inf
         self._y_max = -np.inf
+        self._bl_corr = bl_corr
 
     def __repr__(self):
         """Return printable representation of a Window object."""
@@ -1700,6 +1704,8 @@ class Window:
 
     @y_fit.setter
     def y_fit(self, value):
+        if self._bl_corr and min(value) < 0:
+            value -= min(value)
         self._y_fit = value
         if len(self._y_fit) > 3:
             self._in_fit = True
@@ -1753,6 +1759,8 @@ class Window:
 
     @y_file.setter
     def y_file(self, value):
+        if self._bl_corr and min(value) < 0:
+            value -= min(value)
         self._y_file = value
         self.y_min = min([self._y_min, min(self._y_file)])
         self.y_max = max([self._y_max, max(self._y_file)])

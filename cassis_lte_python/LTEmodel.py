@@ -455,7 +455,11 @@ class ModelSpectrum(object):
 
     def get_rms_cal(self, fmhz):
         row = get_df_row_from_freq_range(self._rms_cal, fmhz)
-        return row['rms'].values[0], row['cal'].values[0]
+        try:
+            return row['rms'].values[0], row['cal'].values[0]
+        except IndexError:
+            raise IndexError(f"rms/cal not found at {fmhz} MHz "
+                             f"(min/max are {min(self._rms_cal.fmin), max(self._rms_cal.fmax)}).")
 
     def get_rms(self, fmhz):
         if type(fmhz) == float:
@@ -554,7 +558,12 @@ class ModelSpectrum(object):
                             except KeyError:  # key does not exist, do nothing
                                 pass
                 else:
-                    params[key].set(expr=val)
+                    try:
+                        params[key].set(expr=val)
+                    except KeyError:
+                        print(f'Constraints: {key.split('_')[-1]} is not in the tag list '
+                              f'or has been removed due to lack of transitions.')
+                        pass
 
         # reset bounds if a parameters contains an expression to make sure it does not interfere
         for par in params:
@@ -792,9 +801,10 @@ class ModelSpectrum(object):
         if (self.modeling or self.minimize) and self.save_configs:
             # must be last to make sure we have appropriate data file in memory
             if 'lam' in self.model_config.output_files:
-                # save both ltm and lam
+                # save both lam and ltm if no baseline correction (local correction)
                 self.write_lam(self.model_config.output_files['lam'])
-                self.write_ltm(self.model_config.output_files['lam'])
+                if not self.model_config.bl_corr:
+                    self.write_ltm(self.model_config.output_files['lam'])
 
             if 'config' in self.model_config.output_files:
                 self.save_config(self.model_config.output_files['config'])
@@ -881,12 +891,14 @@ class ModelSpectrum(object):
                                         min=np.log10(params[par].min),
                                         max=np.log10(params[par].max))
 
-        if len(self.win_list_fit) > 1:
-            wt = np.concatenate([utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
-                                 for win in self.win_list_fit], axis=None)
-        else:
-            win = self.win_list_fit[0]
-            wt = utils.compute_weight(win.y_fit - self.get_tc(win.x_fit), win.rms, win.cal)
+        wt = []
+        for win in self.win_list_fit:
+            if self.model_config.cont_free:
+                tc = 0.
+            else:
+                tc = self.get_tc(win.x_fit)
+            wt.extend(utils.compute_weight(win.y_fit - tc, win.rms, win.cal))
+        wt = np.array(wt)
 
         # wt = None
         method = fit_kws.get('method', 'leastsq')
@@ -1789,11 +1801,15 @@ class ModelSpectrum(object):
             # if self.data_file is None and self.x_file is not None:  # TODO: check whether this case is useful
             #     self.data_file = file_path
             #     x_values, y_values = self.x_file, self.y_file
-            x_values, y_values = self.x_file, self.y_file
+            if self.model_config.bl_corr:
+                x_values = np.concatenate([w.x_file for w in self.model_config.win_list_fit], axis=None)
+                y_values = np.concatenate([w.y_file for w in self.model_config.win_list_fit], axis=None)
+            else:
+                x_values, y_values = self.x_file, self.y_file
             if yunit is None:
                 yunit = self.model_config.yunit
             if self.model_config.yunit in UNITS['flux'] and yunit == 'K':
-                y_values = self.y_file * self.model_config.jypb(self.x_file)
+                y_values = y_values * self.model_config.jypb(x_values)
 
         elif spectrum_type == 'synthetic':
             x_values, y_values = self.x_mod, self.y_mod
