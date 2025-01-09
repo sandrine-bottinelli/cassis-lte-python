@@ -1935,23 +1935,50 @@ class ModelSpectrum(object):
 
             # Compute the intensity at the *observed* frequency corresponding to the transition's frequency
             x_vals = utils.velocity_to_frequency(cpt.vlsr, line_list.fMHz.values, vref_kms=self.model_config.vlsr_file)
+            line_list['x_obs'] = x_vals
 
+            rms = []
+            for i, row in line_list.iterrows():
+                fmhz = row['x_obs']
+                tran = row['transition']
+                if fmhz < min(self.model_config.tuning_info.fmhz_min):
+                    print(f"INFO save_line_list_cassis component {cpt.name} - {fmhz} "
+                          f"is below the minimum telescope range ({min(self.model_config.tuning_info.fmhz_min)}) ; ")
+                    rms_val = np.nan
+                elif fmhz > max(self.model_config.tuning_info.fmhz_max):
+                    print(f"INFO save_line_list_cassis component {cpt.name} - {fmhz} "
+                          f"is above the maximum telescope range ({max(self.model_config.tuning_info.fmhz_max)}) ; ")
+                    rms_val = np.nan
+                else:
+                    try:
+                        rms_val = self.get_rms_cal(fmhz)[0]
+                    except IndexError:
+                        print(f"INFO save_line_list_cassis component {cpt.name} - No rms info found for {fmhz} MHz ; ")
+                        rms_val = np.nan
+                if np.isnan(rms_val):
+                    print(f"-> ignoring the corresponding transition : {' ; '.join(tran.__str__().split(' ; ')[:3])}.")
+
+                rms.append(rms_val)
+
+            if np.isnan(np.array(rms)).any():
+                print(" ")
+            line_list['rms'] = rms
+            line_list = line_list.dropna()
+            x_vals = line_list.x_obs
             int0 = self.compute_model_intensities(params=self.params, x_values=x_vals,
                                                   line_list=self.line_list_all, cpt=cpt,
                                                   line_center_only=True)
-            rms = np.array([self.get_rms_cal(fmhz)[0] for fmhz in x_vals])
+            line_list['int0'] = int0
             cont = np.array([self.get_tc(fmhz) for fmhz in x_vals])
-            snr = (int0 - cont) / rms
+            snr = (int0 - cont) / line_list.rms
+            line_list['snr'] = snr
+            line_list['selected'] = np.full(len(x_vals), True)
+
             if snr_threshold is not None:
-                selected = np.full(len(line_list), False)
-                selected[snr >= snr_threshold] = True
-                selected[snr < 0] = True
-            else:
-                selected = np.full(len(line_list), True)
+                line_list.loc[line_list.snr < snr_threshold, 'selected'] = False
+                line_list.loc[0 < line_list.snr, 'selected'] = True  # keep lines with negative snr
 
-            line_list['selected'] = selected
             line_list = line_list[line_list.selected == True]
-
             line_list.sort_values(['tag', 'fMHz'], ascending=[True, True])
 
             with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
