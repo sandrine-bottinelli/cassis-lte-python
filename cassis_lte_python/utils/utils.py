@@ -39,8 +39,8 @@ class File:
         self.get_header()
         self.get_data()
 
-        self._xunit = self.header.get('xUnit', None)
-        self._yunit = self.header.get('yUnit', None)
+        # self._xunit = self.header.get('xUnit', None)
+        # self._yunit = self.header.get('yUnit', None)
 
         if self.xunit is None:
             # xunit = input(f"X-axis unit not found, please provide it : ")
@@ -142,8 +142,8 @@ class File:
 
     def write(self, fileout, sep='\t'):
         if self._ext == '.txt':
-            hdr = [f'{key}: {val}\n' for key, val in self.header]
-            np.savetxt(fileout, sep=sep, header=hdr)
+            hdr = ''.join([f'{key}: {val}\n' for key, val in self.header])
+            np.savetxt(fileout, np.array([self.xdata, self.ydata]).T, delimiter=sep, header=hdr)
         elif self._ext == '.fits':
             tab_hdu_out = fits.BinTableHDU.from_columns(
                 [fits.Column(name='wave', format='D', array=self.xdata, unit=self.xunit),
