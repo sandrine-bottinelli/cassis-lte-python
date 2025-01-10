@@ -338,6 +338,15 @@ class ModelConfiguration:
         if self.vlsr_plot == 0. and 'components' in configuration:
             self.vlsr_plot = self.cpt_list[0].vlsr
 
+        if self.vlsr_file == 0 and self.line_shift_kms == 0:
+            print("Your data seem to be in sky frequency : "
+                  "you should provide the 'line_shift_kms' to ensure adequate search of transitions.")
+            shift = max([cpt.vlsr for cpt in self.cpt_list])
+            ans = input(f"Do you want to use the largest Vlsr found in the components' starting values "
+                        f"({shift})? [Y/n] : ")
+            if ans.strip() in ['y', 'Y', '']:
+                self.line_shift_kms = shift
+
         if 'tc' in self._configuration_dict:
             self.get_continuum()
 
@@ -559,64 +568,56 @@ class ModelConfiguration:
         If computing a model only or fitting by velocity, apply thresholds.
         """
 
-        # if len(self.x_file) > 0:
-        #     x_vals = self.x_file
-        # else:
-        #     x_vals = self.x_mod
-
-        # self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=[[min(x_vals), max(x_vals)]])
-        self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=self.franges_mhz,
-                                               shift_kms=self.line_shift_kms)
-        print(f"INFO - {len(self.line_list_all)} transitions found (no thresholds).")
-        line_list_all_by_tag = {tag: list(self.line_list_all[self.line_list_all.tag == tag].transition)
+        # Search for all transition between min/max of data or model
+        if self.fit_full_range:
+            line_list_all = get_transition_df(self.tag_list,
+                                              # fmhz_ranges=[[self.fmin_mhz, self.fmax_mhz]],
+                                              fmhz_ranges=self.franges_mhz,
+                                              shift_kms=self.line_shift_kms)
+        else:
+            line_list_all = get_transition_df(self.tag_list,
+                                              fmhz_ranges=[[self.fmin_mhz, self.fmax_mhz]],
+                                              # fmhz_ranges=self.franges_mhz,
+                                              shift_kms=self.line_shift_kms)
+            print(f"INFO - {len(line_list_all)} transitions found (no thresholds) "
+                  f"within {'data' if len(self.x_file) > 0 else 'model'}'s min/max.")
+        line_list_all_by_tag = {tag: list(line_list_all[line_list_all.tag == tag].transition)
                                 for tag in self.tag_list}
 
         if self.f_err_mhz_max is not None:
-            self.line_list_all = self.line_list_all[self.line_list_all.f_err_mhz <= self.f_err_mhz_max]
-            print(f"INFO - {len(self.line_list_all)} transitions found with f_err_mhz <= {self.f_err_mhz_max}.")
+            line_list_all = line_list_all[line_list_all.f_err_mhz <= self.f_err_mhz_max]
+            print(f"INFO - {len(line_list_all)} transitions found with f_err_mhz <= {self.f_err_mhz_max}.")
 
+        self.line_list_all = select_transitions(line_list_all, xrange=self.franges_mhz)
+        print(f"INFO - {len(self.line_list_all)} transitions found (no thresholds) "
+              f"within tuning frequencies : {self.tuning_info['fmhz_range'].tolist()}.")
         self.tr_list_by_tag = {tag: list(self.line_list_all[self.line_list_all.tag == tag].transition)
                                for tag in self.tag_list}
 
-        if self.fit_full_range:
-            print("INFO - Fitting an entire spectrum except a few frequency ranges : no thresholds applied,")
-            print("       except the maximum error on the line frequency if provided (f_err_mhz_max).")
+        # get linelist w/i thresholds and tuning frequencies
+        tr_list_tresh = select_transitions(line_list_all, thresholds=self.thresholds)
+        if len(self.tuning_info) > 1:
+            # more than one telescope range => search only in data within telescope ranges
+            # NB : this assumes that if only one range, it encompasses the data's min/max
+            tr_list_tresh = select_transitions(tr_list_tresh, xrange=self.franges_mhz)
+            print(f"INFO - {len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
+                  f"{self.tuning_info['fmhz_range'].tolist()}")
 
-        else:  # get linelist w/i thresholds
-            tr_list_tresh = get_transition_df(self.tag_list, self.franges_mhz, **self.thresholds)
-            if self.sort == 'frequency':
-                tr_list_tresh.sort_values('fMHz', inplace=True)
-            else:
-                tr_list_tresh.sort_values(self.sort, inplace=True)
-            # for comparison with CASSIS look for number of transitions w/i min/max of data :
-            if len(self.x_file) > 0:
-                print(f"{len(tr_list_tresh)} transitions within thresholds ",
-                      f"and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
-            # else:
-            #     self.line_list_all = tr_list_tresh
+        if self.sort == 'frequency':
+            tr_list_tresh.sort_values('fMHz', inplace=True)
+        else:
+            tr_list_tresh.sort_values(self.sort, inplace=True)
+        # for comparison with CASSIS look for number of transitions w/i min/max of data :
+        # if len(self.x_file) > 0:
+        #     print(f"{len(tr_list_tresh)} transitions within thresholds",
+        #           f"and within data's min/max : [{min(self.x_file)}, {max(self.x_file)}].")
+        # else:
+        #     self.line_list_all = tr_list_tresh
 
-            if len(self.tuning_info) > 1:
-                # more than one telescope range => search only in data within telescope ranges
-                # NB : this assumes that if only one range, it encompasses the data's min/max
-                # f_range_search = []
-                # for f_range in self.tuning_info['fmhz_range']:
-                #     x_sub = x_vals[(x_vals >= min(f_range)) & (x_vals <= max(f_range))]
-                #     f_range_search.append([min(x_sub), max(x_sub)])
-                f_range_search = self.franges_mhz  # telescope range - fit_except_range if applies
-                tr_list_tresh = select_transitions(tr_list_tresh, xrange=f_range_search)
-                print(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
-                      f"{self.tuning_info['fmhz_range'].tolist()}")
-                if self.sort == 'frequency':
-                    tr_list_tresh.sort_values('fMHz', inplace=True)
-                else:
-                    tr_list_tresh.sort_values(self.sort, inplace=True)
-                # self.line_list_all = tr_list_tresh
-
-            # tr_list_tresh = get_transition_df(self.tag_list, self.tuning_info['fmhz_range'], **self.thresholds)
-            self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition)
-                                   for tag in self.tag_list}
-            if all([len(t_list) == 0 for t_list in self.tr_list_by_tag.values()]):
-                raise LookupError("No transition found within the thresholds.")
+        self.tr_list_by_tag = {tag: list(tr_list_tresh[tr_list_tresh.tag == tag].transition)
+                               for tag in self.tag_list}
+        if all([len(t_list) == 0 for t_list in self.tr_list_by_tag.values()]):
+            raise LookupError("No transition found within the thresholds.")
 
         ltag = max([len(t) for t in self.tag_list])  # max length for tags
         lntr = max([len(l) for l in self.tr_list_by_tag.values()])  # max number of lines w/i thresholds
@@ -625,7 +626,7 @@ class ModelConfiguration:
         lntr_all = len(str(lntr_all))  # max length of number of lines
         tags_no_tran = []
         for tag, tr_list in self.tr_list_by_tag.items():
-            if len(line_list_all_by_tag[tag]) == 0:
+            if len(tr_list) == 0:
                 tags_no_tran.append(tag)
             thr_info = "within thresholds"
             if self.fit_full_range:
@@ -634,14 +635,14 @@ class ModelConfiguration:
                     thr_info = f"with f_err_mhz <= {self.f_err_mhz_max}"
             if verbose or verbose == 2:
                 print(f'{tag:>{ltag}s} : {len(tr_list):{lntr}d}'
-                      f'/{len(line_list_all_by_tag[tag]):{lntr_all}d} transitions found {thr_info}')
+                      f' /{len(line_list_all_by_tag[tag]):{lntr_all}d} transitions found {thr_info}')
             if verbose == 2:
                 for it, tr in enumerate(tr_list):
                     print('  {}. {}'.format(it + 1, tr))
 
         if len(tags_no_tran) > 0:
-            print(f"No transitions found for the following species : {', '.join(tags_no_tran)}"
-                  f" - removing it/them from the analysis.")
+            print(f"WARNING - No transitions found for the following species : {', '.join(tags_no_tran)}"
+                  f" ; removing it/them from the analysis.")
             for tag in tags_no_tran:
                 self.tag_list.remove(tag)
                 for cpt in self.cpt_list:
@@ -650,10 +651,28 @@ class ModelConfiguration:
                         cpt.species_list = [sp for sp in cpt.species_list if sp.tag != tag]
                     except ValueError:  # tag already not in component -> do nothing
                         pass
+            cpt_no_sp = [cpt.name for _, cpt in enumerate(self.cpt_list) if len(cpt.tag_list) == 0]
+            if len(cpt_no_sp) > 0:
+                if len(cpt_no_sp) == 1:
+                    message = (f"Component {cpt_no_sp[0]} does not have any species,"
+                               f"please check your thresholds.")
+                else:
+                    message = (f"Components {', '.join(cpt_no_sp)} do not have any species, "
+                               f"please check your thresholds.")
+                raise LookupError(message)
 
-        for cpt in self.cpt_list:
-            # cpt.transition_list = self.line_list_all[self.line_list_all['tag'].isin(cpt.tag_list)]
-            cpt.transition_list = {key: val for key, val in self.tr_list_by_tag.items() if key in cpt.tag_list}
+            # recompute the linelist
+            self.line_list_all = get_transition_df(
+                self.tag_list, fmhz_ranges=self.franges_mhz,
+                shift_kms=self.line_shift_kms
+            )
+            tmp_list = select_transitions(self.line_list_all, thresholds=self.thresholds)
+            self.tr_list_by_tag = {tag: list(tmp_list[tmp_list.tag == tag].transition)
+                                   for tag in self.tag_list}
+
+        # for cpt in self.cpt_list:  # currently not used
+        #     # cpt.transition_list = self.line_list_all[self.line_list_all['tag'].isin(cpt.tag_list)]
+        #     cpt.transition_list = {key: val for key, val in self.tr_list_by_tag.items() if key in cpt.tag_list}
 
     def get_v_range_info(self):
         # extract v_range info
@@ -1254,7 +1273,7 @@ class ModelConfiguration:
                     win_list_limits.append([min(f_range_plot) - 0.5 * fwhm_mhz, max(f_range_plot + 0.5 * fwhm_mhz)])
 
                 nt = len(win_list_tag)
-                if verbose or verbose == 2:
+                if (verbose or verbose == 2) and nt != len(tr_list):
                     print('{} : {}/{} transitions found with enough data within thresholds'.format(tag, nt,
                                                                                                    len(tr_list)))
                 if verbose == 2:
@@ -1264,7 +1283,10 @@ class ModelConfiguration:
                 self.win_list.extend(win_list_tag)
 
             # Find transitions in win_list:
-            self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=win_list_limits)
+            self.line_list_all = get_transition_df(self.tag_list, fmhz_ranges=win_list_limits,
+                                                   shift_kms=self.line_shift_kms)
+            if self.f_err_mhz_max is not None:
+                self.line_list_all = self.line_list_all[self.line_list_all.f_err_mhz <= self.f_err_mhz_max]
             self.line_list_all = self.line_list_all.drop_duplicates(subset='db_id', keep='first')
 
         if self.sort == 'frequency':
