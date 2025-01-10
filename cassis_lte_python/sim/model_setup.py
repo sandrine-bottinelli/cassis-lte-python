@@ -1365,25 +1365,26 @@ class ModelConfiguration:
 
     @y_file.setter
     def y_file(self, value):
-        self._y_file = value
-        if self.x_obs is not None and not np.array_equal(self.x_obs, self.x_file):
-            self._y_file = value[self.x_obs.argsort()]
-        # update windows :
-        if self.ref_pixel_info is not None:
-            win_list = self.ref_pixel_info['windows']
-        else:
-            win_list = self.win_list
-        new_win_list = []
-        if len(win_list) > 0 and self.x_file is not None:
-            for win in win_list:
-                x_win, y_win = utils.select_from_ranges(self.x_file, [min(win.x_file), max(win.x_file)],
-                                                        y_values=self._y_file)
-                if len(x_win) <= 5 or len(set(y_win)) == 1:
-                    continue
-                win.y_file = y_win
-                new_win_list.append(win)
-            self.win_list = new_win_list
-            self.get_data_to_fit()
+        if len(value) > 0:
+            self._y_file = value
+            if self.x_obs is not None and not np.array_equal(self.x_obs, self.x_file):
+                self._y_file = value[self.x_obs.argsort()]
+            # update windows :
+            if self.ref_pixel_info is not None:
+                win_list = self.ref_pixel_info['windows']
+            else:
+                win_list = self.win_list
+            new_win_list = []
+            if len(win_list) > 0 and self.x_file is not None:
+                for win in win_list:
+                    x_win, y_win = utils.select_from_ranges(self.x_file, [min(win.x_file), max(win.x_file)],
+                                                            y_values=self._y_file)
+                    if len(x_win) <= 5 or len(set(y_win)) == 1:
+                        continue
+                    win.y_file = y_win
+                    new_win_list.append(win)
+                self.win_list = new_win_list
+                self.get_data_to_fit()
 
     @property
     def tc(self):
