@@ -119,9 +119,6 @@ class ModelConfiguration:
             else:
                 print("Data selection performed with 'tuning_info' or 'franges_ghz', whichever is provided.")
 
-        self.fmin_mhz = None #fmin_ghz * 1.e3
-        self.fmax_mhz = None #fmax_ghz * 1.e3
-
         self.franges_mhz = []
         if 'tuning_info' in configuration:  # mandatory if model or fit
             self._tuning_info_user = configuration.get('tuning_info')
@@ -141,6 +138,9 @@ class ModelConfiguration:
                 print("INFO - 'franges_ghz' supersedes the ranges in 'tuning_info' for model computation")
                 print("       make sure the ranges in tuning_info are wider than those in 'franges_ghz'")
             self.franges_mhz = [[min(r) * 1000, max(r) * 1000] for r in franges_ghz]
+
+        self.fmin_mhz = min(self.franges_mhz[0])
+        self.fmax_mhz = max(self.franges_mhz[-1])
 
         self.mask = []
 
@@ -355,22 +355,24 @@ class ModelConfiguration:
             config = self._configuration_dict
 
         self.data_file = config.get('data_file', None)
-        self.x_file = config.get('x_obs', None)
-        self.y_file = config.get('y_obs', None)
-        if self.y_file is None and self.x_file is not None:
-            self.y_file = np.random.rand(len(self.x_file))  # random y-values just to be able to set up windows.
+        if 'x_obs' in config:
+            self.x_file = config['x_obs']
+        if 'y_obs' in config:
+            self.y_file = config['y_obs']
         self.vlsr_file = config.get('vlsr_obs', 0.)
-        if self.data_file is not None and self.x_file is None:
+        if self.data_file is not None and len(self.x_file) == 0:
             self.data_file_obj = utils.DataFile(self.data_file)
             self.x_file, self.y_file = self.data_file_obj.xdata_mhz, self.data_file_obj.ydata
             self.vlsr_file = self.data_file_obj.vlsr
             self.yunit = self.data_file_obj.yunit
+        if len(self.y_file) == 0 and len(self.x_file) > 0:
+            self.y_file = np.random.rand(len(self.x_file))  # random y-values just to be able to set up windows.
 
         self.vlsr_plot = self.vlsr_file
 
         if len(self.x_file) > 0 and isinstance(self.x_file[0], np.ndarray):
             self.x_file = np.concatenate(self.x_file)
-        if self.y_file is not None and isinstance(self.y_file[0], np.ndarray):
+        if len(self.y_file) > 0 and isinstance(self.y_file[0], np.ndarray):
             self.y_file = np.concatenate(self.y_file)
 
         if len(self.x_file) > 0:
@@ -388,6 +390,8 @@ class ModelConfiguration:
                     print(f"No data in {frange} (data end at {max(self.x_file)}) - skipping this range")
                 else:
                     frange_mhz.append(frange)
+            if len(frange_mhz) == 0:
+                raise ValueError("No frequency ranges selected ; check your values.")
             self.franges_mhz = frange_mhz
             # modify min of first range to be the greatest value between itself and min(x_file)
             self.franges_mhz[0][0] = max(min(self.x_file), self.franges_mhz[0][0])
