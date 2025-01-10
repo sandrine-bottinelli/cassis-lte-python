@@ -711,6 +711,7 @@ class ModelSpectrum(object):
         if print_report:
             # print(self.model_fit.fit_report())
             print(self.fit_report(report_kws=report_kws))
+            print("")
 
         self.do_savings()
         self.do_plots()
@@ -926,11 +927,10 @@ class ModelSpectrum(object):
                                         iter_cb=cb)
         if not self.print_report:
             if self.model_fit.nfev == self.model_fit.max_nfev:
-                print(f"Maximum number of iterations reached ({self.model_fit.max_nfev}).")
+                message = f"Maximum number of iterations reached ({self.model_fit.max_nfev}) ; "
             else:
-                print(f"Fit performed in {self.model_fit.nfev} iterations ; "
-                      f"reduced chi-square = {self.model_fit.redchi:.2f}.")
-
+                message = f"Fit performed in {self.model_fit.nfev} iterations ; "
+            print(message + f"reduced chi-square = {self.model_fit.redchi:.2f}.")
         # if len(self.cpt_list) > 1:
         #     for cpt in self.cpt_list:
         #         model_fit_cpt = copy.deepcopy(self.model_fit)

@@ -35,6 +35,7 @@ class File:
         self._xdata_mhz = None
         self._xdata = None
         self._ydata = None
+
         self.get_header()
         self.get_data()
 
@@ -903,7 +904,6 @@ def get_cubes(file_list, check_spatial_shape=None):
     """
     Retrieve data as SpectralCube objects. Checks whether the cubes in file_list have the same spatial shape.
 
-    :param self:
     :param file_list: the list of files (absolute paths)
     :param check_spatial_shape: a two-element tuple representing the spatial shape of some other cube.
     :return: a list of SpectralCube objects
@@ -918,6 +918,9 @@ def get_cubes(file_list, check_spatial_shape=None):
 
     if check_spatial_shape is not None:
         if (next(iter(nx_list)), next(iter(ny_list))) != check_spatial_shape:
+            for hdul, file in zip(hduls, file_list):
+                print(f"RA/Dec dimensions of {file}: ({hdul[0].shape[-2]}, {hdul[0].shape[-1]})")
+            print(f"compared to {check_spatial_shape}")
             raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
 
     return [SpectralCube.read(h) for h in hduls]
@@ -936,7 +939,7 @@ def read_crtf(file, use_region=None):
     Read a CRTF region file.
 
     :param file: a CRTF file
-    :param region_number: if more than one region in the file, specify which region to use (starting at 0)
+    :param use_region: if more than one region in the file, specify which region to use (starting at 0)
     :return: the region
     """
     try:

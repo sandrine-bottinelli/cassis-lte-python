@@ -20,6 +20,9 @@ class ModelConfiguration:
     def __init__(self, configuration, verbose=True, check_tel_range=False):
         self._configuration_dict = configuration
 
+        if 'v_range' in configuration and 'fit_freq_except' in configuration:
+            raise AttributeError("Cannot have both 'v_range' and 'fit_freq_except' in the configuration.")
+
         self.modeling = configuration.get('modeling', False)
         self.minimize = configuration.get('minimize', False)
         self.line_analysis = configuration.get('line_analysis', 'inspect' in configuration)
@@ -559,12 +562,14 @@ class ModelConfiguration:
     def get_linelist(self, verbose=True):
         """
         Retrieving lists of transitions.
+
         :param verbose: if True, print number of transitions w/i thresholds
-                        if 2, print
+                        if 2, print infos for each transition
         :return: None
 
-        self.line_list_all (dataframe): the list of all transitions (no thresholds)
-        self.tr_list_by_tag (dictionary): the list of transitions (w/i thresholds if applies), for each tag
+        line_list_all (dataframe): the list of all transitions (no thresholds, except f_err_mhz_max)
+        line_list_all_by_tag (dictionary): the list of transitions (no thresholds), for each tag
+        tr_list_by_tag (dictionary): the list of transitions (w/i thresholds if applies), for each tag
         If computing a model only or fitting by velocity, apply thresholds.
         """
 
@@ -1346,7 +1351,7 @@ class ModelConfiguration:
                     print(f"    {frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
                           f" / {len(self.x_file[(self.x_file >= min(frange)) & (self.x_file <= max(frange))])}"
                           f" points used")
-                print("\n")
+                print(" ")
 
         else:
             self.x_fit, self.y_fit = None, None
