@@ -942,7 +942,10 @@ class ModelConfiguration:
         pars = ['ntot', 'fwhm']
         for block in blocks_from_file:
             sp_name = block[1].split()[0]
-            sp_names.append(sp_name)
+            if sp_name not in sp_names:
+                sp_names.append(sp_name)
+            else:
+                raise Exception(f"Duplicate tag in {self.comp_config_file}: {sp_name}")
             sp_df = pd.read_csv(io.StringIO("\n".join(block[2:])), sep='\t', comment='#', index_col=0)
             sp_df = sp_df.rename(columns=lambda x: x.strip())
             # check validity of labels
@@ -1069,21 +1072,17 @@ class ModelConfiguration:
                             self.species_infos = utils.read_species_info(io.StringIO("".join(lines_sp)))
                         else:
                             # species infos by block : first need to separate each block
-                            infos_by_sp = []  # list of list containing species infos
-                            infos_sp = []
 
                             # First remove all comment lines
                             # (otherwise there is an issue if the last line is a comment line)
                             lines_sp = [line for line in lines_sp if not line.startswith('#')]
+                            # remove all blank lines
+                            lines_sp = [line for line in lines_sp if line.strip() != '']
 
-                            for i, line in enumerate(lines_sp):
-                                if line.strip() != '':  # info line (not blank line)
-                                    infos_sp.append(line.rstrip() + "\n")  # append info to the species list
-                                if line.strip() == '' or i == len(lines_sp) - 1:
-                                    # blank line or end of list : end of a species block
-                                    infos_by_sp.append(infos_sp)
-                                    infos_sp = []
-                                    continue
+                            block_indices = [i for i, line in enumerate(lines_sp) if line.startswith('tag')]
+                            block_indices.append(len(lines_sp))
+                            infos_by_sp = [lines_sp[block_indices[i]:block_indices[i+1]]
+                                           for i in range(len(block_indices)-1)]
 
                             self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
 
