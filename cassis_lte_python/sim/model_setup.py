@@ -410,8 +410,9 @@ class ModelConfiguration:
             # modify max of last range to be the small value between itself and max(x_file)
             self.franges_mhz[-1][-1] = min(max(self.x_file), self.franges_mhz[-1][-1])
             # if necessary, cut out data below/above min/max frange_mhz
-            self.y_file = self.y_file[(self.x_file >= self.franges_mhz[0][0]) & (self.x_file <= self.franges_mhz[-1][-1])]
-            self.x_file = self.x_file[(self.x_file >= self.franges_mhz[0][0]) & (self.x_file <= self.franges_mhz[-1][-1])]
+            idx = (self.x_file >= self.franges_mhz[0][0]) & (self.x_file <= self.franges_mhz[-1][-1])
+            self.x_file = self.x_file[idx]
+            self.y_file = self.y_file[idx]
             mask = np.full(len(self.x_file), False)
             for r in self.franges_mhz:
                 mask[(min(r) <= self.x_file) & (self.x_file <= max(r))] = True
@@ -1360,6 +1361,8 @@ class ModelConfiguration:
     @x_file.setter
     def x_file(self, value):
         self._x_file = value
+        if self.x_obs is not None and not np.array_equal(self.x_obs, self.x_file):
+            self.x_obs = self.x_obs[(self.x_obs >= min(value)) & (self.x_obs <= max(value))]
 
     @property
     def y_file(self):
