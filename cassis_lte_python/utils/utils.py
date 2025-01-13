@@ -706,13 +706,11 @@ def search_telescope_file(tel):
         raise FileNotFoundError(f"Telescope file {tel} not found.")
 
 
-def read_telescope_file(telescope_file, fmin_mhz=None, fmax_mhz=None):
+def read_telescope_file(telescope_file):
     """
     Read telescope file into dataframe
 
     :param telescope_file: CASSIS telescope file
-    :param fmin_mhz: the lowest frequency to retrieve
-    :param fmax_mhz: the highest frequency to retrieve
     :return: dataframe
     """
     with open(telescope_file, 'r') as f:
@@ -731,22 +729,6 @@ def read_telescope_file(telescope_file, fmin_mhz=None, fmax_mhz=None):
 
         if not tel_info['Frequency (MHz)'].is_monotonic_increasing:
             warnings.warn(f"Warning : frequencies in telescope file {telescope_file} are not in ascending order.")
-
-        # TODO : check whether the following is really necessary
-        if fmin_mhz is not None:
-            tel_info_tmp = tel_info[tel_info['Frequency (MHz)'] > fmin_mhz]
-            tel_info = tel_info.iloc[min(tel_info_tmp.axes[0])-1:]
-            # first_row = tel_info.iloc[0].to_dict()
-            # first_row['Frequency (MHz)'] = fmin_mhz
-            # tel_info = pd.concat([pd.DataFrame([list(first_row.values())], columns=tel_info.columns), tel_info])
-            # tel_info = tel_info.sort_values(by=['Frequency (MHz)'], ignore_index=True)
-        if fmax_mhz is not None:
-            tel_info_tmp = tel_info[tel_info['Frequency (MHz)'] < fmax_mhz]
-            tel_info = tel_info.iloc[:max(tel_info_tmp.axes[0])+1]
-            # last_row = tel_info.iloc[-1].to_dict()
-            # last_row['Frequency (MHz)'] = fmax_mhz
-            # tel_info = pd.concat([pd.DataFrame([list(last_row.values())], columns=tel_info.columns), tel_info])
-            # tel_info = tel_info.sort_values(by=['Frequency (MHz)'], ignore_index=True)
 
         tel_info['Diameter (m)'] = [tel_diam for _ in range(len(tel_info))]
 

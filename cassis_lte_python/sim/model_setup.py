@@ -528,9 +528,7 @@ class ModelConfiguration:
         for tel, freq_user in self._configuration_dict['tuning_info'].items():
             if isinstance(freq_user[0], list):
                 freq_user = [el for li in freq_user for el in li]
-            tel_info = utils.read_telescope_file(utils.search_telescope_file(tel),
-                                                 fmin_mhz=min(freq_user),
-                                                 fmax_mhz=max(freq_user))
+            tel_info = utils.read_telescope_file(utils.search_telescope_file(tel))
             self._telescope_data[tel] = tel_info
 
         # tuning_data = pd.DataFrame()
