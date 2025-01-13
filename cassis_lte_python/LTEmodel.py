@@ -561,8 +561,8 @@ class ModelSpectrum(object):
                     try:
                         params[key].set(expr=val)
                     except KeyError:
-                        print(f'Constraints: {key.split('_')[-1]} is not in the tag list '
-                              f'or has been removed due to lack of transitions.')
+                        print(f"Constraints: {key.split('_')[-1]} is not in the tag list "
+                              f"or has been removed due to lack of transitions.")
                         pass
 
         # reset bounds if a parameters contains an expression to make sure it does not interfere
