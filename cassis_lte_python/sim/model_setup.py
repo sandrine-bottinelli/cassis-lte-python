@@ -194,6 +194,8 @@ class ModelConfiguration:
         sort_parameters = ['frequency', 'eup', 'aij']
         if self.sort not in sort_parameters:
             print("Sort should be one of the following :", ", ".join(sort_parameters))
+            print("Using frequency.")
+            self.sort = 'frequency'
         self.line_list_all = None
         self.tr_list_by_tag = None  # w/i thresholds
 
