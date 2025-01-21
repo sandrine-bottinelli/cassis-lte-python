@@ -2458,28 +2458,36 @@ class ModelCube(object):
 
     def read_frequencies(self):
         # Read the data cubes and start and end frequencies of each cube :
-        dats = []
-        start_frequencies_MHz = []
-        end_frequencies_MHz = []
         fmhz_ranges = []
 
         for i, f in enumerate(self._data_file):
-            hduls = fits.open(f)
-            dats.append(SpectralCube.read(hduls))
+            dat = SpectralCube.read(fits.open(f))
 
-            # Extract the first and last frequency values of each cube
-            first_value = min(dats[i].spectral_axis)
-            last_value = max(dats[i].spectral_axis)
+            # Extract the min and max frequency values of each cube
+            start_freq_MHz = min(dat.spectral_axis).to(u.MHz).value
+            end_freq_MHz = max(dat.spectral_axis).to(u.MHz).value
 
-            start_freq_MHz = round(first_value.to(u.MHz).value, 3)
-            end_freq_MHz = round(last_value.to(u.MHz).value, 3)
+            # start_freq_MHz = round(start_freq_MHz, 3)
+            # end_freq_MHz = round(end_freq_MHz, 3)
 
-            # If this is not the first cube, check whether start_freq_MHz is larger than the previous end_freq_MHz
-            if i > 0 and start_freq_MHz <= end_frequencies_MHz[i - 1]:
-                start_freq_MHz = end_frequencies_MHz[i - 1] + 1e-3
+            # From EC : If this is not the first cube, check whether start_freq_MHz is larger than the previous end_freq_MHz
+            # if i > 0 and start_freq_MHz <= end_frequencies_MHz[i - 1]:
+            #     start_freq_MHz = end_frequencies_MHz[i - 1] + 1e-3
+            # SB : don't understand the use of the above lines
 
-            start_frequencies_MHz.append(start_freq_MHz)
-            end_frequencies_MHz.append(end_freq_MHz)
+            # If not the first cube, do some checks :
+            if i > 0:
+                if end_freq_MHz <= fmhz_ranges[i - 1][0]:
+                    raise IndexError(f"Cubes {f} and {self._data_file[i - 1]} are not in increasing frequency order.\n"
+                                     f"Make sure all your cubes are in increasing frequency order.")
+                if start_freq_MHz <= fmhz_ranges[i - 1][-1]:
+                    # Issue a warning if overlap :
+                    print('\n\n\n')
+                    print(f'WARNING - The cube {f} starts at {start_freq_MHz} MHz '
+                          f'and overlaps with the cube {self._data_file[i - 1]}, which ends {fmhz_ranges[i - 1][-1]}.')
+                    print(f'          Make sure none of the selected lines are in the overlap region')
+                    print('\n\n\n')
+
             fmhz_ranges.append([start_freq_MHz, end_freq_MHz])
 
         return fmhz_ranges
