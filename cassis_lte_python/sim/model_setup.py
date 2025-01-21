@@ -150,10 +150,9 @@ class ModelConfiguration:
         if self.x_mod is None and self.data_file is None:
             # self.x_mod = np.arange(self.fmin_mhz, self.fmax_mhz + self.dfmhz, self.dfmhz)
             self.x_mod = np.array([])
-            for r in franges_ghz:
-                self.franges_mhz.append([min(r) * 1000, max(r) * 1000])
+            for r in self.franges_mhz:
                 self.x_mod = np.concatenate([self.x_mod,
-                                             np.arange(min(r) * 1000, max(r) * 1000 + self.dfmhz / 2, self.dfmhz)],
+                                             np.arange(min(r), max(r) + self.dfmhz / 2, self.dfmhz)],
                                             dtype=np.float32)
             self.fmin_mhz = min(self.x_mod)
             self.fmax_mhz = max(self.x_mod)
@@ -965,6 +964,10 @@ class ModelConfiguration:
                 for par in pars:
                     if f'{cname}_{par}' in df.index:
                         pmin, val, pmax, var = df.loc[f'{cname}_{par}'][tag].values
+                        try:
+                            val = float(val)
+                        except ValueError:
+                            raise Exception(f"Value {val} for parameter {par} is not numeric for tag {tag}.")
                         if np.isnan(float(val)):
                             raise ValueError(f"Missing {par} information for tag {tag}.")
                         factor = False
