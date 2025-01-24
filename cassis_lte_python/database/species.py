@@ -3,10 +3,14 @@ from __future__ import annotations
 from numpy import interp, power, log10, genfromtxt
 import os
 import pandas as pd
+from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.settings import PARTITION_FUNCTION_DIR, FWHM_DEF
 from cassis_lte_python.sim.parameters import create_parameter, Parameter
 from cassis_lte_python.database.setupdb import DATABASE_SQL
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
+
+
+LOGGER = CassisLogger.create('Species')
 
 
 class Species:
@@ -226,7 +230,7 @@ def get_species_info(tag: str, database=DATABASE_SQL.cursor()):
     cols_sp_info = [t[0] for t in res_catdir.description]
     all_rows = database.fetchall()
     if len(all_rows) == 0:
-        print(f"{tag} not found in the database.")
+        LOGGER.error(f"{tag} not found in the database -> ignoring.")
         return None
     sp_info = all_rows[-1]
     sp_info_dic = dict(zip(cols_sp_info, sp_info))

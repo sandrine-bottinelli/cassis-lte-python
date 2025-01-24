@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Literal
 
+from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
 from cassis_lte_python.utils.settings import TELESCOPE_DIR, NB_DECIMALS
 from cassis_lte_python.database.species import get_partition_function
@@ -18,6 +19,8 @@ from datetime import timedelta
 import warnings
 import json
 
+
+LOGGER = CassisLogger.create('utils')
 
 class CustomJSONizer(json.JSONEncoder):
     def default(self, obj):
@@ -945,12 +948,11 @@ def read_crtf(file, use_region=None):
         if use_region is None:
             use_region = len(regs) - 1
             if len(regs) > 1:
-                print('More than one regions were found: using the last one by default.'
-                      'If this is not what you want, please use the use_region keyword or edit your CRTF file.')
+                LOGGER.warning(f'More than one regions were found in {file}: using the last one by default.\n    '
+                      'If this is not what you want, please edit your CRTF file.')
         return regs[use_region]
     except TypeError:
-        print('Not a CRTF file.')
-        return None
+        raise TypeError(f'{file} is not a CRTF file.')
 
 
 def get_single_mask(wcs: WCS, file, exclude=False):

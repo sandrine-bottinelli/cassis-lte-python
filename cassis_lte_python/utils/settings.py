@@ -30,6 +30,10 @@ DPI_DEF = config.getint('PLOT', 'DPI')
 NROWS_DEF = config.getint('PLOT', 'NROWS', fallback=8)
 NCOLS_DEF = config.getint('PLOT', 'NCOLS', fallback=3)
 FONT_DEF = config.get('PLOT', 'FONT', fallback='DejaVu Sans')
+ENABLE_FILE_LOGGER = config.getboolean('LOGGER', 'ENABLE_FILE_LOGGER', fallback=True)
+LOG_PATH = config.get('LOGGER', 'LOG_PATH', fallback='logs')
+if not os.path.exists(LOG_PATH):
+    os.makedirs(LOG_PATH)
 
 if not os.path.isfile(SQLITE_FILE):
     parent_dir = os.path.dirname(SQLITE_FILE)
@@ -54,7 +58,7 @@ if not os.path.isfile(SQLITE_FILE):
 
 
 def print_settings():
-    print("Settings are :")
+    message = ["Settings are :"]
     for section in config.sections():
         for key, val in dict(config.items(section)).items():
             unit = ""
@@ -62,5 +66,6 @@ def print_settings():
                 unit = "arcsec"
             elif "vlsr" in key or "fwhm" in key:
                 unit = "km/s"
-            print(f"    {key.upper()} = {val} {unit}")
+            message.append(f"{key.upper()} = {val} {unit}")
+    print("\n    ".join(message))
     print("")

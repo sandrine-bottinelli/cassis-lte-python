@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.constants import COLOR_RESIDUAL
 from cassis_lte_python.utils.settings import DPI_DEF, NCOLS_DEF, NROWS_DEF, FONT_DEF
 # from cassis_lte_python.gui.basic_units import mhz, BasicUnit
@@ -43,6 +44,8 @@ plt.rcParams["font.family"] = FONT_DEF
 
 # arbitrary plot width:
 PLOT_WIDTH = 2.0  # inches
+
+LOGGER = CassisLogger.create('plots')
 
 
 def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, axes_labels=True):
@@ -256,7 +259,7 @@ def gui_plot(lte_model):
         color_message = []
         for i in range(len(lte_model.cpt_list)):
             color_message.append(f"{lte_model.cpt_list[i].name} - {lte_model.cpt_cols[i]}")
-        print("Component colors are :", " ; ".join(color_message))
+        LOGGER.info(f"Component colors are : {' ; '.join(color_message)}")
 
     fontsize = 16
     plt.rc('font', size=fontsize)
@@ -429,7 +432,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
         file_path = lte_model.set_filepath(filename, dirname=dirname, ext='pdf')
 
     if verbose:
-        print("\nSaving plot to {} \n...".format(file_path))
+        LOGGER.info("Saving plot to {} \n    ...".format(file_path))
 
     margins = {
         'left': 0.5,  # left margin
@@ -590,7 +593,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
     #     # fig.savefig(file_path, bbox_inches='tight', dpi=dpi)
 
     if verbose:
-        print("Done\n")
+        LOGGER.info("Done\n")
 
 
 def file_fig_size(nrows, ncols, **kwargs):

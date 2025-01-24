@@ -5,6 +5,7 @@ import sys
 from urllib.parse import uses_params
 
 from cassis_lte_python.utils import utils
+from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
@@ -20,6 +21,7 @@ import warnings
 
 
 class ModelConfiguration:
+    LOGGER = CassisLogger.create('ModelConfiguration')
     def __init__(self, configuration, verbose=True, check_tel_range=False):
         self._configuration_dict = configuration
 
@@ -122,11 +124,12 @@ class ModelConfiguration:
         if self.line_analysis and 'franges_ghz' not in configuration and 'tuning_info' not in configuration:
             raise KeyError("You must provide a frequency range with the 'franges_ghz' keyword.")
         if any([key in configuration for key in ['fmin_ghz', 'fmax_ghz']]):
-            print("The keywords 'fmin_ghz' and 'fmax_ghz' are deprecated.")
+            message = ["The keywords 'fmin_ghz' and 'fmax_ghz' are deprecated."]
             if self.minimize or self.modeling:
-                print("The model will be computed over the ranges in 'tuning_info'.")
+                message.append("The model will be computed over the ranges in 'tuning_info'.")
             else:
-                print("Data selection performed with 'tuning_info' or 'franges_ghz', whichever is provided.")
+                message.append("Data selection performed with 'tuning_info' or 'franges_ghz', whichever is provided.")
+            ModelConfiguration.LOGGER.info("\n    ".join(message))
 
         self.franges_mhz = []
         if 'tuning_info' in configuration:  # mandatory if model or fit
@@ -144,8 +147,10 @@ class ModelConfiguration:
                 franges_ghz = [franges_ghz]
 
             if 'tuning_info' in configuration:
-                print("INFO - 'franges_ghz' supersedes the ranges in 'tuning_info' for model computation")
-                print("       make sure the ranges in tuning_info are wider than those in 'franges_ghz'")
+                ModelConfiguration.LOGGER.info(
+                    "\n    ".join(["'franges_ghz' supersedes the ranges in 'tuning_info' for model computation",
+                                   "make sure the ranges in tuning_info are wider than those in 'franges_ghz'"])
+                )
             self.franges_mhz = [[min(r) * 1000, max(r) * 1000] for r in franges_ghz]
 
         self.fmin_mhz = min(self.franges_mhz[0])
@@ -174,7 +179,7 @@ class ModelConfiguration:
             yvals = np.array([[n, n] for n in noise])
             self.noise = interp1d(np.concatenate(self.franges_mhz), np.concatenate(yvals), kind='nearest')
         else:
-            print('Noise format not supported. Should be a integer, a float or a list.')
+            raise TypeError('Noise format not supported. Should be a integer, a float or a list.')
 
         self.f_err_mhz_max = configuration.get('f_err_mhz_max', None)
 
@@ -198,8 +203,10 @@ class ModelConfiguration:
         self.sort = configuration.get('sort', 'frequency')
         sort_parameters = ['frequency', 'eup', 'aij']
         if self.sort not in sort_parameters:
-            print("Sort should be one of the following :", ", ".join(sort_parameters))
-            print("Using frequency.")
+            ModelConfiguration.LOGGER.warning(
+                "\n    ".join(["Sort should be one of the following :", ", ".join(sort_parameters),
+                               "-> Using frequency."])
+            )
             self.sort = 'frequency'
         self.line_list_all = None
         self.tr_list_by_tag = None  # w/i thresholds
@@ -261,7 +268,7 @@ class ModelConfiguration:
                     try:
                         params[key].set(expr=val)
                     except KeyError:
-                        print(f"Constraints: {key.split('_')[-1]} is not in the tag list "
+                        ModelConfiguration.LOGGER.warning(f"Constraints: {key.split('_')[-1]} is not in the tag list "
                               f"or has been removed due to lack of transitions.")
                         pass
 
@@ -274,7 +281,7 @@ class ModelConfiguration:
             ans = input(f"You have set a very large value for the maximum number of iterations ({self.max_iter}.\n"
             f"Press y or enter to continue, n to stop, otherwise provide a new value : ")
             if ans.lower() in ["n", "no"]:
-                print("Exiting the program.")
+                ModelConfiguration.LOGGER.info("Exiting the program.")
                 sys.exit(0)
             if ans not in ["y", "Y", "", " "]:
                 try:
@@ -383,7 +390,7 @@ class ModelConfiguration:
             self.vlsr_plot = self.cpt_list[0].vlsr
 
         if self.vlsr_file == 0 and self.line_shift_kms == 0:
-            print("Your data seem to be in sky frequency : "
+            ModelConfiguration.LOGGER.warning("Your data seem to be in sky frequency : "
                   "you should provide the 'line_shift_kms' to ensure adequate search of transitions.")
             shift = max([cpt.vlsr for cpt in self.cpt_list])
             ans = input(f"Do you want to use the largest Vlsr found in the components' starting values "
@@ -439,9 +446,11 @@ class ModelConfiguration:
             frange_mhz = []
             for frange in self.franges_mhz:
                 if frange[1] < min(self.x_file):
-                    print(f"No data in {frange} (data start at {min(self.x_file)}) - skipping this range")
+                    ModelConfiguration.LOGGER.info(f"No data in {frange} (data start at {min(self.x_file)}) - "
+                                                   f"skipping this range")
                 elif frange[0] > max(self.x_file):
-                    print(f"No data in {frange} (data end at {max(self.x_file)}) - skipping this range")
+                    ModelConfiguration.LOGGER.info(f"No data in {frange} (data end at {max(self.x_file)}) - "
+                                                   f"skipping this range")
                 else:
                     frange_mhz.append(frange)
             if len(frange_mhz) == 0:
@@ -628,17 +637,17 @@ class ModelConfiguration:
                                           fmhz_ranges=self.franges_mhz,
                                           shift_kms=self.line_shift_kms)
 
-        print(f"INFO - {len(line_list_all)} transitions found (no thresholds) "
+        ModelConfiguration.LOGGER.info(f"{len(line_list_all)} transitions found (no thresholds) "
               f"within {'data' if len(self.x_file) > 0 else 'model'}'s frequency range(s).")
         line_list_all_by_tag = {tag: list(line_list_all[line_list_all.tag == tag].transition)
                                 for tag in self.tag_list}
 
         if self.f_err_mhz_max is not None:
             line_list_all = line_list_all[line_list_all.f_err_mhz <= self.f_err_mhz_max]
-            print(f"INFO - {len(line_list_all)} transitions found with f_err_mhz <= {self.f_err_mhz_max}.")
+            ModelConfiguration.LOGGER.info(f"{len(line_list_all)} transitions found with f_err_mhz <= {self.f_err_mhz_max}.")
 
         self.line_list_all = select_transitions(line_list_all, xrange=self.franges_mhz)
-        print(f"INFO - {len(self.line_list_all)} transitions found (no thresholds) "
+        ModelConfiguration.LOGGER.info(f"{len(self.line_list_all)} transitions found (no thresholds) "
               f"within tuning frequencies : {self.tuning_info['fmhz_range'].tolist()}.")
         self.tr_list_by_tag = {tag: list(self.line_list_all[self.line_list_all.tag == tag].transition)
                                for tag in self.tag_list}
@@ -649,7 +658,7 @@ class ModelConfiguration:
             # more than one telescope range => search only in data within telescope ranges
             # NB : this assumes that if only one range, it encompasses the data's min/max
             # tr_list_tresh = select_transitions(tr_list_tresh, xrange=self.franges_mhz)
-            print(f"INFO - {len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
+            ModelConfiguration.LOGGER.info(f"{len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
                   f"{self.tuning_info['fmhz_range'].tolist()}")
 
         asc = True  # by default, ascending order
@@ -686,14 +695,14 @@ class ModelConfiguration:
                 if self.f_err_mhz_max is not None:
                     thr_info = f"with f_err_mhz <= {self.f_err_mhz_max}"
             if verbose or verbose == 2:
-                print(f'{tag:>{ltag}s} : {len(tr_list):{lntr}d}'
+                ModelConfiguration.LOGGER.info(f'{tag:>{ltag}s} : {len(tr_list):{lntr}d}'
                       f' /{len(line_list_all_by_tag[tag]):{lntr_all}d} transitions found {thr_info}')
             if verbose == 2:
                 for it, tr in enumerate(tr_list):
-                    print('  {}. {}'.format(it + 1, tr))
+                    ModelConfiguration.LOGGER.info('  {}. {}'.format(it + 1, tr))
 
         if len(tags_no_tran) > 0:
-            print(f"WARNING - No transitions found for the following species : {', '.join(tags_no_tran)}"
+            ModelConfiguration.LOGGER.warning(f"No transitions found for the following species : {', '.join(tags_no_tran)}"
                   f" ; removing it/them from the analysis.")
             for tag in tags_no_tran:
                 self.tag_list.remove(tag)
@@ -1360,12 +1369,14 @@ class ModelConfiguration:
                     win_list_limits.append([min(f_range_plot) - 0.5 * fwhm_mhz, max(f_range_plot + 0.5 * fwhm_mhz)])
 
                 nt = len(win_list_tag)
+                message = []
                 if (verbose or verbose == 2) and nt != len(tr_list):
-                    print('{} : {}/{} transitions found with enough data within thresholds'.format(tag, nt,
-                                                                                                   len(tr_list)))
+                    message.append(f'{tag} : {nt}/{len(tr_list)} transitions found with enough data within thresholds')
                 if verbose == 2:
                     for iw, w in enumerate(win_list_tag):
-                        print('  {}. {}'.format(iw + 1, w.transition))
+                        message.append('  {}. {}'.format(iw + 1, w.transition))
+                if len(message) > 0:
+                    ModelConfiguration.LOGGER.info("\n    ".join(message))
 
                 self.win_list.extend(win_list_tag)
 
@@ -1423,7 +1434,7 @@ class ModelConfiguration:
                 else:
                     win.in_fit = False
                     if init:
-                        print(f"WARNING - Window {win.name} : "
+                        ModelConfiguration.LOGGER.warning(f"Window {win.name} : "
                               f"{len(win.x_fit)} data points selected, window not included in fit.")
 
                     # with open('freq2fit.txt', 'a') as f:
@@ -1437,14 +1448,15 @@ class ModelConfiguration:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
             if self.print_debug and self.minimize:
-                print(f"\nNumber of points used for the minimization : {len(self.x_fit)}/{len(self.x_file)}")
+                message = [f"\nNumber of points used for the minimization : {len(self.x_fit)}/{len(self.x_file)}"]
                 if len(self.franges_mhz) > 1:
                     for frange in self.franges_mhz:
-                        print(
-                            f"    {frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
+                        message.append(
+                            f"{frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
                             f" / {len(self.x_file[(self.x_file >= min(frange)) & (self.x_file <= max(frange))])}"
                             f" points used")
-                    print(" ")
+                    message.append(" ")
+                ModelConfiguration.LOGGER.debug("\n    ".join(message))
 
         else:
             self.x_fit, self.y_fit = None, None
@@ -1476,8 +1488,8 @@ class ModelConfiguration:
                     try:
                         params[key].set(expr=val)
                     except KeyError:
-                        print(f"Constraints: {key.split('_')[-1]} is not in the tag list "
-                              f"or has been removed due to lack of transitions.")
+                        ModelConfiguration.LOGGER.warning(f"Constraints: {key.split('_')[-1]} is not in the tag list "
+                                                          f"or has been removed due to lack of transitions.")
                         pass
 
         # reset bounds if a parameters contains an expression to make sure it does not interfere
@@ -1689,6 +1701,7 @@ class ModelConfiguration:
 
 
 class Component:
+    LOGGER = CassisLogger.create('Component')
     def __init__(self, name, species_list, isInteracting=False, vlsr=None, size=None, tex=100., fwhm=None, config=None):
         # super().__init__()
         self.name = name
@@ -1734,8 +1747,8 @@ class Component:
                 try:
                     sp2add = Species(int(sp))
                 except TypeError:
-                    print("Elements of species_list must be a Species, a dictionary, "
-                          "or the tag as an integer or a string")
+                    raise TypeError("Elements of species_list must be a Species, a dictionary, "
+                                    "or the tag as an integer or a string")
             if sp2add._component is None:
                 sp2add.set_component(self.name)
             cpt_species_list.append(sp2add)
@@ -1772,21 +1785,21 @@ class Component:
 
     def check_tex_bounds(self):
         if self._tex.vary:
+            title = f'Component {self.name} :'
+            message = []
             if isinstance(self._tex.min, (float, int)) and self.tmin > self._tex.min:
                 sp_tmin = [sp for sp in self.species_list if min(sp.pf[0]) == self.tmin]
                 if len(sp_tmin) > 1:
                     tags_tmin = ", ".join([sp.tag for sp in sp_tmin])
                 else:
                     tags_tmin = sp_tmin[0].tag
-                message = [
+                message += [
                     f'The requested lower boundary for Tex is {self._tex.min} K, but the lowest temperature',
                     f'for which the partition function (pf) is defined for all species is {self.tmin} K;',
                     f'Species for which T_pf_min = {self.tmin} is/are: {tags_tmin}',
                     f'-> limiting Tex search to temperatures > {self.tmin} \n'
                 ]
-                print(f'INFO - Component {self.name} :')
-                for line in message:
-                    print(" " * 6, line)
+
             self._tex.abs_min = self.tmin
 
             if isinstance(self._tex.max, (float, int)) and self.tmax < self._tex.max:
@@ -1795,17 +1808,19 @@ class Component:
                     tags_tmax = ", ".join([sp.tag for sp in sp_tmax])
                 else:
                     tags_tmax = sp_tmax[0].tag
-                message = [
+                message += [
                     f'The requested upper boundary for Tex is {self.tmax} K, but the highest temperature',
                     f'for which the partition function (pf) is defined for all species is {self.tmax} K;',
                     f'Species for which T_pf_max = {self.tmax} is/are: {tags_tmax}',
                     f'-> limiting Tex search to temperatures < {self.tmax} \n'
                 ]
-                print(f'INFO - Component {self.name} :')
-                for line in message:
-                    print(" " * 6, line)
 
             self._tex.abs_max = self.tmax
+
+            if len(message) > 0:
+                message = [title] + message
+                Component.LOGGER.info("\n    ".join(message))
+
 
     def update_parameters(self, new_pars):
         self._vlsr = new_pars['{}_vlsr'.format(self.name)]

@@ -1,8 +1,13 @@
 import numpy as np
 import math
+
+from cassis_lte_python.utils.logger import CassisLogger
 # from cassis_lte_python.utils.utils import format_float
 # from lmfit import Parameter
 from lmfit import Parameter as lmfitParameter
+
+
+LOGGER = CassisLogger.create('parameters')
 
 
 # class Parameter(lmfitParameter):
@@ -120,7 +125,7 @@ class Parameter:
                 try:
                     setattr(self, att, getattr(param, att))
                 except AttributeError:
-                    print(f'Could not set {att} from {param}, ignoring.')
+                    LOGGER.error(f'Could not set {att} from {param} -> ignoring.')
         else:
             for arg, val in inputs.items():
                 if val is not None:

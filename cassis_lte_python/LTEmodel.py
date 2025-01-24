@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
@@ -204,6 +205,7 @@ class SimpleSpectrum:
 
 
 class ModelSpectrum(object):
+    LOGGER = CassisLogger.create('ModelSpectrum')
     def __init__(self, configuration: (dict, str, ModelConfiguration), **kwargs):
         if isinstance(configuration, (dict, str)):  # dictionary or string
             model_config = make_model_config(configuration, **kwargs)
@@ -355,9 +357,8 @@ class ModelSpectrum(object):
             with open(path, 'w') as f:
                 f.write(json_dump)
         except Exception as e:
-            print("WARNING - Encountered the following error while writing the json config : ")
-            print(e)
-            print("-> skipping this step.")
+            message = ["Encountered the following error while writing the json config : ", e, "-> skipping this step."]
+            ModelSpectrum.LOGGER.warning("\n    ".join(message))
             # pass
 
     def update_configuration(self, config):  # TODO : needs to be updated
@@ -454,7 +455,7 @@ class ModelSpectrum(object):
 
     def do_minimization(self, print_report: 'short' | 'long' | None=None, report_kws=None):
         if self.x_fit is None:
-            print("Not enough data to fit.")
+            ModelSpectrum.LOGGER.error("Not enough data to fit.")
             return None
 
         if print_report is None:
@@ -482,12 +483,12 @@ class ModelSpectrum(object):
         self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
         t_stop = process_time()
         if self.exec_time:
-            print("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
+            ModelSpectrum.LOGGER.info("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
 
         # If finite tau_lim, check if some lines have tau0 > tau_lim, if so, drop them from win_list_fit
         # and re-do minimization
         if self.model_config.tau_lim < np.inf:
-            print("Checking line-center opacities...")
+            ModelSpectrum.LOGGER.info("Checking line-center opacities...")
             rerun = True
             while rerun:
                 for win in self.model_config.win_list_fit:
@@ -508,7 +509,7 @@ class ModelSpectrum(object):
                             win.in_fit = False
                             break
                 if len([w for w in self.model_config.win_list if w.in_fit]) < len(self.model_config.win_list_fit):
-                    print("Some opacities are above the user-defined limit. Re-run the minimization.")
+                    ModelSpectrum.LOGGER.info("Some opacities are above the user-defined limit. Re-run the minimization.")
                     # update data to be fitted and min/max values if factor
                     self.model_config.get_data_to_fit()
                     for par in self.params:
@@ -521,9 +522,9 @@ class ModelSpectrum(object):
                     self.fit_model(max_nfev=self.max_iter, fit_kws=self.fit_kws)
                     t_stop = process_time()
                     if self.exec_time:
-                        print("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
+                        ModelSpectrum.LOGGER.info("Execution time for minimization : {}.".format(utils.format_time(t_stop - t_start)))
                 else:
-                    print("All line-center are below the user-defined limit.")
+                    ModelSpectrum.LOGGER.info("All line-center are below the user-defined limit.")
                     rerun = False
 
         # reset norm factors and log scale
@@ -532,12 +533,12 @@ class ModelSpectrum(object):
 
         if print_report == 'long':
             # print(self.model_fit.fit_report())
-            print(self.fit_report(report_kws=report_kws))
+            ModelSpectrum.LOGGER.info("Fit report \n" + self.fit_report(report_kws=report_kws))
             print("")
         elif print_report == 'short':
-            print("Best values:")
+            short_report = ["Best values:"]
             if any([p.stderr is None for p in self.model_fit.params.values()]):
-                print("  Some uncertainties could not be estimated.")
+                short_report.append("Some uncertainties could not be estimated.")
             for cpt in self.model_config.cpt_list:
                 fit_pars = [p for p in self.model_fit.params.values() if cpt.name in p.name]
                 res = []
@@ -558,7 +559,8 @@ class ModelSpectrum(object):
                     else:
                         error = '(fixed)'
                     res.append(f"{p.name} = {value} {error}")
-                print(f"  " + " ; ".join(res))
+                short_report.append(" ; ".join(res))
+            ModelSpectrum.LOGGER.info("\n    ".join(short_report))
             print("")
         else:
             raise KeyError("print_report can only be 'long' or 'short'.")
@@ -672,17 +674,17 @@ class ModelSpectrum(object):
 
     def do_plots(self):
         # if self.plot_gui or self.plot_file:
-            print('Finding windows for gui and file plots.')
+            ModelSpectrum.LOGGER.info('Finding windows for gui and file plots.')
             self.setup_plot()
             if self.plot_gui and len(self.model_config.win_list_gui) > 0:
                 t_start = process_time()
-                print("Preparing windows for GUI plot...")
+                ModelSpectrum.LOGGER.info("Preparing windows for GUI plot...")
                 if self.bandwidth is None or self.model_config.fit_full_range:
                     self.setup_plot_fus()
                 else:
                     self.setup_plot_la(self.model_config.win_list_gui, **self.gui_kws)
                 if self.exec_time:
-                    print(f"Execution time for preparing GUI plot : {utils.format_time(process_time() - t_start)}.")
+                    ModelSpectrum.LOGGER.info(f"Execution time for preparing GUI plot : {utils.format_time(process_time() - t_start)}.")
 
                 self.make_plot('gui')
 
@@ -691,7 +693,7 @@ class ModelSpectrum(object):
                         (self.file_kws['model_err'] and not self.gui_kws['model_err']) or
                         (self.file_kws['component_err'] and not self.gui_kws['component_err'])):
                     t_start = process_time()
-                    print("Preparing windows for file plot...")
+                    ModelSpectrum.LOGGER.info("Preparing windows for file plot...")
                     # look for windows not already in gui
                     if self.model_config.plot_gui:
                         win_list = [w for w in self.model_config.win_list_file
@@ -712,10 +714,11 @@ class ModelSpectrum(object):
                             if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
                                 win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
                     else:
-                        print("## Warning: could not compute model errors.")
+                        ModelSpectrum.LOGGER.warning("Could not compute model errors.")
 
                     if self.exec_time:
-                        print(f"Execution time for preparing file plot : {utils.format_time(process_time() - t_start)}.")
+                        ModelSpectrum.LOGGER.info(f"Execution time for preparing file plot : "
+                                                  f"{utils.format_time(process_time() - t_start)}.\n")
 
                 self.make_plot('file')
 
@@ -730,7 +733,7 @@ class ModelSpectrum(object):
         def fit_callback(pars, iter, resid, *args, **kws):
             # Function called after each iteration to print the iteration number every 100 iterations
             if iter % 100 == 0:
-                print(f"    Iteration {int(iter // 100) * 100 + 1} : chi2 = {sum(resid**2)} ; "
+                ModelSpectrum.LOGGER.info(f"    Iteration {int(iter // 100) * 100 + 1} : chi2 = {sum(resid**2)} ; "
                       f"reduced chi2 = {sum(resid**2) / (len(resid) - len([p for p in pars if pars[p].vary]))} ...")
 
         if self.log:  # take log10 for tex and ntot ; TODO : re-write
@@ -798,7 +801,7 @@ class ModelSpectrum(object):
                 message = f"Maximum number of iterations reached ({self.model_fit.max_nfev}) ; "
             else:
                 message = f"Fit performed in {self.model_fit.nfev} iterations ; "
-            print(message + f"reduced chi-square = {self.model_fit.redchi:.2f}.")
+            ModelSpectrum.LOGGER.info(message + f"reduced chi-square = {self.model_fit.redchi:.2f}.")
         # if len(self.cpt_list) > 1:
         #     for cpt in self.cpt_list:
         #         model_fit_cpt = copy.deepcopy(self.model_fit)
@@ -1152,7 +1155,7 @@ class ModelSpectrum(object):
 
         # Compute model and line positions for each window
         t_win = datetime.datetime.now()
-        print(f"Start preparing windows : {t_win.strftime('%H:%M:%S')}...")
+        ModelSpectrum.LOGGER.info(f"Start preparing windows : {t_win.strftime('%H:%M:%S')}...")
         t_start = process_time()
         for iwin, win in enumerate(win_list):
             tr = win.transition
@@ -1292,10 +1295,10 @@ class ModelSpectrum(object):
 
             if iwin == 0:
                 prep_time = (process_time() - t_start)
-                print(f"    Time for one window : {prep_time:.2f} seconds")
+                ModelSpectrum.LOGGER.info(f"    Time for one window : {prep_time:.2f} seconds")
                 prep_time *= len(win_list)
                 t_win += datetime.timedelta(seconds=prep_time)
-                print(f"    Expected end time for {len(win_list)} windows: {t_win.strftime('%H:%M:%S')}")
+                ModelSpectrum.LOGGER.info(f"    Expected end time for {len(win_list)} windows: {t_win.strftime('%H:%M:%S')}")
 
             # Create file for saving the lines
             with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
@@ -1439,7 +1442,7 @@ class ModelSpectrum(object):
             if self.model_config.plot_gui:
                 self.model_config.win_list_gui = self.select_windows(**self.gui_kws)
                 if len(self.model_config.win_list_gui) == 0:
-                    print("Nothing to plot in GUI, check your selection.")
+                    ModelSpectrum.LOGGER.error("Nothing to plot in GUI, check your selection.")
 
             if self.model_config.plot_file:
                 if ((self.file_kws['display_all'] == self.gui_kws['display_all']) and
@@ -1451,7 +1454,7 @@ class ModelSpectrum(object):
                     # select windows
                     self.model_config.win_list_file = self.select_windows(**self.file_kws)
                     if len(self.model_config.win_list_file) == 0:
-                        print("Nothing to plot in file, check your selection.")
+                        ModelSpectrum.LOGGER.error("Nothing to plot in file, check your selection.")
 
             # Disable for now, but needs to be re-written : TODO
             # if other_species_win_selection is not None:
@@ -1482,7 +1485,7 @@ class ModelSpectrum(object):
                       dpi=dpi, nrows=nrows, ncols=ncols)
             t_stop = process_time()
             if self.exec_time:
-                print("Execution time for saving plot : {}.".format(utils.format_time(t_stop - t_start)))
+                ModelSpectrum.LOGGER.info("Execution time for saving plot : {}.".format(utils.format_time(t_stop - t_start)))
 
     def set_filepath(self, filename, dirname=None, ext=None):
         sub_dir = self.output_dir
@@ -1642,7 +1645,7 @@ class ModelSpectrum(object):
             x_values, y_values = None, None
 
         if x_values is None or y_values is None:
-            print('Nothing to save.')
+            ModelSpectrum.LOGGER.error('Nothing to save.')
             return None
 
         if ext == 'fits':
@@ -1763,22 +1766,26 @@ class ModelSpectrum(object):
             for i, row in line_list.iterrows():
                 fmhz = row['x_obs']
                 tran = row['transition']
+                message = []
                 if fmhz < min(self.model_config.tuning_info.fmhz_min):
-                    print(f"INFO save_line_list_cassis component {cpt.name} - {fmhz} "
-                          f"is below the minimum telescope range ({min(self.model_config.tuning_info.fmhz_min)}) ; ")
+                    message.append(f"{fmhz} is below the minimum telescope range "
+                                   f"({min(self.model_config.tuning_info.fmhz_min)}) ; ")
                     rms_val = np.nan
                 elif fmhz > max(self.model_config.tuning_info.fmhz_max):
-                    print(f"INFO save_line_list_cassis component {cpt.name} - {fmhz} "
-                          f"is above the maximum telescope range ({max(self.model_config.tuning_info.fmhz_max)}) ; ")
+                    message.append(f"{fmhz} is above the maximum telescope range "
+                                   f"({max(self.model_config.tuning_info.fmhz_max)}) ; ")
                     rms_val = np.nan
                 else:
                     try:
                         rms_val = self.get_rms_cal(fmhz)[0]
                     except IndexError:
-                        print(f"INFO save_line_list_cassis component {cpt.name} - No rms info found for {fmhz} MHz ; ")
+                        message.append(f"No rms info found for {fmhz} MHz ; ")
                         rms_val = np.nan
                 if np.isnan(rms_val):
-                    print(f"-> ignoring the corresponding transition : {' ; '.join(tran.__str__().split(' ; ')[:3])}.")
+                    message.append(f"-> ignoring the corresponding transition : "
+                                   f"{' ; '.join(tran.__str__().split(' ; ')[:3])}.")
+                    message = [f"save_line_list_cassis component {cpt.name} : "] + message
+                    ModelSpectrum.LOGGER.warning("\n    ".join(message))
 
                 rms.append(rms_val)
 
@@ -2120,6 +2127,7 @@ class ModelSpectrum(object):
 
 
 class ModelCube(object):
+    LOGGER = CassisLogger.create('ModelCube')
     def __init__(self, configuration, verbose=False):
 
         try:
@@ -2332,11 +2340,13 @@ class ModelCube(object):
                                      f"Make sure all your cubes are in increasing frequency order.")
                 if start_freq_MHz <= fmhz_ranges[i - 1][-1]:
                     # Issue a warning if overlap :
-                    print('\n\n\n')
-                    print(f'WARNING - The cube {f} starts at {start_freq_MHz} MHz '
-                          f'and overlaps with the cube {self._data_file[i - 1]}, which ends {fmhz_ranges[i - 1][-1]}.')
-                    print(f'          Make sure none of the selected lines are in the overlap region')
-                    print('\n\n\n')
+                    print('\n')
+                    message = ['Frequency overlap : ',
+                               f'The cube {f} starts at {start_freq_MHz} MHz and overlaps '
+                               f'with the cube {self._data_file[i - 1]}, which ends {fmhz_ranges[i - 1][-1]}.',
+                               f'->Make sure none of the selected lines are in the overlap region']
+                    ModelSpectrum.LOGGER.warning(message)
+                    print('\n')
 
             fmhz_ranges.append([start_freq_MHz, end_freq_MHz])
 
@@ -2468,7 +2478,7 @@ class ModelCube(object):
             data = np.concatenate([dat[:, j, i].array for dat in self._cubes])
             data = np.nan_to_num(data)
             if len(set(data)) == 1:
-                print(f'Not enough data to compute the model at pixel {pix}.')
+                ModelCube.LOGGER.warning(f'Not enough data to compute the model at pixel {pix}.')
                 continue
 
             if len(self._cubes_noise) > 0:  # TODO: re-write this block
@@ -2511,12 +2521,13 @@ class ModelCube(object):
                 })
                 # print to terminal if debug mode
                 if self._model_configuration.print_debug:
+                    message = [f"Continuum at pixel {pix}: "]
                     if len(cont_df['continuum'].unique()) == 1:
-                        print("j =", j, " i =", i, 'continuum[j,i] =', cont_df['continuum'].unique()[0], self.yunit)
+                        message.append(f"{cont_df['continuum'].unique()[0]} {self.yunit}")
                     else:
                         for _, row in cont_df.iterrows():
-                            print("j =", j, " i =", i, 'continuum[j,i] =', row['continuum'], self.yunit, ';',
-                                  row['fmhz_range'])
+                            message.append(f"{row['fmhz_range']} : {row['continuum']} {self.yunit}")
+                    ModelCube.LOGGER.info("\n    ".join(message))
 
                 # save to file
                 utils.write_continuum_file(cont_name, cont_df, yunit=self.yunit)
@@ -2544,7 +2555,7 @@ class ModelCube(object):
             if pix == self._pix_info[:2]:
 
                 if self.ref_pixel_info is None:  # create the model on the first (brightest) pixel
-                    print("\nFitting ref pixel : ", pix)
+                    ModelCube.LOGGER.info(f"Fitting ref pixel : {pix}")
 
                     # Run the model
                     model = ModelSpectrum(config)
@@ -2566,7 +2577,8 @@ class ModelCube(object):
                     self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 
                 else:
-                    print("\nBack to ref : ", pix, " - Do not fit again")
+                    print("")
+                    ModelCube.LOGGER.info(f"Back to ref : {pix} - Do not fit again")
                     # model = self.use_ref_pixel(model)
                     self.latest_valid_params = self.ref_pixel_info['params'].copy()
 
@@ -2575,11 +2587,9 @@ class ModelCube(object):
                 continue
 
             # Find which species to fit based on snr
-            print("\nPixel : ", pix)
             snr_tag = config.avg_snr_per_species()
             snr_fmt = {key: f'{val:.2f}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
             snr_list = [f"{key}: {val}" for key, val in snr_fmt.items()]
-            print(f'    S/N = {" ; ".join(snr_list)}')
             tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
             # flux_rms = config.flux_rms_per_species()
             # snr_info = {}
@@ -2593,6 +2603,9 @@ class ModelCube(object):
             # print(f"Number of lines with SNR > {self._model_configuration_user['snr']} : "
             #       f"{' ; '.join([f"{key}: {val}" for key, val in snr_info.items()])}")
 
+            message = [f"Pixel : {pix}",
+                       f'S/N = {" ; ".join(snr_list)}']
+
             constraints = self._model_configuration_user.get('constraints', None)
             if len(tags_new) > 0 and constraints is not None:
                 # Check if constraint can be applied, if not, remove species
@@ -2601,11 +2614,12 @@ class ModelCube(object):
                         if tag in key:
                             tag_ref = val.split('_')[-1]
                             if tag_ref not in tags_new:
-                                print(f'    {tag} linked to {tag_ref} -> not selected at pixel {pix}.')
+                                message.append(f'{tag} linked to {tag_ref} -> not selected')
                                 tags_new.remove(tag)
                                 break
 
-            print(f'    tags_new = {", ".join(tags_new)}')  # new tag list with S/N ≥ signal2noise
+            message.append(f'tags_new = {", ".join(tags_new)}')
+            ModelCube.LOGGER.info("\n    ".join(message))
 
             if len(tags_new) > 0:
                 # mask_comp[j, i] = True
@@ -2628,7 +2642,7 @@ class ModelCube(object):
                 config.make_params()
 
                 # fit with the updated config
-                print("Fitting pixel : ", pix)
+                ModelCube.LOGGER.info(f"Fitting pixel : {pix}")
 
                 try:
                     model = ModelSpectrum(config)
@@ -2659,9 +2673,9 @@ class ModelCube(object):
                     self.err_dict['{}'.format(param.name)][j, i] = param.stderr
 
                 t1_stop = process_time()
-                print(f'Execution time for pixel {pix} : {t1_stop - t1_start:.2f} seconds')
+                ModelCube.LOGGER.info(f'Execution time for pixel {pix} : {t1_stop - t1_start:.2f} seconds')
             else:
-                print(f'    S/N too low to compute a model')
+                ModelCube.LOGGER.info(f'    S/N too low to compute a model')
             # --------------------------------------------------------------------------------------------------------------------------
 
             # Printouts for debugging
@@ -2681,7 +2695,7 @@ class ModelCube(object):
 
     def make_maps(self):
         params = self.array_dict.keys()
-        print('params = ', params)
+        ModelCube.LOGGER.info(f'Making maps for params : {", ".join(params)}')
         units = {
             'tex': 'Kelvin',
             'vlsr': 'km/s',
