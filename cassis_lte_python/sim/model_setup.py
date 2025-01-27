@@ -953,7 +953,10 @@ class ModelConfiguration:
                 if lbl.split('_')[-1] not in pars:
                     raise Exception(f"Invalid parameter name {lbl} for tag {sp_name}.")
 
-            sp_dfs.append(sp_df)
+            if any(sp_df.index.duplicated()):
+                raise ValueError(f"Duplicate parameter in {self.comp_config_file} for tag: {sp_name}")
+            else:
+                sp_dfs.append(sp_df)
         df = pd.concat(sp_dfs, axis=1, keys=sp_names)
         # print(df)
         for cname, sp_list in sp_list_by_cpt.items():
