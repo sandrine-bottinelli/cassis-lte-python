@@ -1086,9 +1086,12 @@ class ModelConfiguration:
                             # remove all blank lines
                             lines_sp = [line for line in lines_sp if line.strip() != '']
 
-                            block_indices = [i for i, line in enumerate(lines_sp) if line.startswith('tag')]
+                            names_thresholds = lines_sp[0]
+                            # remove all "tag" lines
+                            lines_sp = [line for line in lines_sp if not line.startswith('tag')]
+                            block_indices = [i for i, line in enumerate(lines_sp) if line.split()[0].isdigit()]
                             block_indices.append(len(lines_sp))
-                            infos_by_sp = [lines_sp[block_indices[i]:block_indices[i+1]]
+                            infos_by_sp = [[names_thresholds]+lines_sp[block_indices[i]:block_indices[i+1]]
                                            for i in range(len(block_indices)-1)]
 
                             self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
