@@ -608,10 +608,13 @@ class ModelConfiguration:
             print(f"INFO - {len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
                   f"{self.tuning_info['fmhz_range'].tolist()}")
 
+        asc = True  # by default, ascending order
         if self.sort == 'frequency':
             tr_list_tresh.sort_values('fMHz', inplace=True)
         else:
-            tr_list_tresh.sort_values(self.sort, inplace=True)
+            if self.sort == 'aij':
+                asc = False
+            tr_list_tresh.sort_values(self.sort, ascending=asc, inplace=True)
         # for comparison with CASSIS look for number of transitions w/i min/max of data :
         # if len(self.x_file) > 0:
         #     print(f"{len(tr_list_tresh)} transitions within thresholds",
