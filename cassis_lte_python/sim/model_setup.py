@@ -573,19 +573,14 @@ class ModelConfiguration:
         If computing a model only or fitting by velocity, apply thresholds.
         """
 
-        # Search for all transition between min/max of data or model
-        if self.fit_full_range:
-            line_list_all = get_transition_df(self.tag_list,
-                                              # fmhz_ranges=[[self.fmin_mhz, self.fmax_mhz]],
-                                              fmhz_ranges=self.franges_mhz,
-                                              shift_kms=self.line_shift_kms)
-        else:
-            line_list_all = get_transition_df(self.tag_list,
-                                              fmhz_ranges=[[self.fmin_mhz, self.fmax_mhz]],
-                                              # fmhz_ranges=self.franges_mhz,
-                                              shift_kms=self.line_shift_kms)
-            print(f"INFO - {len(line_list_all)} transitions found (no thresholds) "
-                  f"within {'data' if len(self.x_file) > 0 else 'model'}'s min/max.")
+        # Search for all transition in the user's frequency range(s):
+        line_list_all = get_transition_df(self.tag_list,
+                                          # fmhz_ranges=[[self.fmin_mhz, self.fmax_mhz]],
+                                          fmhz_ranges=self.franges_mhz,
+                                          shift_kms=self.line_shift_kms)
+
+        print(f"INFO - {len(line_list_all)} transitions found (no thresholds) "
+              f"within {'data' if len(self.x_file) > 0 else 'model'}'s min/max.")
         line_list_all_by_tag = {tag: list(line_list_all[line_list_all.tag == tag].transition)
                                 for tag in self.tag_list}
 
@@ -1278,9 +1273,13 @@ class ModelConfiguration:
                                     for v in [-1. * self.bandwidth / 2 + self.vlsr_plot,
                                               1. * self.bandwidth / 2 + self.vlsr_plot]]
                     f_range_plot.sort()
+                    f_range_search = [utils.velocity_to_frequency(v, tr.f_trans_mhz, vref_kms=self.vlsr_file)
+                                      for v in [-1. * self.bandwidth / 2 + self.vlsr_file,
+                                                1. * self.bandwidth / 2 + self.vlsr_file]]
+                    f_range_plot.sort()
                     x_win, y_win = None, None
                     if len(self.x_file) > 0:
-                        x_win, y_win = utils.select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
+                        x_win, y_win = utils.select_from_ranges(self.x_file, f_range_search, y_values=self.y_file)
                         if len(x_win) <= 5 or len(set(y_win)) == 1:
                             continue
                     win = Window(tr, len(win_list_tag) + 1, bl_corr=self.bl_corr)
