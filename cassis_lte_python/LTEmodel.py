@@ -2567,7 +2567,7 @@ class ModelCube(object):
                     except IndexError:
                         continuum = cont_data[:, j, i][0].value
                     cont_values.append(continuum)
-                if len(self.fmhz_ranges) > 1 and len(self._cont_data):
+                if len(self.fmhz_ranges) > 1 and len(self._cont_data) == 1:  # TODO : check
                     # only one continuum value for all frequency ranges -> replicate
                     cont_values *= len(self.fmhz_ranges)
                 cont_df = pd.DataFrame({
@@ -2578,7 +2578,7 @@ class ModelCube(object):
                 if len(cont_df['continuum'].unique()) == 1:
                     print("j =", j, " i =", i, 'continuum[j,i] =', cont_df['continuum'].unique()[0], self.yunit)
                 else:
-                    for i, row in cont_df.iterrows():
+                    for _, row in cont_df.iterrows():
                         print("j =", j, " i =", i, 'continuum[j,i] =', row['continuum'], self.yunit, ';',
                               row['fmhz_range'])
 
