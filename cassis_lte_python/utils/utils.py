@@ -958,10 +958,17 @@ def get_single_mask(wcs: WCS, file, exclude=False):
 def get_mask(wcs: WCS, file, exclude=False):
     if not isinstance(file, list):
         return get_single_mask(wcs, file, exclude=exclude)
-    mask = get_single_mask(wcs, file[0], exclude=exclude)
-    for f in file[1:]:
-        mask &= get_single_mask(wcs, f, exclude=exclude)
-    return mask
+
+    if len(file) == 1:
+        return get_single_mask(wcs, file[0], exclude=exclude)
+
+    mask_out = get_single_mask(wcs, file[0], exclude=False)
+    mask_in = get_single_mask(wcs, file[1], exclude=True)
+    return mask_out & mask_in
+    # mask = get_single_mask(wcs, file[0], exclude=False)
+    # for f in file[1:]:
+    #     mask &= get_single_mask(wcs, f, exclude=exclude)
+    # return mask
 
 
 def get_valid_pixels(wcs: WCS, file, file2=None, masked=False, snr=5., mask_operation='or'):

@@ -2408,7 +2408,17 @@ class ModelCube(object):
         if mask_info is None:
             self.masked_pix_list = None
         else:
-            self.masked_pix_list = utils.get_mask(self.wcs, mask_info['file'], exclude=mask_info.get('exclude',True))
+            mask_file = mask_info.get('file', None)
+            if mask_file is None:
+                raise KeyError("Missing mask file")
+            if not isinstance(mask_file, list):
+                mask_file = [mask_file]
+            if len(mask_file) > 2:
+                raise ValueError("Can only handle 1 or 2 mask files.")
+
+            self.masked_pix_list = utils.get_mask(self.wcs, mask_file,
+                                                  exclude=mask_info.get('exclude',True))
+
 
             # file1 = os.path.join(self._data_path, masks[0])
             # file2 = None
