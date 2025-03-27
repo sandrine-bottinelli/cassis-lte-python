@@ -501,6 +501,98 @@ class ModelSpectrum(object):
         if json_params is not None:
             params.loads(json_params)
 
+        params = self.check_params_boundaries(params)
+        # # Check min/max Tex:
+        # for icpt, cpt in enumerate(self.cpt_list):
+        #     par = params[f'{cpt.name}_tex']
+        #     mini = cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin)
+        #     maxi = cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax)
+        #     if par.min < cpt.tmin and self.minimize:
+        #         sp_tmin = [sp for sp in cpt.species_list if min(sp.pf[0]) == cpt.tmin]
+        #         if len(sp_tmin) > 1:
+        #             tags_tmin = ", ".join([sp.tag for sp in sp_tmin])
+        #         else:
+        #             tags_tmin = sp_tmin[0].tag
+        #         message = [
+        #             f'The requested lower boundary for Tex is {par.min} K, but the lowest temperature',
+        #             f'for which the partition function (pf) is defined for all species is {cpt.tmin} K;',
+        #             f'Species for which T_pf_min = {cpt.tmin} is/are: {tags_tmin}',
+        #             f'-> limiting Tex search to temperatures > {cpt.tmin} \n'
+        #         ]
+        #         print(f'INFO - Component {cpt.name} :')
+        #         for line in message:
+        #             print(" " * 6, line)
+        #         # print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
+        #         #       f'(smallest temperature for which the partition function is defined for all species).')
+        #         val = (mini + maxi) / 2
+        #     if par.max > cpt.tmax and self.minimize:
+        #         sp_tmax = [sp for sp in cpt.species_list if max(sp.pf[0]) == cpt.tmax]
+        #         if len(sp_tmax) > 1:
+        #             tags_tmax = ", ".join([sp.tag for sp in sp_tmax])
+        #         else:
+        #             tags_tmax = sp_tmax[0].tag
+        #         message = [
+        #             f'The requested upper boundary for Tex is {par.max} K, but the highest temperature',
+        #             f'for which the partition function (pf) is defined for all species is {cpt.tmax} K;',
+        #             f'Species for which T_pf_max = {cpt.tmax} is/are: {tags_tmax}',
+        #             f'-> limiting Tex search to temperatures < {cpt.tmax} \n'
+        #         ]
+        #         print(f'INFO - Component {cpt.name} :')
+        #         for line in message:
+        #             print(" " * 6, line)
+        #         # print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
+        #         #       f'(highest temperature for which the partition function is defined for all species).')
+        #         val = (mini + maxi) / 2
+        #
+        #     par.set(min=mini, max=maxi)
+
+        # user constraints
+        if self.model_config.constraints is not None and self.model_config.ref_pixel_info is None:
+            for key, val in self.model_config.constraints.items():
+                if 'set_fwhm' in key:
+                    tag_ref = val.split('_')[-1]
+                    cpt = val.split('_')[0]
+                    for tag in self.model_config.tag_list:
+                        if tag != tag_ref:
+                            try:
+                                params[f'{cpt}_fwhm_{tag}'].set(expr=val)
+                            except KeyError:  # key does not exist, do nothing
+                                pass
+                else:
+                    try:
+                        params[key].set(expr=val)
+                    except KeyError:
+                        print(f"Constraints: {key.split('_')[-1]} is not in the tag list "
+                              f"or has been removed due to lack of transitions.")
+                        pass
+
+        # reset bounds if a parameters contains an expression to make sure it does not interfere
+        for par in params:
+            if params[par].expr is not None:
+                params[par].set(min=-np.inf, max=np.inf)
+
+        self.params = params
+
+        # if self.model_config.jparams is None:
+        #     self.model_config.jparams = self.params.dumps()
+
+        norm_factors = {self.params[parname].name: 1. for parname in self.params}
+        if normalize:
+            for parname in self.params:
+                param = self.params[parname]
+                nf = abs(param.value) if param.value != 0. else 1.
+                norm_factors[param.name] = nf
+                if param.expr is None:
+                    param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
+        self.norm_factors = norm_factors
+
+    def check_params_boundaries(self, params):
+        # Check min for params that cannot have negative values:
+        for parname in params:
+            if any([p in parname for p in ['size', 'fwhm', 'ntot']]):
+                if params[parname].min < 0:
+                    params[parname].set(min=0)
+
         # Check min/max Tex:
         for icpt, cpt in enumerate(self.cpt_list):
             par = params[f'{cpt.name}_tex']
@@ -545,45 +637,7 @@ class ModelSpectrum(object):
 
             par.set(min=mini, max=maxi)
 
-        # user constraints
-        if self.model_config.constraints is not None and self.model_config.ref_pixel_info is None:
-            for key, val in self.model_config.constraints.items():
-                if 'set_fwhm' in key:
-                    tag_ref = val.split('_')[-1]
-                    cpt = val.split('_')[0]
-                    for tag in self.model_config.tag_list:
-                        if tag != tag_ref:
-                            try:
-                                params[f'{cpt}_fwhm_{tag}'].set(expr=val)
-                            except KeyError:  # key does not exist, do nothing
-                                pass
-                else:
-                    try:
-                        params[key].set(expr=val)
-                    except KeyError:
-                        print(f"Constraints: {key.split('_')[-1]} is not in the tag list "
-                              f"or has been removed due to lack of transitions.")
-                        pass
-
-        # reset bounds if a parameters contains an expression to make sure it does not interfere
-        for par in params:
-            if params[par].expr is not None:
-                params[par].set(min=-np.inf, max=np.inf)
-
-        self.params = params
-
-        # if self.model_config.jparams is None:
-        #     self.model_config.jparams = self.params.dumps()
-
-        norm_factors = {self.params[parname].name: 1. for parname in self.params}
-        if normalize:
-            for parname in self.params:
-                param = self.params[parname]
-                nf = abs(param.value) if param.value != 0. else 1.
-                norm_factors[param.name] = nf
-                if param.expr is None:
-                    param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
-        self.norm_factors = norm_factors
+        return params
 
     def generate_lte_model(self, normalize=False):
         if self.params is None:
@@ -632,10 +686,6 @@ class ModelSpectrum(object):
             start_pars = Parameters().loads(self.model_config.jparams)
             for parname in self.params:
                 self.params[parname] = start_pars[parname]
-
-        if self.model_config.latest_valid_params is not None:
-            for parname in self.params:
-                self.params[parname] = self.model_config.latest_valid_params[parname]
 
         # if self.model is None:
         #     self.generate_lte_model()
@@ -2366,6 +2416,8 @@ class ModelCube(object):
 
         self._model_configuration_user = copy.deepcopy(configuration)
         self._model = ModelSpectrum(configuration, verbose=verbose)
+        self._model.make_params()
+        self._params_user = self._model.params.copy()
         # self._model_configuration = ModelConfiguration(configuration, verbose=verbose)
         self._model_configuration = self._model.model_config
 
@@ -2669,6 +2721,24 @@ class ModelCube(object):
                 # mask_comp[j, i] = True
                 # update tag list
                 model.update_tag_list(tags_new)
+
+                # update params
+                if model.model_config.latest_valid_params is not None:
+                    for parname in model.params:
+                        model.params[parname] = model.model_config.latest_valid_params[parname]
+                        if model.params[parname].vary and model.params[parname].expr is None:
+                            val = model.params[parname].value
+                            if (model.params[parname].user_data is not None and
+                                    model.params[parname].user_data.get('factor', False)):
+                                new_max = model.params[parname].user_data['max_fact'] * val
+                                new_min = model.params[parname].user_data['min_fact'] * val
+                            else:
+                                new_max = val + self._params_user[parname].max - self._params_user[parname].value
+                                new_min = val - (self._params_user[parname].value - self._params_user[parname].min)
+
+                            model.params[parname].set(min=new_min, max=new_max)
+
+                model.params = model.check_params_boundaries(model.params)
 
                 # fit with the updated config
                 model.do_minimization()
