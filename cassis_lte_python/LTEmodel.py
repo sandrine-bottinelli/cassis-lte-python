@@ -815,6 +815,13 @@ class ModelSpectrum(object):
         self.do_savings()
         self.do_plots()
 
+        return {
+            'iterations': self.model_fit.nfev,
+            'Exec time (s)': t_stop - t_start,
+            'red_chi2': self.model_fit.redchi,
+            'params': self.model_fit.params
+        }
+
     def do_savings(self):
         if self.model_config.fit_full_range:
             self.save_line_list_cassis("linelist_cassis", snr_threshold=self.model_config.snr_threshold)
@@ -2409,6 +2416,7 @@ class ModelCube(object):
             self._data_file = [os.path.join(self._data_path, f) for f in self._data_file]
 
         self.output_dir = configuration.get('output_dir', 'outputs')
+        self.log_file = os.path.join(self.output_dir, 'logfile.txt')
 
         self._cubes = utils.get_cubes(self._data_file)
         self.cubeshape = self._cubes[0].shape
@@ -2608,6 +2616,27 @@ class ModelCube(object):
         return fmhz_ranges
 
     def do_minimization(self, pix_list=None):
+        def save_to_log(pix, res, par_names_all, append):
+            par_names = [res["params"][par].name for par in res["params"]]
+            if not append:
+                with open(self.log_file, "w") as f:
+                    cols = ["x_pix", "y_pix", "iterations", "Exec time (s)", "red_chi2", "tags_new"]
+                    cols += par_names_all
+                    f.write("\t".join(cols) + "\n")
+            with (open(self.log_file, "a") as f):
+                line = [str(p) for p in pix]
+                line += [utils.format_variable(val) for key, val in res.items() if key != 'params']
+                tags = model.model_config.tag_list
+                line += [",".join(tags)]
+                par_vals = []
+                for par_name in par_names_all:
+                    if par_name in par_names:
+                        par_vals.append(utils.format_float(res["params"][par_name].value))
+                    else:
+                        par_vals.append("--")
+                line += par_vals
+                f.write("\t".join(line) + "\n")
+
         if not os.path.isdir(os.path.abspath(self.output_dir)):
             os.makedirs(os.path.abspath(self.output_dir))
 
@@ -2716,7 +2745,11 @@ class ModelCube(object):
 
                     # Run the model
                     model.model_config.minimize = True
-                    model.do_minimization()
+                    res = model.do_minimization()
+
+                    # Save some info
+                    par_names_all = [model.params[par].name for par in model.params]
+                    save_to_log(pix, res, par_names_all, append=False)
 
                     # Save the model
                     model.save_ref_pixel()
@@ -2794,7 +2827,9 @@ class ModelCube(object):
                 model.params = model.check_params_boundaries(model.params)
 
                 # fit with the updated config
-                model.do_minimization()
+                print("\nFitting pixel : ", pix)
+                res = model.do_minimization()
+                save_to_log(pix, res, par_names_all, append=True)
 
                 self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 
