@@ -580,7 +580,7 @@ class ModelConfiguration:
                                           shift_kms=self.line_shift_kms)
 
         print(f"INFO - {len(line_list_all)} transitions found (no thresholds) "
-              f"within {'data' if len(self.x_file) > 0 else 'model'}'s min/max.")
+              f"within {'data' if len(self.x_file) > 0 else 'model'}'s frequency range(s).")
         line_list_all_by_tag = {tag: list(line_list_all[line_list_all.tag == tag].transition)
                                 for tag in self.tag_list}
 
@@ -599,7 +599,7 @@ class ModelConfiguration:
         if len(self.tuning_info) > 1:
             # more than one telescope range => search only in data within telescope ranges
             # NB : this assumes that if only one range, it encompasses the data's min/max
-            tr_list_tresh = select_transitions(tr_list_tresh, xrange=self.franges_mhz)
+            # tr_list_tresh = select_transitions(tr_list_tresh, xrange=self.franges_mhz)
             print(f"INFO - {len(tr_list_tresh)} transitions within thresholds and within tuning frequencies : "
                   f"{self.tuning_info['fmhz_range'].tolist()}")
 
