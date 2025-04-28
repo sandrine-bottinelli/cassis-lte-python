@@ -303,52 +303,91 @@ class ModelSpectrum(object):
         except TypeError:
             name_config = self.name_config
 
-        config_save = {
-            'creation-date': datetime.datetime.now().strftime("%Y-%m-%d,  %H:%M:%S"),
-            'data_file': os.path.abspath(self.data_file) if self.data_file is not None else None,
-            'output_dir': os.path.abspath(self.output_dir) if self.output_dir is not None else None,
+        cpt_config = {}
+        if self.model_config.comp_config_file is not None:
+            cpt_config['config'] = os.path.abspath(self.model_config.comp_config_file)
+        cpt_config = {**cpt_config, **{cpt.name: cpt.as_json() for cpt in self.cpt_list}}
+
+        config_save = {}
+
+        for attr in ('data_file', 'output_dir', 'tcmb', 'fit_full_range', 'bandwidth', 'oversampling',
+                     'tau_max', 'thresholds', 'fit_kws', 'name_lam', 'save_configs', 'save_results',
+                     'plot_gui', 'plot_file', 'exec_time', 'constraints'):
+            try:
+                val = getattr(self, attr)
+            except AttributeError:
+                continue
+            if isinstance(val, (str, os.PathLike)) and (os.path.isdir(val) or os.path.isfile(val)):
+                val = os.path.abspath(val)
+            config_save[attr] = val
+
+        tuning_info = {os.path.abspath(k): v for k, v in self.model_config._tuning_info_user.items()}
+        rms_cal = self.model_config._rms_cal_user
+        rms_cal = os.path.abspath(rms_cal) if isinstance(rms_cal, str) else rms_cal
+        plot_kws = self.user_plot_kws
+        try:
+            plot_kws['gui+file']['other_species'] = os.path.abspath(plot_kws['gui+file']['other_species'])
+        except (KeyError, TypeError):
+            pass
+        try:
+            plot_kws['file_only']['filename'] = os.path.abspath(plot_kws['file_only']['filename'])
+        except (KeyError, TypeError):
+            pass
+
+        config_save_ctd = {
             'tc': os.path.abspath(self.cont_info) if isinstance(self.cont_info, (str, os.PathLike)) else self.cont_info,
-            'tcmb': self.tcmb,
-            'tuning_info': self.model_config._tuning_info_user,
+            'baseline_corr': self.bl_corr,
+            'continuum_free': self.cont_free,
+            'tuning_info': tuning_info,
             # 'v_range': self.model_config._v_range_user,
-            'v_range': None,  # update later
-            'fit_full_range': self.model_config.fit_full_range,
-            'fit_freq_except': self.model_config._fit_freq_except_user,
-            'rms_cal': self.model_config._rms_cal_user,
-            'bandwidth': self.bandwidth,
-            'oversampling': self.oversampling,
+            # 'v_range': None,  # update later
+            # 'fit_full_range': self.model_config.fit_full_range,
+            # 'fit_freq_except': self.model_config._fit_freq_except_user,
+            'rms_cal': rms_cal,
             # 'fghz_min': self.fmin_mhz / 1.e3,
             # 'fghz_max': self.fmax_mhz / 1.e3,
             'df_mhz': self.dfmhz,
             'noise': np.mean(self.noise(self.x_mod)),  # TODO : write range
-            'tau_max': self.tau_max,
-            'thresholds': self.thresholds,
             'minimize': False,  # by default, do not (re-)minimize
             'modeling': self.modeling or self.minimize,  # if minimization was done, want modeling too by default
             'max_iter': self.max_iter,
-            'fit_kws': self.fit_kws,
-            'name_lam': self.name_lam,
+            # 'fit_kws': self.fit_kws,
+            # 'name_lam': self.name_lam,
             'name_config': name_config,
-            'save_configs': self.save_configs,
-            'save_results': self.save_results,
-            'plot_gui': self.plot_gui,
-            # 'gui_kws': self.gui_kws,
-            'plot_file': self.plot_file,
+            # 'save_configs': self.save_configs,
+            # 'save_results': self.save_results,
+            # 'plot_gui': self.plot_gui,
+            # # 'gui_kws': self.gui_kws,
+            # 'plot_file': self.plot_file,
             # 'plot_file': os.path.abspath(self.plot_file) if os.path.isfile(self.plot_file) else self.plot_file,
             # 'file_kws': self.file_kws,
-            'plot_kws': self.user_plot_kws,
-            'exec_time': self.exec_time,
-            'components': {cpt.name: cpt.as_json() for cpt in self.cpt_list},
-            'params': self.params.dumps(cls=utils.CustomJSONizer)
+            'plot_kws': plot_kws,
+            # 'exec_time': self.exec_time,
+            'components': cpt_config,
+            # 'constraints': self.model_config.constraints,
+            # 'params': self.params.dumps(cls=utils.CustomJSONizer)
             # 'params': self.params.dumps()
         }
+
+        config_save = {**config_save, **config_save_ctd}
+
         if not self.model_config.fit_full_range:
             config_save['v_range'] = {tag: {win.name.split()[-1]: win.v_range_fit
                                             for win in self.model_config.win_list_fit}
                                       for tag in self.model_config.tag_list}
-        if self.model_fit is not None:
-            config_save['model_fit'] = self.model_fit.dumps(cls=utils.CustomJSONizer)
+        else:
+            config_save['fit_freq_except'] = self.model_config._fit_freq_except_user
 
+        # if self.model_fit is not None:
+        #     config_save['model_fit'] = self.model_fit.dumps(cls=utils.CustomJSONizer)
+        # NB: the above line yields an "Object of type bool is not JSON serializable" error
+        #     when the dumps method of the lmfit ModelResult class calls the dumps method of the Parameters class ;
+        #     however, I do not understand why the later yields an error, since individual parameters do not yield
+        #     any error.
+
+        config_save = {'creation-date': datetime.datetime.now().strftime("%Y-%m-%d,  %H:%M:%S"),
+                       **dict(sorted(config_save.items())),
+                       'params': self.params.dumps(cls=utils.CustomJSONizer)}
         return config_save
 
     def save_config(self, filename, dirname=None):
