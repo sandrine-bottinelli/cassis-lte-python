@@ -2640,7 +2640,7 @@ class ModelCube(object):
         if not os.path.isdir(os.path.abspath(self.output_dir)):
             os.makedirs(os.path.abspath(self.output_dir))
 
-        printDebug = self._model_configuration_user.get('print_debug', True)
+        printDebug = self._model_configuration.print_debug
 
         if pix_list is None:
             pix_list = self.pix_list
@@ -2708,13 +2708,14 @@ class ModelCube(object):
                     'fmhz_range': self.fmhz_ranges,
                     'continuum': cont_values
                 })
-                # print to terminal
-                if len(cont_df['continuum'].unique()) == 1:
-                    print("j =", j, " i =", i, 'continuum[j,i] =', cont_df['continuum'].unique()[0], self.yunit)
-                else:
-                    for _, row in cont_df.iterrows():
-                        print("j =", j, " i =", i, 'continuum[j,i] =', row['continuum'], self.yunit, ';',
-                              row['fmhz_range'])
+                # print to terminal if debug mode
+                if self._model_configuration.print_debug:
+                    if len(cont_df['continuum'].unique()) == 1:
+                        print("j =", j, " i =", i, 'continuum[j,i] =', cont_df['continuum'].unique()[0], self.yunit)
+                    else:
+                        for _, row in cont_df.iterrows():
+                            print("j =", j, " i =", i, 'continuum[j,i] =', row['continuum'], self.yunit, ';',
+                                  row['fmhz_range'])
 
                 # save to file
                 utils.write_continuum_file(cont_name, cont_df, yunit=self.yunit)

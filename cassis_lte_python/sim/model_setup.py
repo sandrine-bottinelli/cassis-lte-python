@@ -245,6 +245,7 @@ class ModelConfiguration:
         self.max_iter = configuration.get('max_iter', None)
         self.fit_kws = configuration.get('fit_kws', None)
         self.print_report = configuration.get('print_report', True)
+        self.print_debug = configuration.get('print_debug', True)
 
         # outputs other than plots
         self.base_name = configuration.get('base_name', configuration.get('name_lam', 'lte_model'))
@@ -1356,13 +1357,14 @@ class ModelConfiguration:
         if len(self.win_list_fit) > 0:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
-            print(f"\nNumber of points used for the minimization : {len(self.x_fit)}/{len(self.x_file)}")
-            if len(self.franges_mhz) > 1:
-                for frange in self.franges_mhz:
-                    print(f"    {frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
-                          f" / {len(self.x_file[(self.x_file >= min(frange)) & (self.x_file <= max(frange))])}"
-                          f" points used")
-                print(" ")
+            if self.print_debug and self.minimize:
+                print(f"\nNumber of points used for the minimization : {len(self.x_fit)}/{len(self.x_file)}")
+                if len(self.franges_mhz) > 1:
+                    for frange in self.franges_mhz:
+                        print(f"    {frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
+                              f" / {len(self.x_file[(self.x_file >= min(frange)) & (self.x_file <= max(frange))])}"
+                              f" points used")
+                    print(" ")
 
         else:
             self.x_fit, self.y_fit = None, None
