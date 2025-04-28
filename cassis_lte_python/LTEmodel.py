@@ -2663,6 +2663,8 @@ class ModelCube(object):
             t1_start = process_time()
             i, j = pix
             if mask is not None and not mask[j, i]:
+                if pix == self._pix_info[:2]:  # ref pixel is masked out
+                    raise IndexError("Your reference pixel is masked out.")
                 # the pixel is masked, go to the next one
                 continue
             data = np.concatenate([dat[:, j, i].array for dat in self._cubes])
