@@ -705,7 +705,7 @@ class ModelSpectrum(object):
             return None
 
         if print_report is None:
-            print_report = self.print_report
+            print_report = 'long' if self.model_config.print_report else 'short'
         # if self.model_config.line_list_all is None:
         #     self.model_config.get_linelist()
         # if len(self.model_config.win_list) == 0:
@@ -797,10 +797,20 @@ class ModelSpectrum(object):
                 # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
                     self.model_config.latest_valid_params[parname] = self.params[parname]
 
-        if print_report:
+        if print_report == 'long':
             # print(self.model_fit.fit_report())
             print(self.fit_report(report_kws=report_kws))
             print("")
+        elif print_report == 'short':
+            print("Best values:")
+            for cpt in self.model_config.cpt_list:
+                res = []
+                for p in cpt.parameters:
+                    res.append(f"{p.name} = {utils.format_float(p.value, nb_signif_digits=2)}")
+                print(f"  " + " ; ".join(res))
+            print("")
+        else:
+            raise KeyError("print_report can only be 'long' or 'short'.")
 
         self.do_savings()
         self.do_plots()
