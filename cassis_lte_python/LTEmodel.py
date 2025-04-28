@@ -2405,14 +2405,18 @@ class ModelCube(object):
         if self._pix_info is None:
             self.pix_list = []
         else:
-            (xref, yref, delta) = self._pix_info
+            try:
+                (xref, yref, delta, step) = self._pix_info
+            except ValueError:
+                (xref, yref, delta) = self._pix_info
+                step = 1
             # Define the snake loop extent
             if delta == -1:
                 ymax, xmax = self.cubeshape[-2:]
-                self.pix_list = utils.pixels_snake_loop(xref, yref, xmax - 1, ymax - 1)
+                self.pix_list = utils.pixels_snake_loop(xref, yref, xmax - 1, ymax - 1, step=step)
             else:
                 self.pix_list = utils.pixels_snake_loop(xref, yref, xref + delta, yref + delta, xmin=xref - delta,
-                                                        ymin=yref - delta)
+                                                        ymin=yref - delta, step=step)
 
         self._model_configuration_user = copy.deepcopy(configuration)
         self._model = ModelSpectrum(configuration, verbose=verbose)

@@ -1022,7 +1022,7 @@ def get_valid_pixels(wcs: WCS, file, file2=None, masked=False, snr=5., mask_oper
         raise ValueError("Unknown extension.")
 
 
-def pixels_snake_loop(xref, yref, xmax, ymax, xmin=0, ymin=0):
+def pixels_snake_loop(xref, yref, xmax, ymax, xmin=0, ymin=0, step=1):
     """
     Compute the list of pixels that scans the array in the following way :
      - start on (xref, yref) then go right, up, left, up, right... -> computes top half of the map
@@ -1037,28 +1037,31 @@ def pixels_snake_loop(xref, yref, xmax, ymax, xmin=0, ymin=0):
     :param ymax: the upper limit in y-direction (included)
     :param xmin: the lower limit in x-direction
     :param ymin: the lower limit in y-direction
+    :param step: the step size in pixels
     :return: list of (x,y)
     """
     def snake(pix_list, direction):
-        full_line = list(range(xmin, xmax))
+        full_line = list(range(xref, xmin - 1, -step))
+        full_line = full_line[1:] + list(range(xref, xmax + 1, step))
+        full_line.sort()
         if direction == 'up':
-            increment = +1
+            increment = +1 * step
             right2left = True  # start by going right to left
         else:
-            increment = -1
+            increment = -1 * step
             right2left = False  # start by going left to right
         y = yref + increment
-        while (yref < y < ymax) or (yref > y >= ymin):
+        while (yref < y <= ymax) or (yref > y >= ymin):
             full_line.sort(reverse=right2left)
             pix_list.extend([(x, y) for x in full_line])
             right2left = not right2left  # reverse direction
             y = y + increment
         return pix_list
 
-    xmax, ymax = xmax+1, ymax+1
-    pix_list = [(x, yref) for x in range(xref, xmax)]  # complete the line at yref, going right
+    # xmax, ymax = xmax+1, ymax+1
+    pix_list = [(x, yref) for x in range(xref, xmax + 1, step)]  # complete the line at yref, going right
     pix_list = snake(pix_list, direction='up')
-    pix_list.extend([(x, yref) for x in range(xref, xmin - 1, -1)])  # complete the line at yref, going left
+    pix_list.extend([(x, yref) for x in range(xref, xmin - 1, -1*step)])  # complete the line at yref, going left
     pix_list = snake(pix_list, direction='down')
 
     return pix_list
