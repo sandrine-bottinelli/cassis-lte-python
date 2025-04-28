@@ -370,6 +370,14 @@ def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=NB_DECIMALS, min
         f = "{:." + str(nb_signif_digits) + rpst + "}"
         return f.format(value)
 
+def format_variable(var):
+    if isinstance(var, str):
+        return var
+    elif isinstance(var, int):
+        return str(var)
+    else:
+        return format_float(var)
+
 
 def format_time(t_sec):
     """
