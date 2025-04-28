@@ -1009,7 +1009,7 @@ class ModelSpectrum(object):
 
         # wt = None
         method = fit_kws.get('method', 'leastsq')
-        print(f'Performing minimization with the {method} method...')
+        # print(f'Performing minimization with the {method} method...')
         if 'method' in fit_kws:
             fit_kws.pop('method')
 
@@ -2744,7 +2744,7 @@ class ModelCube(object):
             if pix == self._pix_info[:2]:
 
                 if model.model_fit is None:  # create the model on the first (brightest) pixel
-                    print("Fitting ref pixel : ", pix)
+                    print("\nFitting ref pixel : ", pix)
 
                     # Run the model
                     model.model_config.minimize = True
