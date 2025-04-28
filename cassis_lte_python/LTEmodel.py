@@ -2693,7 +2693,7 @@ class ModelCube(object):
                 'model': model_name
             }
 
-            cont_name = self.output_dir + "continuum_{}_{}".format(i, j) + ".txt"
+            cont_name = os.path.join(self.output_dir, "continuum_{}_{}".format(i, j) + ".txt")
 
             if len(self._cont_data) != 0:
                 cont_values = []
