@@ -1429,7 +1429,7 @@ class ModelConfiguration:
         self._rms_cal_user = value
         self.get_rms_cal_info()
         for win in self.win_list:
-            row = utils.get_df_row_from_freq_range(self.rms_cal, win.transition.f_trans_mhz)
+            row = utils.get_df_row_from_freq_range(self.rms_cal, np.mean(win.x_file))
             idx = row.index
             win.rms = self.rms_cal.loc[idx, 'rms'].values[0]
             win.cal = self.rms_cal.loc[idx, 'cal'].values[0]
@@ -1672,8 +1672,8 @@ class Window:
 
     def set_rms_cal(self, rms_cal_df):
         if 'freq_range' in rms_cal_df.columns:
-            rms_cal = rms_cal_df[(self.transition.f_trans_mhz > rms_cal_df['fmin'])
-                                 & (self.transition.f_trans_mhz < rms_cal_df['fmax'])]
+            rms_cal = rms_cal_df[(np.mean(self.x_file) > rms_cal_df['fmin'])
+                                 & (np.mean(self.x_file) < rms_cal_df['fmax'])]
         else:
             rms_cal = rms_cal_df[rms_cal_df['win_id'] == (self.transition.tag, self.plot_nb)]
             if len(rms_cal) == 0:
