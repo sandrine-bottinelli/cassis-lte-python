@@ -700,7 +700,10 @@ class ModelSpectrum(object):
             self.make_params(json_params=self.model_config.jparams)
             self.generate_lte_model()
 
-    def do_minimization(self, print_report=None, report_kws=None):
+        if self.plot_gui or self.plot_file:
+            self.do_plots()
+
+    def do_minimization(self, print_report: 'short' | 'long' | None=None, report_kws=None):
         if self.x_fit is None:
             return None
 
