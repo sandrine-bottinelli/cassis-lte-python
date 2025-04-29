@@ -1765,8 +1765,11 @@ class Window:
         if self._bl_corr and min(value) < 0:
             value -= min(value)
         self._y_fit = value
-        if len(self._y_fit) > 3:
+        if len(self._y_fit) >= 3:
             self._in_fit = True
+        else:
+            self._in_fit = False
+            print(f"WARNING - Window {self.name} : {len(self._y_fit)} data points selected, window not included in fit.")
 
     @property
     def in_fit(self):
