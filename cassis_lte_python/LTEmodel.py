@@ -1989,10 +1989,10 @@ class ModelSpectrum(object):
 
                 for x, y in zip(x_values, y_values):
                     if len(np.shape(y_values)) == 1:
-                        f.write('{}\t{}\n'.format(utils.format_float(x, nb_signif_digits=4),
+                        f.write('{}\t{}\n'.format(utils.format_float(x, fmt="{:.5f}"),
                                                   utils.format_float(y, fmt="{:.5e}")))
                     else:
-                        line = '{}\t'.format(utils.format_float(x, nb_signif_digits=4))
+                        line = '{}\t'.format(utils.format_float(x, fmt="{:.5f}"))
                         line += '\t'.join([utils.format_float(yy, fmt="{:.5e}") for yy in y])
                         f.write(line + '\n')
 
