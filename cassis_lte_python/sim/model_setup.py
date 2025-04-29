@@ -1090,8 +1090,8 @@ class ModelConfiguration:
                             lines_sp = [line for line in lines_sp if not line.startswith('tag')]
                             block_indices = [i for i, line in enumerate(lines_sp) if line.split()[0].isdigit()]
                             block_indices.append(len(lines_sp))
-                            infos_by_sp = [[names_thresholds]+lines_sp[block_indices[i]:block_indices[i+1]]
-                                           for i in range(len(block_indices)-1)]
+                            infos_by_sp = [[names_thresholds] + lines_sp[block_indices[i]:block_indices[i + 1]]
+                                           for i in range(len(block_indices) - 1)]
 
                             self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
 
@@ -1127,7 +1127,7 @@ class ModelConfiguration:
         for cname, cpt_dic in cpt_info.items():
             sp_list = cpt_dic.get('species', None)
             if sp_list is None:
-                    raise Exception("Missing species info.")
+                raise Exception("Missing species info.")
             if not isinstance(sp_list, list):  # make sure it is a list
                 sp_list = [sp_list]
             if isinstance(sp_list[0], (int, str)):
@@ -1362,9 +1362,10 @@ class ModelConfiguration:
                 print(f"\nNumber of points used for the minimization : {len(self.x_fit)}/{len(self.x_file)}")
                 if len(self.franges_mhz) > 1:
                     for frange in self.franges_mhz:
-                        print(f"    {frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
-                              f" / {len(self.x_file[(self.x_file >= min(frange)) & (self.x_file <= max(frange))])}"
-                              f" points used")
+                        print(
+                            f"    {frange}: {len(self.x_fit[(self.x_fit >= min(frange)) & (self.x_fit <= max(frange))])}"
+                            f" / {len(self.x_file[(self.x_file >= min(frange)) & (self.x_file <= max(frange))])}"
+                            f" points used")
                     print(" ")
 
         else:
