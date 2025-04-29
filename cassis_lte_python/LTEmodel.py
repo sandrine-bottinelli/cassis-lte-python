@@ -959,8 +959,7 @@ class ModelSpectrum(object):
                             if win.y_mod_err is None and self.file_kws['model_err']:
                                 win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
                             if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
-                                win.y_mod_err_cpt = {f'c{nc+1}': y for nc, y in
-                                                     enumerate(self.eval_uncertainties_components(fmhz=win.x_mod))}
+                                win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
                     else:
                         print("## Warning: could not compute model errors.")
 
@@ -1151,7 +1150,7 @@ class ModelSpectrum(object):
 
     def eval_uncertainties_components(self, fmhz, sigma=1):
         """From lmfit.model"""
-        res = []
+        res = {}
 
         if self.model_fit.covar is not None:
             for cpt in self.cpt_list:
@@ -1205,7 +1204,7 @@ class ModelSpectrum(object):
 
                 scale = t.ppf((prob+1)/2.0, self.model_fit.ndata-nvarys)
 
-                res.append(scale * np.sqrt(df2))
+                res[cpt.name] = scale * np.sqrt(df2)
 
         return res
 
@@ -1474,8 +1473,7 @@ class ModelSpectrum(object):
                     # self.model_fit.nvarys = len(plot_pars)
                     # win.y_mod_err_cpt = [fit_cpt.eval_uncertainty(fmhz=win.x_mod, cpt=cpt)
                     #                      for fit_cpt, cpt in zip(self.model_fit_cpt, self.cpt_list)]
-                    win.y_mod_err_cpt = {f'c{nc+1}': y
-                                         for nc, y in enumerate(self.eval_uncertainties_components(fmhz=win.x_mod))}
+                    win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
 
             if (self.modeling or self.minimize) and (len(self.cpt_list) > 1):
                 for cpt in self.cpt_list:
