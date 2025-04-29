@@ -1325,11 +1325,12 @@ class ModelConfiguration:
 
                     if win_num in v_range:  # window has range to be fitted
                         win.v_range_fit = v_range[win_num]
-                        f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
-                                                               vref_kms=self.vlsr_file)
-                                   for v in v_range[win_num]]
-                        f_range.sort()
-                        win.f_range_fit = f_range
+                        win.compute_f_range_fit(self.vlsr_file)
+                        # f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
+                        #                                        vref_kms=self.vlsr_file)
+                        #            for v in v_range[win_num]]
+                        # f_range.sort()
+                        # win.f_range_fit = f_range
 
                         # get rms and cal for windows to be fitted
                         if self._rms_cal_user is not None:
@@ -1684,6 +1685,14 @@ class Window:
         # if self.jypb is not None:
         #     win.rms_mk *= self.jypb[find_nearest_id(self.x_file, win.transition.f_trans_mhz)]
         self._cal = rms_cal['cal'].values[0]
+
+    def compute_f_range_fit(self, vlsr_ref):
+        f_range = [utils.velocity_to_frequency(v, self.transition.f_trans_mhz,
+                                               vref_kms=vlsr_ref)
+                   for v in self.v_range_fit]
+        f_range.sort()
+        self.f_range_fit = f_range
+        return f_range
 
     @property
     def name(self):

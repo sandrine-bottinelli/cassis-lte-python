@@ -2828,9 +2828,13 @@ class ModelCube(object):
                                 new_max = val + self._params_user[parname].max - self._params_user[parname].value
                                 new_min = val - (self._params_user[parname].value - self._params_user[parname].min)
 
-                            model.params[parname].set(min=new_min, max=new_max)
+                # update velocity ranges in windows
+                for win in model.win_list_fit:
+                    delta_v = [model.model_config.latest_valid_params['c1_vlsr'].init_value - v for v in win.v_range_fit]
+                    win.v_range_fit = [model.params['c1_vlsr'].value - dv for dv in delta_v]
+                    win.compute_f_range_fit(model.model_config.vlsr_file)
 
-                model.params = model.check_params_boundaries(model.params)
+                model.model_config.get_data_to_fit()
 
                 # fit with the updated config
                 print("\nFitting pixel : ", pix)
