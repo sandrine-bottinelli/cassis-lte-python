@@ -1317,29 +1317,30 @@ class ModelConfiguration:
         for tag in self.tag_list:
             win_list_tag = [win for win in self.win_list if tag in win.name]
             nt = len(win_list_tag)
-            if self._v_range_user is not None and (tag in self._v_range_user or '*' in self._v_range_user):
-                v_range = utils.expand_dict(self._v_range_user[tag], nt)
-                self.win_nb_fit[tag] = list(v_range.keys())
-                for win in win_list_tag:
-                    win_num = win.plot_nb
+            if self._v_range_user is not None:
+                if tag in self._v_range_user or '*' in self._v_range_user:
+                    v_range = utils.expand_dict(self._v_range_user[tag], nt)
+                    self.win_nb_fit[tag] = list(v_range.keys())
+                    for win in win_list_tag:
+                        win_num = win.plot_nb
 
-                    if win_num in v_range:  # window has range to be fitted
-                        win.v_range_fit = v_range[win_num]
-                        win.compute_f_range_fit(self.vlsr_file)
-                        # f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
-                        #                                        vref_kms=self.vlsr_file)
-                        #            for v in v_range[win_num]]
-                        # f_range.sort()
-                        # win.f_range_fit = f_range
+                        if win_num in v_range:  # window has range to be fitted
+                            win.v_range_fit = v_range[win_num]
+                            win.compute_f_range_fit(self.vlsr_file)
+                            # f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
+                            #                                        vref_kms=self.vlsr_file)
+                            #            for v in v_range[win_num]]
+                            # f_range.sort()
+                            # win.f_range_fit = f_range
 
-                        # get rms and cal for windows to be fitted
-                        if self._rms_cal_user is not None:
-                            try:
-                                win.set_rms_cal(self.rms_cal)
-                            except KeyError:
-                                raise KeyError(f"rms/cal info not found.")
-                        else:
-                            pass
+                            # get rms and cal for windows to be fitted
+                            if self._rms_cal_user is not None:
+                                try:
+                                    win.set_rms_cal(self.rms_cal)
+                                except KeyError:
+                                    raise KeyError(f"rms/cal info not found.")
+                else:
+                    raise KeyError(f"{tag} not found in velocity range infos.")
 
     def get_data_to_fit(self, update=False):
         # find windows with data to be fitted
