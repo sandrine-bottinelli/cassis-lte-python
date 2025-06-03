@@ -32,6 +32,12 @@ class Species:
 
         self.pf = get_partition_function(self._tag)  # (tref, qlog)
 
+    def __str__(self):
+        infos = ["Species '{}'".format(self.name),
+                 "Tag={}".format(self.tag),
+                 "Ntot={:.2e}".format(self.ntot)]
+        return "<" + " ; ".join(infos) + ">"
+
     def as_json(self):
         return {
             'tag': self.tag,
