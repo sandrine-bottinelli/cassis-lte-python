@@ -806,10 +806,27 @@ class ModelSpectrum(object):
             print("")
         elif print_report == 'short':
             print("Best values:")
+            if any([p.stderr is None for cpt in self.model_config.cpt_list for p in cpt.parameters]):
+                print("  Some uncertainties could not be estimated.")
             for cpt in self.model_config.cpt_list:
                 res = []
                 for p in cpt.parameters:
-                    res.append(f"{p.name} = {utils.format_float(p.value, nb_signif_digits=2)}")
+                    value = utils.format_float(p.value, nb_signif_digits=2)
+                    if p.vary:
+                        if p.expr is not None:
+                            error = f'(= {p.expr})'
+                        elif p.stderr is not None:
+                            error = f'+/- {utils.format_float(p.stderr, nb_signif_digits=2)}'
+                        else:
+                            if p.init_value and np.allclose(p.value, p.init_value):
+                                error = '(at initial value)'
+                            elif np.allclose(p.value, p.min) or np.allclose(p.value, p.max):
+                                error = '(at boundary)'
+                            else:
+                                error = ''
+                    else:
+                        error = '(fixed)'
+                    res.append(f"{p.name} = {value} {error}")
                 print(f"  " + " ; ".join(res))
             print("")
         else:
