@@ -705,6 +705,7 @@ class ModelSpectrum(object):
 
     def do_minimization(self, print_report: 'short' | 'long' | None=None, report_kws=None):
         if self.x_fit is None:
+            print("Not enough data to fit.")
             return None
 
         if print_report is None:
