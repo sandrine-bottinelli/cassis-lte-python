@@ -2823,14 +2823,33 @@ class ModelCube(object):
                       fluxes_freq_range['rms']
                 snr_tag[tag_i] = snr.mean()
 
-            if 'constraint' in self._model_configuration_user:
-                # This considers only rflux[0] values when constraints is True
-                tags_new = self.tags if list(snr_tag.values())[0] >= self._model_configuration_user['snr'] else []
-            else:
-                # Consider all rflux values when constraints is False
-                tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
+            # if 'constraint' in self._model_configuration_user:
+            #     # This considers only rflux[0] values when constraints is True
+            #     tags_new = self.tags if list(snr_tag.values())[0] >= self._model_configuration_user['snr'] else []
+            # else:
+            #     # Consider all rflux values when constraints is False
+            #     tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
+
+            print("\nPixel : ", pix)
 
             snr_fmt = {key: f'{val:.2f}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
+            snr_list = [f"{key}: {val}" for key, val in snr_fmt.items()]
+            print(f'    S/N = {" ; ".join(snr_list)}')
+
+            tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
+            constraints = self._model_configuration_user.get('constraints', None)
+            if len(tags_new) > 0 and constraints is not None:
+                # Check if constraint can be applied, if not, remove species
+                for tag in tags_new:
+                    for key, val in constraints.items():
+                        if tag in key:
+                            tag_ref = val.split('_')[-1]
+                            if tag_ref not in tags_new:
+                                print(f'    {tag} linked to {tag_ref} -> not selected at pixel {pix}.')
+                                tags_new.remove(tag)
+                                break
+
+            print(f'    tags_new = {", ".join(tags_new)}')  # new tag list with S/N ≥ signal2noise
 
             if len(tags_new) > 0:
                 # mask_comp[j, i] = True
