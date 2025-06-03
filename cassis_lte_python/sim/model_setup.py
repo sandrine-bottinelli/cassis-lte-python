@@ -1714,6 +1714,8 @@ class Window:
 
     @f_range_fit.setter
     def f_range_fit(self, value):
+        if self.x_file is not None and len(self.x_file) > 0:
+            self._x_fit, self._y_fit = utils.select_from_ranges(self.x_file, value, y_values=self.y_file)
         self._f_range_fit = value
 
     @property
@@ -1758,18 +1760,22 @@ class Window:
 
     @property
     def y_fit(self):
-        return self._y_fit
+        if self.f_range_fit is not None:
+            x_fit, y_fit = utils.select_from_ranges(self.x_file, self.f_range_fit, y_values=self.y_file)
+        else:
+            y_fit = self._y_fit
+        return y_fit
 
     @y_fit.setter
     def y_fit(self, value):
         if self._bl_corr and min(value) < 0:
             value -= min(value)
         self._y_fit = value
-        if len(self._y_fit) >= 3:
-            self._in_fit = True
-        else:
-            self._in_fit = False
-            print(f"WARNING - Window {self.name} : {len(self._y_fit)} data points selected, window not included in fit.")
+        # if len(self._y_fit) >= 3:
+        #     self._in_fit = True
+        # else:
+        #     self._in_fit = False
+        #     print(f"WARNING - Window {self.name} : {len(self._y_fit)} data points selected, window not included in fit.")
 
     @property
     def in_fit(self):
