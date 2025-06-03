@@ -1029,9 +1029,12 @@ class ModelSpectrum(object):
 
         # wt = None
         method = fit_kws.get('method', 'leastsq')
+        if method is None:
+            method = 'leastsq'
         # print(f'Performing minimization with the {method} method...')
-        if 'method' in fit_kws:
-            fit_kws.pop('method')
+        fit_kws_lmfit = fit_kws.copy()
+        if 'method' in fit_kws_lmfit:
+            fit_kws_lmfit.pop('method')
 
         cb = None
         if self.print_report and method != "emcee":
@@ -1041,16 +1044,20 @@ class ModelSpectrum(object):
         'raise': Raise a ValueError (default)
         'propagate': Do not check for NaNs or missing values. The fit will try to ignore them.
         'omit': Remove NaNs or missing observations in data."""
-        self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=self.log,
-                                        # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
-                                        # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
-                                        nan_policy='omit',  #
-                                        cpt='from_config',
-                                        line_center_only=False, return_tau=False,
-                                        weights=wt,
-                                        method=method,
-                                        max_nfev=max_nfev, fit_kws=fit_kws,
-                                        iter_cb=cb)
+        try:
+            self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=self.log,
+                                            # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
+                                            # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
+                                            nan_policy='omit',  #
+                                            cpt='from_config',
+                                            line_center_only=False, return_tau=False,
+                                            weights=wt,
+                                            method=method,
+                                            max_nfev=max_nfev, fit_kws=fit_kws_lmfit,
+                                            iter_cb=cb)
+        except Exception as e:
+            raise Exception(e)
+            # pass
         if not self.print_report:
             if self.model_fit.nfev == self.model_fit.max_nfev:
                 message = f"Maximum number of iterations reached ({self.model_fit.max_nfev}) ; "
