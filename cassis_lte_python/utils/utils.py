@@ -299,6 +299,14 @@ class DataFile(File):
                 print(f"Cannot convert from {self._yunit} to {value}, nothing done.")
 
 
+def load_json(path):
+    try:
+        with open(path) as f:
+            return json.load(f)  # , cls=type(self))
+    except FileNotFoundError:
+        print(f"File not found : {path}")
+
+
 def open_continuum_file(filepath):
     data = File(filepath)
     return data.xdata_mhz, data.ydata

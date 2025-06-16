@@ -290,13 +290,6 @@ class ModelSpectrum(object):
         # in this case, assume the item is in model_config
         return self.model_config.__getattribute__(item)
 
-    def load_config(self, path):
-        try:
-            with open(path) as f:
-                return json.load(f)  # , cls=type(self))
-        except FileNotFoundError:
-            print(f"File not found : {path}")
-
     def save_config_dict(self):
         try:
             name_config = os.path.abspath(self.name_config)
