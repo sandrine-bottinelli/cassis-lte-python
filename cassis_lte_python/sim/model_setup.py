@@ -697,26 +697,29 @@ class ModelConfiguration:
             else:
                 raise TypeError("v_range must be a dictionary or a path to an appropriate file.")
 
-    def get_rms_cal_info(self):
+    def get_rms_cal_info(self, rms_cal_info=None):
         if self.tr_list_by_tag is None:
             raise ValueError("Missing transition list.")
 
+        if rms_cal_info is None:
+            rms_cal_info = self._rms_cal_user
+
         # extract rms/cal info
-        if self._rms_cal_user is not None:
-            if isinstance(self._rms_cal_user, dict):
+        if rms_cal_info is not None:
+            if isinstance(rms_cal_info, dict):
                 # make sure we have floats:
-                for key, val in self._rms_cal_user.items():
-                    self._rms_cal_user[key] = [float(elt) for elt in val]
-                if '*' in self._rms_cal_user:
+                for key, val in rms_cal_info.items():
+                    rms_cal_info[key] = [float(elt) for elt in val]
+                if '*' in rms_cal_info:
                     self._rms_cal = pd.DataFrame({'freq_range': [[min(self.x_file), max(self.x_file)]],
                                                   'fmin': [min(self.x_file)],
                                                   'fmax': [max(self.x_file)],
-                                                  'rms': [self._rms_cal_user['*'][0]],
-                                                  'cal': [self._rms_cal_user['*'][1]]})
+                                                  'rms': [rms_cal_info['*'][0]],
+                                                  'cal': [rms_cal_info['*'][1]]})
 
-                elif next(iter(self._rms_cal_user))[0] == '[':  # info by frequency range
+                elif next(iter(rms_cal_info))[0] == '[':  # info by frequency range
                     frange, fmin, fmax, rms, cal = [], [], [], [], []
-                    for k, v in self._rms_cal_user.items():
+                    for k, v in rms_cal_info.items():
                         range = k.strip('[').strip(']').strip()  # remove brackets and spaces ; could be improved
                         range = [float(elt) for elt in range.split(',')]  # convert comma-separated values to float
                         range.sort()  # make sure it is order by increasing values
@@ -735,12 +738,12 @@ class ModelConfiguration:
                                                   'cal': cal})
 
                 else:  # TODO : check the following
-                    if len(self.tag_list) == 1 and str(self.tag_list[0]) not in self._rms_cal_user:
+                    if len(self.tag_list) == 1 and str(self.tag_list[0]) not in rms_cal_info:
                         # only one species and tag not given => "reformat" dictionary to contain tag
-                        self._rms_cal_user = {str(self.tag_list[0]): self._rms_cal_user}
+                        self._rms_cal_user = {str(self.tag_list[0]): rms_cal_info}
 
                     tup, rms, cal = [], [], []
-                    for tag, chi2_info in self._rms_cal_user.items():
+                    for tag, chi2_info in rms_cal_info.items():
                         for k, v in utils.expand_dict(chi2_info).items():
                             tup.append((tag, k))
                             rms.append(float(v[0]))
@@ -749,10 +752,10 @@ class ModelConfiguration:
                                                   'rms': rms,
                                                   'cal': cal})
 
-            elif isinstance(self._rms_cal_user, str):
+            elif isinstance(rms_cal_info, str):
                 # TODO: TBC
                 # self._rms_cal_user = utils.read_noise_info(self._rms_cal_user)
-                fmin, fmax, rms, cal = np.loadtxt(self._rms_cal_user, delimiter='\t', unpack=True)
+                fmin, fmax, rms, cal = np.loadtxt(rms_cal_info, delimiter='\t', unpack=True)
                 if isinstance(fmin, float):
                     frange = [fmin, fmax]
                 else:
