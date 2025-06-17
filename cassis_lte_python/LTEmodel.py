@@ -421,7 +421,7 @@ class ModelSpectrum(object):
 
         # self.y_mod = self.compute_model_intensities(params=self.params, x_values=self.x_mod)
 
-    def update_tag_list(self, new_tags):
+    def update_tag_list(self, new_tags, ref_pixel_info):
         current_tags = self.model_config.tag_list
         current_tags.sort()
         new_tags.sort()
@@ -435,10 +435,9 @@ class ModelSpectrum(object):
                 if tag in cpt.tag_list:  # species already in tag list, keep it
                     new_sp_list.append(list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0])
                 else:
-                    if (self.model_config.ref_pixel_info is not None
-                            and tag in self.model_config.ref_pixel_info[cpt.name]):
+                    if (ref_pixel_info is not None and tag in ref_pixel_info[cpt.name]):
                         # we have info on a reference pixel and the species is in the original component, take it
-                        new_sp_list.append(self.model_config.ref_pixel_info[cpt.name][tag])
+                        new_sp_list.append(ref_pixel_info[cpt.name][tag])
 
             cpt.species_list = new_sp_list
             cpt.tag_list = [sp.tag for sp in new_sp_list]
@@ -454,7 +453,7 @@ class ModelSpectrum(object):
         for win in self.model_config.win_list:
             win.set_rms_cal(self.model_config.rms_cal)
             tag = win.transition.tag
-            if tag in self.model_config.tag_list and win.plot_nb in self.model_config.win_nb_fit[tag]:
+            if tag in self.model_config.tag_list and win.plot_nb in self.model_config.win_nb_fit[tag] and len(win.x_fit) >= 3:
                 win.in_fit = True
             else:
                 win.in_fit = False
@@ -622,7 +621,7 @@ class ModelSpectrum(object):
                     param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
         self.norm_factors = norm_factors
 
-    def check_params_boundaries(self, params):
+    def check_params_boundaries(self, params, verbose=True):
         # Check min for params that cannot have negative values:
         for parname in params:
             if any([p in parname for p in ['size', 'fwhm', 'ntot']]):
@@ -646,9 +645,10 @@ class ModelSpectrum(object):
                     f'Species for which T_pf_min = {cpt.tmin} is/are: {tags_tmin}',
                     f'-> limiting Tex search to temperatures > {cpt.tmin} \n'
                 ]
-                print(f'INFO - Component {cpt.name} :')
-                for line in message:
-                    print(" " * 6, line)
+                if verbose:
+                    print(f'INFO - Component {cpt.name} :')
+                    for line in message:
+                        print(" " * 6, line)
                 # print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
                 #       f'(smallest temperature for which the partition function is defined for all species).')
                 val = (mini + maxi) / 2
@@ -664,9 +664,10 @@ class ModelSpectrum(object):
                     f'Species for which T_pf_max = {cpt.tmax} is/are: {tags_tmax}',
                     f'-> limiting Tex search to temperatures < {cpt.tmax} \n'
                 ]
-                print(f'INFO - Component {cpt.name} :')
-                for line in message:
-                    print(" " * 6, line)
+                if verbose:
+                    print(f'INFO - Component {cpt.name} :')
+                    for line in message:
+                        print(" " * 6, line)
                 # print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
                 #       f'(highest temperature for which the partition function is defined for all species).')
                 val = (mini + maxi) / 2
@@ -764,7 +765,7 @@ class ModelSpectrum(object):
                 if len([w for w in self.model_config.win_list if w.in_fit]) < len(self.model_config.win_list_fit):
                     print("Some opacities are above the user-defined limit. Re-run the minimization.")
                     # update data to be fitted and min/max values if factor
-                    self.model_config.get_data_to_fit(update=True)
+                    self.model_config.get_data_to_fit()
                     for par in self.params:
                         p = self.params[par]
                         if p.user_data is not None and 'factor' in p.user_data:
@@ -784,19 +785,23 @@ class ModelSpectrum(object):
         self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
         self.log = False
 
-        # save parameters for re-use
-        # if self.model_config.jparams is None:
-        #     self.model_config.jparams = self.params.dumps()
-        if self.model_config.latest_valid_params is None:
-            self.model_config.latest_valid_params = self.params.copy()
-        else:
-            REL_TOL = 1e-3
-            for parname, par in self.params.items():
-                tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
-                if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
-                                            for extrem in [par.min, par.max]]):
-                # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
-                    self.model_config.latest_valid_params[parname] = self.params[parname]
+        # # save parameters for re-use
+        # # if self.model_config.jparams is None:
+        # #     self.model_config.jparams = self.params.dumps()
+        # if self.model_config.latest_valid_params is None:
+        #     self.model_config.latest_valid_params = self.params.copy()
+        # else:
+        #     REL_TOL = 1e-3
+        #     for parname, par in self.params.items():
+        #         tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
+        #         tol = par.value * 0.1
+        #         if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
+        #                                     for extrem in [par.min, par.max]]):
+        #         # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
+        #             self.model_config.latest_valid_params[parname] = self.params[parname]
+        #         # elif par.vary:
+        #         #     self.model_config.latest_valid_params[parname] = self.model_config._param
+        #         #     pass
 
         if print_report == 'long':
             # print(self.model_fit.fit_report())
@@ -1026,6 +1031,8 @@ class ModelSpectrum(object):
         wt = np.array(wt)
 
         # wt = None
+        if fit_kws is None:
+            fit_kws = {}
         method = fit_kws.get('method', 'leastsq')
         if method is None:
             method = 'leastsq'
@@ -1795,27 +1802,30 @@ class ModelSpectrum(object):
                     params.pop(par)
         return params
 
-    def save_ref_pixel(self):
-        ref_pixel_info = {
-            'params': self.params.copy(),
-            'model': self.model,
-            'model_fit': self.model_fit,
-            'tag_list': self.model_config.tag_list,
-            'windows': self.model_config.win_list
-        }
-        cpt_info = {
-            cpt.name: {sp.tag: sp for sp in cpt.species_list}
-            for cpt in self.model_config.cpt_list
-        }
-        self.model_config.ref_pixel_info = {**ref_pixel_info, **cpt_info}
+    # def save_ref_pixel(self):
+    #     ref_pixel_info = {
+    #         'params': self.params.copy(),
+    #         # 'model': self.model.copy(),
+    #         # 'model_fit': self.model_fit.copy(),
+    #         'tag_list': self.model_config.tag_list.copy(),
+    #         'windows': self.model_config.win_list.copy(),
+    #         'windows_fit': self.model_config.win_list_fit.copy()
+    #     }
+    #     cpt_info = {
+    #         cpt.name: {sp.tag: sp for sp in cpt.species_list}
+    #         for cpt in self.model_config.cpt_list
+    #     }
+    #     self.model_config.ref_pixel_info = {**ref_pixel_info, **cpt_info}
+    #     self.ref_pixel_info = {**ref_pixel_info, **cpt_info}
 
     def use_ref_pixel(self, tag_list=None):
         params = self.ref_pixel_info['params'].copy()
         self.model_config.latest_valid_params = params
         # self.model = self.ref_pixel_info['model']
         if tag_list is not None:
-            self.update_params_dict(params, tag_list)
-            self.generate_lte_model()
+            params = self.update_params_dict(params, tag_list)
+        self.params = params
+        self.generate_lte_model()
         # self.params = params
 
     def save_model(self, filename, dirname=None, ext='txt', full_spectrum=True):
@@ -2459,7 +2469,7 @@ class ModelCube(object):
         configuration['t_a*'] = IntensityTastar
         configuration['yunit'] = yunit
 
-        configuration['continuum_free'] = configuration.get('continuum_free', False)
+        # configuration['continuum_free'] = configuration.get('continuum_free', False)
 
         # Extract the Vlsr if present in the fits files (to be check out, does not work yet)
         # --------------------------------------------------------------------------------------------------------------------------
@@ -2478,6 +2488,9 @@ class ModelCube(object):
             self._cubes_noise = utils.get_cubes(self._noise_info, check_spatial_shape=self.cubeshape[-2:])
         else:
             self._cubes_noise = []
+
+        if isinstance(self._noise_info, list) and isinstance(self._noise_info[0], (float, int)):
+            configuration['rms_cal'] = {f'[{min(frange)}, {max(frange)}]': [rms, self._cal] for frange, rms in zip(self.fmhz_ranges, self._noise_info)}
 
         configuration['minimize'] = False
         configuration['x_obs'] = np.concatenate([dat.spectral_axis.value / 1.e6 for dat in self._cubes])  # in MHz
@@ -2507,14 +2520,19 @@ class ModelCube(object):
         # self._model.make_params()
         # self._params_user = self._model.params.copy()
         # self._model_configuration = ModelConfiguration(configuration, verbose=verbose)
-        self._model_configuration = self._model.model_config
+        # self._model_configuration = self._model.model_config
 
-        self.tags = self._model.model_config.tag_list
+        self.ref_pixel_info = None
+        self.latest_valid_params = None
+
+        self.tags = self._model_configuration.tag_list[:]  # make a copy
+        self.param_names = [p.name for cpt in self._model_configuration.cpt_list for p in cpt.parameters]
+
 
         # create arrays of Nans for the output parameters, ensure to make for all components
         array_dict = {'redchi2': np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)}
         err_dict = dict()
-        for param in self._model.param_names():
+        for param in self.param_names:
             array_dict['{}'.format(param)] = np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)
             err_dict['{}'.format(param)] = np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)
         self.array_dict = array_dict
@@ -2642,7 +2660,54 @@ class ModelCube(object):
 
         return fmhz_ranges
 
+    def pixel_infos(self, mdl):
+        pixel_info = {
+            'params': mdl.params.copy(),
+            # 'model': self.model.copy(),
+            # 'model_fit': self.model_fit.copy(),
+            'tag_list': mdl.model_config.tag_list.copy(),
+            'windows': mdl.model_config.win_list.copy(),
+            'windows_fit': mdl.model_config.win_list_fit.copy()
+        }
+        cpt_info = {
+            cpt.name: {sp.tag: sp for sp in cpt.species_list}
+            for cpt in mdl.model_config.cpt_list
+        }
+        return {**pixel_info, **cpt_info}
+
+    def use_ref_pixel(self, mdl, tag_list=None):
+        params = self.ref_pixel_info['params'].copy()
+        # self.model_config.latest_valid_params = params
+        # # self.model = self.ref_pixel_info['model']
+        if tag_list is not None:
+            params = mdl.update_params_dict(params, tag_list)
+        mdl.params = params
+        mdl.generate_lte_model()
+        # self.params = params
+        return mdl
+
     def do_minimization(self, pix_list=None):
+        def check_at_boundary(model_spec):
+            redo = False
+            for parname, par in model_spec.params.items():
+                # tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
+                tol = par.value * 0.1
+                if par.vary and any([math.isclose(par.value, extrem, abs_tol=tol) for extrem in [par.min, par.max]]):
+                    # model_spec.params[parname] = self._params_user[parname]
+                    model_spec.params = self.ref_pixel_info['params'].copy()
+                    redo = True
+                    break
+                # if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
+                #                             for extrem in [par.min, par.max]]):
+                #     # value is not close to either boundary
+                #     # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
+                #     model_spec.model_config.latest_valid_params[parname] = model_spec.params[parname]
+                # else:  # value close to one of the boundaries
+                #     if par.vary:
+                #         model_spec.model_config.latest_valid_params[parname] = self._params_user[parname]
+                #         redo = True
+            return redo
+
         def save_to_log(pix, res, par_names_all, append):
             par_names = [res["params"][par].name for par in res["params"]]
             if not append:
@@ -2685,7 +2750,9 @@ class ModelCube(object):
                        zip(self.fmhz_ranges, self._noise_info)}
 
         # Start the snake loop
-        model = self._model
+        # model = self._model
+        # model.model_config.minimize = True
+
         for pix in pix_list:
             t1_start = process_time()
             i, j = pix
@@ -2712,11 +2779,13 @@ class ModelCube(object):
                 print(f'Not enough data to compute the model at pixel {pix}.')
                 continue
 
-            if len(self._cubes_noise) > 0:
+            if len(self._cubes_noise) > 0:  # TODO: re-write this block
                 noiseValues = np.concatenate([dat[:, j, i].array for dat in self._cubes_noise])
                 rms_cal = {'[{:.1f}, {:.1f}]'.format(start, end): [noise, self._cal] for [start, end], noise in
                            zip(self.fmhz_ranges, noiseValues)}
-            #        print('rms_cal = ', rms_cal)
+                # model.model_config.get_rms_cal_info(rms_cal_info=rms_cal)
+                model.model_config.rms_cal = rms_cal
+                # print('rms_cal = ', rms_cal)
 
             plot_name = "plot_{}_{}".format(i, j)
 
@@ -2775,26 +2844,25 @@ class ModelCube(object):
             # ---------------------------------------------------------------
             model.model_config.y_file = data
             model.model_config.cont_info = tc
-            model.model_config.rms_cal = rms_cal
+            model.model_config.get_data_to_fit()
             model.model_config.output_files = output_files
             model.model_config.file_kws['filename'] = plot_name + ".pdf"
             # ---------------------------------------------------------------
 
             if pix == self._pix_info[:2]:
 
-                if model.model_fit is None:  # create the model on the first (brightest) pixel
+                if self.ref_pixel_info is None:  # create the model on the first (brightest) pixel
                     print("\nFitting ref pixel : ", pix)
 
                     # Run the model
-                    model.model_config.minimize = True
                     res = model.do_minimization()
 
                     # Save some info
-                    par_names_all = [model.params[par].name for par in model.params]
-                    save_to_log(pix, res, par_names_all, append=False)
+                    save_to_log(pix, res, self.param_names, append=False)
 
-                    # Save the model
-                    model.save_ref_pixel()
+                    # Save the model and the parameters
+                    self.ref_pixel_info = self.pixel_infos(model)
+                    self.latest_valid_params = model.params.copy()
 
                     # for itag, tages in enumerate(self.tags):
                         # masks_ntot[j, i, itag] = True  # Mind, I do not mask the pixels with that !!!
@@ -2805,8 +2873,11 @@ class ModelCube(object):
                     self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 
                 else:
-                    print("Back to ref : ", pix, " - Do not fit again")
-                    model.use_ref_pixel()
+                    print("\nBack to ref : ", pix, " - Do not fit again")
+                    # model = self.use_ref_pixel(model)
+                    self.latest_valid_params = self.ref_pixel_info['params'].copy()
+
+                    pass
 
                 continue
 
@@ -2880,34 +2951,80 @@ class ModelCube(object):
             if len(tags_new) > 0:
                 # mask_comp[j, i] = True
                 # update tag list
-                model.update_tag_list(tags_new)
+                model.update_tag_list(tags_new, self.ref_pixel_info)
 
                 # update params
-                if model.model_config.latest_valid_params is not None:
-                    for parname in model.params:
-                        model.params[parname] = model.model_config.latest_valid_params[parname]
-                        if model.params[parname].vary and model.params[parname].expr is None:
-                            val = model.params[parname].value
-                            if (model.params[parname].user_data is not None and
-                                    model.params[parname].user_data.get('factor', False)):
-                                new_max = model.params[parname].user_data['max_fact'] * val
-                                new_min = model.params[parname].user_data['min_fact'] * val
+                if self.latest_valid_params is not None:
+                    # model.params = copy.copy(model.model_config.latest_valid_params)
+                    for par in model.params.values():
+                        model.params[par.name] = self.latest_valid_params[par.name]
+                        if par.vary and par.expr is None:
+                            val = par.value
+                            # diff = par.max - par.min
+                            # pc = 0.1
+                            # # if close to a boundary, use initial guess
+                            # if abs(val - par.min) < (pc * val) or abs(val - par.max) < (pc * val):
+                            #     par = self._params_user[par.name]
+                            #     continue
+                            # otherwise, shift boundaries
+                            if par.user_data is not None and par.user_data.get('factor', False):
+                                new_max = par.user_data['max_fact'] * val
+                                new_min = par.user_data['min_fact'] * val
                             else:
-                                new_max = val + self._params_user[parname].max - self._params_user[parname].value
-                                new_min = val - (self._params_user[parname].value - self._params_user[parname].min)
+                                new_max = val + self.ref_pixel_info['params'][par.name].max - self.ref_pixel_info['params'][par.name].value
+                                new_min = val - (self.ref_pixel_info['params'][par.name].value - self.ref_pixel_info['params'][par.name].min)
+
+                            model.params[par.name].set(min=new_min, max=new_max)
+
+                model.params = model.check_params_boundaries(model.params, verbose=False)
 
                 # update velocity ranges in windows
-                for win in model.win_list_fit:
-                    delta_v = [model.model_config.latest_valid_params['c1_vlsr'].init_value - v for v in win.v_range_fit]
-                    win.v_range_fit = [model.params['c1_vlsr'].value - dv for dv in delta_v]
-                    win.compute_f_range_fit(model.model_config.vlsr_file)
+                # first_cpt = model.model_config.cpt_list[0].name
+                # for win in model.win_list_fit:
+                #     delta_v = [model.model_config.latest_valid_params[f'{first_cpt}_vlsr'].init_value - v for v in win.v_range_fit]
+                #     win.v_range_fit = [model.params[f'{first_cpt}_vlsr'].value - dv for dv in delta_v]
+                #     win.compute_f_range_fit(model.model_config.vlsr_file)
 
                 model.model_config.get_data_to_fit()
+                # if len(model.model_config.x_fit) <
 
                 # fit with the updated config
-                print("\nFitting pixel : ", pix)
-                res = model.do_minimization()
-                save_to_log(pix, res, par_names_all, append=True)
+                print("Fitting pixel : ", pix)
+
+                # if pix == (45, 25):
+                #     pass
+                try:
+                    # if pix == (35, 29):
+                    #     pass
+                    res = model.do_minimization()
+                except TypeError as e:
+                    raise TypeError(e)
+                    # pass
+
+                if pix == (8,9):
+                    pass
+                # check if a parameter is close to a boundary ; if so, re-do fit from user's values
+                if check_at_boundary(model):
+                    model.model = None
+                    model.model_fit = None
+                    res = model.do_minimization()
+
+                if res is None:
+                    print("Could not fit - going to next pixel")
+                    continue
+                save_to_log(pix, res, self.param_names, append=True)
+                # save parameters for re-use
+                REL_TOL = 1e-3
+                for parname, par in model.params.items():
+                    tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
+                    tol = par.value * 0.1
+                    if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
+                                                for extrem in [par.min, par.max]]):
+                        # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
+                        self.latest_valid_params[parname] = model.params[parname]
+                    # elif par.vary:
+                    #     self.model_config.latest_valid_params[parname] = self.model_config._param
+                    #     pass
 
                 self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 
