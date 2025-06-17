@@ -283,10 +283,10 @@ class ModelSpectrum(object):
         # except TypeError:
         #     pass
 
-        if self.modeling:
+        if self.model_config.modeling:
             self.do_modeling()
 
-        if self.minimize:
+        if self.model_config.minimize:
             self.do_minimization()
 
     def __getattr__(self, item):
@@ -497,17 +497,17 @@ class ModelSpectrum(object):
             raise IndexError(f"rms/cal not found at {fmhz} MHz "
                              f"(min/max are {min(self._rms_cal.fmin), max(self._rms_cal.fmax)}).")
 
-    def get_rms(self, fmhz):
-        if type(fmhz) == float:
-            fmhz = list(fmhz)
-
-        rms = []
-        for freq in fmhz:
-            for win in self.win_list_fit:
-                if min(win.f_range_fit) <= freq <= max(win.f_range_fit):
-                    rms.append(win.rms)
-
-        return rms if len(rms) > 1 else rms[0]
+    # def get_rms(self, fmhz):  # not used ; keep??
+    #     if type(fmhz) == float:
+    #         fmhz = list(fmhz)
+    #
+    #     rms = []
+    #     for freq in fmhz:
+    #         for win in self.win_list_fit:
+    #             if min(win.f_range_fit) <= freq <= max(win.f_range_fit):
+    #                 rms.append(win.rms)
+    #
+    #     return rms if len(rms) > 1 else rms[0]
 
     def param_names(self):
         params = []
@@ -831,7 +831,8 @@ class ModelSpectrum(object):
             raise KeyError("print_report can only be 'long' or 'short'.")
 
         self.do_savings()
-        self.do_plots()
+        if self.plot_gui or self.plot_file:
+            self.do_plots()
 
         return {
             'iterations': self.model_fit.nfev,
@@ -935,7 +936,7 @@ class ModelSpectrum(object):
                 self.save_config(self.model_config.output_files['config'])
 
     def do_plots(self):
-        if self.plot_gui or self.plot_file:
+        # if self.plot_gui or self.plot_file:
             print('Finding windows for gui and file plots.')
             self.setup_plot()
             if self.plot_gui and len(self.model_config.win_list_gui) > 0:
@@ -2950,7 +2951,7 @@ class ModelCube(object):
                     hdu.header.set('BUNIT', units[param_type])
                     hdul = fits.HDUList([hdu])
                     hdul.writeto(os.path.join(self.output_dir, param + ext), overwrite=True)
-                except KeyError:
+                except (KeyError, TypeError):
                     pass  # do nothing
 
     def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
@@ -3097,17 +3098,17 @@ class ModelCube(object):
             print('otherSpecies not found')
         if 'constraints' in self._model_configuration_user:
             print("constraints = ", self._model_configuration_user['constraints'])
-        print('params = ', self.params)
+        print('params = ', self.param_names)
         print('array_dict = ', self.array_dict.keys())
         print('err_dict = ', self.err_dict.keys())
 
-    @property
-    def params(self):
-        return self._model.param_names()
+    # @property
+    # def params(self):
+    #     return self._model.param_names()
 
     @property
     def yunit(self):
-        return self._model.yunit
+        return self._model_configuration.yunit
 
     # @property
     # def param_arrays(self):
