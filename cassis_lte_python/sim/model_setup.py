@@ -997,7 +997,7 @@ class ModelConfiguration:
                         if np.isnan(float(val)):
                             raise ValueError(f"Missing {par} information for tag {tag}.")
                         factor = False
-                        if par == 'ntot' and df.loc[f'{cname}_{par}'][tag]['max'] < 1.e6:
+                        if par == 'ntot' and df.loc[f'{cname}_{par}'][tag]['max'] < val:
                             factor = True
                         sp_dict[par] = parameter_infos(value=val,
                                                        min=pmin,
