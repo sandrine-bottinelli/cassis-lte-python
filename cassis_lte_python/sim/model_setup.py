@@ -1433,12 +1433,12 @@ class ModelConfiguration:
                 for win in win_list:
                     x_win, y_win = utils.select_from_ranges(self.x_file, [min(win.x_file), max(win.x_file)],
                                                             y_values=self._y_file)
-                    if len(x_win) <= 5 or len(set(y_win)) == 1:
-                        continue
+                    # if len(x_win) <= 5 or len(set(y_win)) == 1:  # TODO: check if necessary
+                    #     continue
                     win.y_file = y_win
                     new_win_list.append(win)
                 self.win_list = new_win_list
-                self.get_data_to_fit()
+                # self.get_data_to_fit()
 
     @property
     def tc(self):
