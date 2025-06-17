@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import io
-
+import sys
 from cassis_lte_python.utils import utils
 from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
@@ -243,6 +243,19 @@ class ModelConfiguration:
         self.latest_valid_params = None
         self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)
+        iter_warn = 100000
+        if self.max_iter is not None and self.max_iter > iter_warn:
+            ans = input(f"You have set a very large value for the maximum number of iterations ({self.max_iter}.\n"
+            f"Press y or enter to continue, n to stop, otherwise provide a new value : ")
+            if ans.lower() in ["n", "no"]:
+                print("Exiting the program.")
+                sys.exit(0)
+            if ans not in ["y", "Y", "", " "]:
+                try:
+                    self.max_iter = int(ans)
+                except ValueError:
+                    raise ValueError("The maximum number of iterations should be an integer.")
+
         self.fit_kws = configuration.get('fit_kws', None)
         self.print_report = configuration.get('print_report', True)
         self.print_debug = configuration.get('print_debug', True)
