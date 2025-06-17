@@ -375,7 +375,7 @@ class ModelConfiguration:
             self.win_nb_fit = {}
             self.get_velocity_ranges()
         if self.minimize or self.modeling:
-            self.get_data_to_fit()
+            self.get_data_to_fit(init=True)
 
     def get_data(self, config=None):
         if config is None:
@@ -1366,13 +1366,20 @@ class ModelConfiguration:
                 else:
                     raise KeyError(f"{tag} not found in velocity range infos.")
 
-    def get_data_to_fit(self, update=False):
+    def get_data_to_fit(self, init=False, update_x=False):
         # find windows with data to be fitted
-        if not update:
-            for win in self.win_list:
-                if win.f_range_fit is not None:
-                    win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, win.f_range_fit,
-                                                                    y_values=self.y_file)
+        # if init or update_x:
+        for win in self.win_list:
+            if win.f_range_fit is not None:
+                win.x_fit, win.y_fit = utils.select_from_ranges(self.x_file, win.f_range_fit, y_values=self.y_file)
+                if len(win.x_fit) >= 3 and len(set(win.y_fit)) > 1:
+                    win.in_fit = True
+                else:
+                    win.in_fit = False
+                    if init:
+                        print(f"WARNING - Window {win.name} : "
+                              f"{len(win.x_fit)} data points selected, window not included in fit.")
+
                     # with open('freq2fit.txt', 'a') as f:
                     #     f.write(win.name + f' - {win.f_range_fit}\n')
                     #     f.writelines('\n'.join([str(freq) for freq in win.x_fit]))
