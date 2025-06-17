@@ -151,6 +151,48 @@ def generate_lte_model_func(config: dict):
     return lte_model_func
 
 
+def make_model_config(configuration: (dict, str, ModelConfiguration), **kwargs):
+    if isinstance(configuration, str):  # string : load the file
+        config = utils.load_json(configuration)
+        # date = config.get('creation-date', datetime.datetime.now())
+        # if isinstance(date, str):
+        #     date = datetime.datetime.strptime(date.split(",")[0], "%Y-%m-%d")
+        if 'creation-date' not in config:  # old format for plot keywords
+            config['plot_kws'] = {'gui+file': config.get('plot_kws', {}),
+                                  'gui_only': config.get('gui_kws', {}),
+                                  'file_only': config.get('file_kws', {})}
+            config.pop('gui_kws')
+            config.pop('file_kws')
+        if ('gui_kws' in kwargs) or ('file_kws' in kwargs):
+            print('gui_kws and file_kws are deprecated keywords, please use the following instead:')
+            comment = "  # N.B. : can be also be removed/commented"
+            info_gui = "" if 'gui_kws' in kwargs else comment
+            info_file = "" if 'file_kws' in kwargs else comment
+            print("  'plot_kws': {")
+            print("       'gui_only':", kwargs.get('gui_kws', {}), info_gui, end=",\n")
+            print("       'file_only':", kwargs.get('file_kws', {}), info_file)
+            print("  }")
+
+            # update kwargs to new format
+            kwargs['plot_kws'] = {}
+            if 'gui_kws' in kwargs:
+                kwargs['plot_kws']['gui_only'] = kwargs['gui_kws']
+                kwargs.pop('gui_kws')
+            if 'file_kws' in kwargs:
+                kwargs['plot_kws']['file_only'] = kwargs['file_kws']
+                kwargs.pop('file_kws')
+
+        # update configuration
+        dflat = utils.flatten_dic(config)
+        dflat.update(utils.flatten_dic(kwargs))
+        config = utils.unflatten_dic(dflat)
+
+    else:  # it is a dictionary
+        config = configuration
+
+    return ModelConfiguration(config)
+
+
 class SimpleSpectrum:
     def __init__(self, xarray, yarray, xunit='mhz', yunit='K'):
         self.xval = xarray
@@ -160,49 +202,9 @@ class SimpleSpectrum:
 
 
 class ModelSpectrum(object):
-    def __init__(self, configuration: (dict, str, ModelConfiguration),
-                 verbose=True, check_tel_range=False, **kwargs):
+    def __init__(self, configuration: (dict, str, ModelConfiguration), **kwargs):
         if isinstance(configuration, (dict, str)):  # dictionary or string
-            if isinstance(configuration, str):  # string : load the file
-                config = self.load_config(configuration)
-                # date = config.get('creation-date', datetime.datetime.now())
-                # if isinstance(date, str):
-                #     date = datetime.datetime.strptime(date.split(",")[0], "%Y-%m-%d")
-                if 'creation-date' not in config:  # old format for plot keywords
-                    config['plot_kws'] = {'gui+file': config.get('plot_kws', {}),
-                                          'gui_only': config.get('gui_kws', {}),
-                                          'file_only': config.get('file_kws', {})}
-                    config.pop('gui_kws')
-                    config.pop('file_kws')
-                if ('gui_kws' in kwargs) or ('file_kws' in kwargs):
-                    print('gui_kws and file_kws are deprecated keywords, please use the following instead:')
-                    comment = "  # N.B. : can be also be removed/commented"
-                    info_gui = "" if 'gui_kws' in kwargs else comment
-                    info_file = "" if 'file_kws' in kwargs else comment
-                    print("  'plot_kws': {")
-                    print("       'gui_only':", kwargs.get('gui_kws', {}), info_gui, end=",\n")
-                    print("       'file_only':", kwargs.get('file_kws', {}), info_file)
-                    print("  }")
-
-                    # update kwargs to new format
-                    kwargs['plot_kws'] = {}
-                    if 'gui_kws' in kwargs:
-                        kwargs['plot_kws']['gui_only'] = kwargs['gui_kws']
-                        kwargs.pop('gui_kws')
-                    if 'file_kws' in kwargs:
-                        kwargs['plot_kws']['file_only'] = kwargs['file_kws']
-                        kwargs.pop('file_kws')
-
-                # update configuration
-                dflat = utils.flatten_dic(config)
-                dflat.update(utils.flatten_dic(kwargs))
-                config = utils.unflatten_dic(dflat)
-
-            else:  # it is a dictionary
-                config = configuration
-
-            model_config = ModelConfiguration(config, verbose=verbose, check_tel_range=check_tel_range)
-
+            model_config = make_model_config(configuration, **kwargs)
             # if 'data_file' in model_config._configuration_dict or 'x_obs' in model_config._configuration_dict:
             #     model_config.get_data()
             #
@@ -213,39 +215,41 @@ class ModelSpectrum(object):
             # model_config.get_windows()
 
         elif isinstance(configuration, ModelConfiguration):
-            model_config = configuration
-            model_config.get_data_to_fit()
-            model_config.get_continuum()
-            # update tag list, parameters, and windows to fit (intensities, noise)
-            tag_list = []
-            for cpt in model_config.cpt_list:
-                tag_list.extend([str(t) for t in cpt.tag_list if str(t) not in tag_list])
-            # determine whether tag_list has changed :
-            recompute_win = True
-            if len(tag_list) == len(model_config.tag_list) and all([tag in model_config.tag_list for tag in tag_list]):
-                recompute_win = False
-            if recompute_win:
-                for cpt in model_config.cpt_list:  # should contain new tag list
-                    current_tags = {sp.tag: sp for sp in cpt.species_list}
-                    new_sp_list = []
-                    for tag in cpt.tag_list:
-                        if tag in current_tags.keys():
-                            new_sp_list.append(current_tags[tag])
-                        else:
-                            new_sp_list.append(model_config.ref_pixel_info[cpt.name][tag])
-                    cpt.species_list = new_sp_list
-                model_config.tag_list = tag_list
-                for win in model_config.win_list:
-                    win.set_rms_cal(model_config.rms_cal)
-                    tag = win.transition.tag
-                    if tag in model_config.tag_list and win.plot_nb in model_config.win_nb_fit[tag]:
-                        win.in_fit = True
-                    else:
-                        win.in_fit = False
-                model_config.win_list_fit = [win for win in model_config.win_list if win.in_fit]
-                if len(model_config.win_list_fit) > 0:
-                    model_config.x_fit = np.concatenate([w.x_fit for w in model_config.win_list_fit], axis=None)
-                    model_config.y_fit = np.concatenate([w.y_fit for w in model_config.win_list_fit], axis=None)
+            model_config = copy.deepcopy(configuration)
+            # if model_config.minimize:
+            #     model_config.get_data_to_fit()
+            # if model_config.minimize or model_config.modeling:
+            #     model_config.get_continuum()
+            # # update tag list, parameters, and windows to fit (intensities, noise)
+            # tag_list = []
+            # for cpt in model_config.cpt_list:
+            #     tag_list.extend([str(t) for t in cpt.tag_list if str(t) not in tag_list])
+            # # determine whether tag_list has changed :
+            # recompute_win = True
+            # if len(tag_list) == len(model_config.tag_list) and all([tag in model_config.tag_list for tag in tag_list]):
+            #     recompute_win = False
+            # if recompute_win:
+            #     for cpt in model_config.cpt_list:  # should contain new tag list
+            #         current_tags = {sp.tag: sp for sp in cpt.species_list}
+            #         new_sp_list = []
+            #         for tag in cpt.tag_list:
+            #             if tag in current_tags.keys():
+            #                 new_sp_list.append(current_tags[tag])
+            #             else:
+            #                 new_sp_list.append(model_config.ref_pixel_info[cpt.name][tag])
+            #         cpt.species_list = new_sp_list
+            #     model_config.tag_list = tag_list
+            #     for win in model_config.win_list:
+            #         win.set_rms_cal(model_config.rms_cal)
+            #         tag = win.transition.tag
+            #         if tag in model_config.tag_list and win.plot_nb in model_config.win_nb_fit[tag] and len(win.x_fit) >= 3:
+            #             win.in_fit = True
+            #         else:
+            #             win.in_fit = False
+            #     model_config.win_list_fit = [win for win in model_config.win_list if win.in_fit]
+            #     if len(model_config.win_list_fit) > 0:
+            #         model_config.x_fit = np.concatenate([w.x_fit for w in model_config.win_list_fit], axis=None)
+            #         model_config.y_fit = np.concatenate([w.y_fit for w in model_config.win_list_fit], axis=None)
 
         else:  # unknown
             raise TypeError("Configuration must be a dictionary or a path to a configuration file "
@@ -2495,9 +2499,12 @@ class ModelCube(object):
                                                         ymin=yref - delta, step=step)
 
         self._model_configuration_user = copy.deepcopy(configuration)
-        self._model = ModelSpectrum(configuration, verbose=verbose)
-        self._model.make_params()
-        self._params_user = self._model.params.copy()
+        self._model_configuration = make_model_config(configuration)  # "reference" model
+
+        # self._model = ModelSpectrum(configuration, verbose=verbose)
+
+        # self._model.make_params()
+        # self._params_user = self._model.params.copy()
         # self._model_configuration = ModelConfiguration(configuration, verbose=verbose)
         self._model_configuration = self._model.model_config
 
@@ -2686,6 +2693,18 @@ class ModelCube(object):
                     raise IndexError("Your reference pixel is masked out.")
                 # the pixel is masked, go to the next one
                 continue
+
+            # self._model_configuration_user = copy.deepcopy(configuration)
+            # self._model = ModelSpectrum(configuration, verbose=verbose)
+            # self._model.make_params()
+            # self._params_user = self._model.params.copy()
+            start_config = copy.deepcopy(self._model_configuration_user)
+            model = ModelSpectrum(self._model_configuration)
+            model.model_config.minimize = True
+            model.make_params()
+            # model.model = None
+            # model.model_fit = None
+
             data = np.concatenate([dat[:, j, i].array for dat in self._cubes])
             data = np.nan_to_num(data)
             if len(set(data)) == 1:
