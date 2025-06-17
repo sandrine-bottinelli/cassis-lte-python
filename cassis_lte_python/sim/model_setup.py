@@ -542,9 +542,17 @@ class ModelConfiguration:
         self.franges_mhz = tuning_info['fmhz_range']
 
         for tel, freq_user in self._configuration_dict['tuning_info'].items():
-            if isinstance(freq_user[0], list):
-                freq_user = [el for li in freq_user for el in li]
+            # if isinstance(freq_user[0], list):
+            #     freq_user = [el for li in freq_user for el in li]
             tel_info = utils.read_telescope_file(utils.search_telescope_file(tel))
+            if not isinstance(freq_user[0], list):
+                freq_user = [freq_user]
+            not_covered = []
+            for freq_range in freq_user:
+                if tel_info['Frequency (MHz)'].min() > max(freq_range) or tel_info['Frequency (MHz)'].max() < min(freq_range):
+                    not_covered.append([float(f) for f in freq_range])
+            if len(not_covered) > 0:
+                raise IndexError(f"Telescope '{tel}' does not cover the following frequency range(s): {not_covered}.")
             self._telescope_data[tel] = tel_info
 
         # tuning_data = pd.DataFrame()
