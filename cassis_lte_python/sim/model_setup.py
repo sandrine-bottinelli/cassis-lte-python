@@ -13,6 +13,7 @@ import os
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
+from lmfit import Parameters
 import warnings
 
 
@@ -43,6 +44,9 @@ class ModelConfiguration:
         if 'components' in configuration:
             self.comp_config_file = configuration['components'].get('config', None)
             self.get_components(configuration['components'])
+
+        self.params = None
+        self.norm_factors = None
 
         self.output_dir = configuration.get('output_dir', os.path.curdir)
         if not os.path.isdir(self.output_dir):
@@ -375,6 +379,7 @@ class ModelConfiguration:
             self.win_nb_fit = {}
             self.get_velocity_ranges()
         if self.minimize or self.modeling:
+            self.make_params()
             self.get_data_to_fit(init=True)
 
     def get_data(self, config=None):
@@ -1403,6 +1408,218 @@ class ModelConfiguration:
         else:
             self.x_fit, self.y_fit = None, None
 
+    def make_params(self, json_params: str | None = None, normalize=False):
+        params = Parameters()
+
+        for icpt, cpt in enumerate(self.cpt_list):
+            for par in cpt.parameters:
+                if 'size' in par.name:
+                    par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
+                if 'tex' in par.name:
+                    par.set(min=self.tcmb if not isinstance(par.min, (float, int)) else max(par.min, self.tcmb))
+                params[par.name] = par
+
+            for isp, sp in enumerate(cpt.species_list):
+                for par in sp.parameters:
+                    par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
+                    params[par.name] = par
+
+        # Update parameters if possible :
+        if json_params is not None:
+            params.loads(json_params)
+
+        params = self.check_params_boundaries(params)
+        # # Check min/max Tex:
+        # for icpt, cpt in enumerate(self.cpt_list):
+        #     par = params[f'{cpt.name}_tex']
+        #     mini = cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin)
+        #     maxi = cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax)
+        #     if par.min < cpt.tmin and self.minimize:
+        #         sp_tmin = [sp for sp in cpt.species_list if min(sp.pf[0]) == cpt.tmin]
+        #         if len(sp_tmin) > 1:
+        #             tags_tmin = ", ".join([sp.tag for sp in sp_tmin])
+        #         else:
+        #             tags_tmin = sp_tmin[0].tag
+        #         message = [
+        #             f'The requested lower boundary for Tex is {par.min} K, but the lowest temperature',
+        #             f'for which the partition function (pf) is defined for all species is {cpt.tmin} K;',
+        #             f'Species for which T_pf_min = {cpt.tmin} is/are: {tags_tmin}',
+        #             f'-> limiting Tex search to temperatures > {cpt.tmin} \n'
+        #         ]
+        #         print(f'INFO - Component {cpt.name} :')
+        #         for line in message:
+        #             print(" " * 6, line)
+        #         # print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
+        #         #       f'(smallest temperature for which the partition function is defined for all species).')
+        #         val = (mini + maxi) / 2
+        #     if par.max > cpt.tmax and self.minimize:
+        #         sp_tmax = [sp for sp in cpt.species_list if max(sp.pf[0]) == cpt.tmax]
+        #         if len(sp_tmax) > 1:
+        #             tags_tmax = ", ".join([sp.tag for sp in sp_tmax])
+        #         else:
+        #             tags_tmax = sp_tmax[0].tag
+        #         message = [
+        #             f'The requested upper boundary for Tex is {par.max} K, but the highest temperature',
+        #             f'for which the partition function (pf) is defined for all species is {cpt.tmax} K;',
+        #             f'Species for which T_pf_max = {cpt.tmax} is/are: {tags_tmax}',
+        #             f'-> limiting Tex search to temperatures < {cpt.tmax} \n'
+        #         ]
+        #         print(f'INFO - Component {cpt.name} :')
+        #         for line in message:
+        #             print(" " * 6, line)
+        #         # print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
+        #         #       f'(highest temperature for which the partition function is defined for all species).')
+        #         val = (mini + maxi) / 2
+        #
+        #     par.set(min=mini, max=maxi)
+
+        # user constraints
+        if self.constraints is not None and self.ref_pixel_info is None:
+            for key, val in self.constraints.items():
+                if 'set_fwhm' in key:
+                    tag_ref = val.split('_')[-1]
+                    cpt = val.split('_')[0]
+                    for tag in self.tag_list:
+                        if tag != tag_ref:
+                            try:
+                                params[f'{cpt}_fwhm_{tag}'].set(expr=val)
+                            except KeyError:  # key does not exist, do nothing
+                                pass
+                else:
+                    try:
+                        params[key].set(expr=val)
+                    except KeyError:
+                        print(f"Constraints: {key.split('_')[-1]} is not in the tag list "
+                              f"or has been removed due to lack of transitions.")
+                        pass
+
+        # reset bounds if a parameters contains an expression to make sure it does not interfere
+        for par in params:
+            if params[par].expr is not None:
+                params[par].set(min=-np.inf, max=np.inf)
+
+        self.params = params
+
+        # if self.model_config.jparams is None:
+        #     self.model_config.jparams = self.params.dumps()
+
+        norm_factors = {self.params[parname].name: 1. for parname in self.params}
+        if normalize:
+            for parname in self.params:
+                param = self.params[parname]
+                nf = abs(param.value) if param.value != 0. else 1.
+                norm_factors[param.name] = nf
+                if param.expr is None:
+                    param.set(min=param.min / nf, max=param.max / nf, value=param.value / nf)
+        self.norm_factors = norm_factors
+
+    def check_params_boundaries(self, params, verbose=True):
+        # Check min for params that cannot have negative values:
+        for parname in params:
+            if any([p in parname for p in ['size', 'fwhm', 'ntot']]):
+                if params[parname].min < 0:
+                    params[parname].set(min=0)
+
+        # Check min/max Tex:
+        for icpt, cpt in enumerate(self.cpt_list):
+            par = params[f'{cpt.name}_tex']
+            mini = cpt.tmin if not isinstance(par.min, (float, int)) else max(par.min, cpt.tmin)
+            maxi = cpt.tmax if not isinstance(par.max, (float, int)) else min(par.max, cpt.tmax)
+            if par.min < cpt.tmin and self.minimize:
+                sp_tmin = [sp for sp in cpt.species_list if min(sp.pf[0]) == cpt.tmin]
+                if len(sp_tmin) > 1:
+                    tags_tmin = ", ".join([sp.tag for sp in sp_tmin])
+                else:
+                    tags_tmin = sp_tmin[0].tag
+                message = [
+                    f'The requested lower boundary for Tex is {par.min} K, but the lowest temperature',
+                    f'for which the partition function (pf) is defined for all species is {cpt.tmin} K;',
+                    f'Species for which T_pf_min = {cpt.tmin} is/are: {tags_tmin}',
+                    f'-> limiting Tex search to temperatures > {cpt.tmin} \n'
+                ]
+                if verbose:
+                    print(f'INFO - Component {cpt.name} :')
+                    for line in message:
+                        print(" " * 6, line)
+                # print(f'Component {cpt.name} : limiting Tex search to temperatures > {cpt.tmin} '
+                #       f'(smallest temperature for which the partition function is defined for all species).')
+                val = (mini + maxi) / 2
+            if par.max > cpt.tmax and self.minimize:
+                sp_tmax = [sp for sp in cpt.species_list if max(sp.pf[0]) == cpt.tmax]
+                if len(sp_tmax) > 1:
+                    tags_tmax = ", ".join([sp.tag for sp in sp_tmax])
+                else:
+                    tags_tmax = sp_tmax[0].tag
+                message = [
+                    f'The requested upper boundary for Tex is {par.max} K, but the highest temperature',
+                    f'for which the partition function (pf) is defined for all species is {cpt.tmax} K;',
+                    f'Species for which T_pf_max = {cpt.tmax} is/are: {tags_tmax}',
+                    f'-> limiting Tex search to temperatures < {cpt.tmax} \n'
+                ]
+                if verbose:
+                    print(f'INFO - Component {cpt.name} :')
+                    for line in message:
+                        print(" " * 6, line)
+                # print(f'Component {cpt.name} : limiting Tex search to temperatures < {cpt.tmax} '
+                #       f'(highest temperature for which the partition function is defined for all species).')
+                val = (mini + maxi) / 2
+
+            par.set(min=mini, max=maxi)
+
+        return params
+
+    def cpt_dict(self):
+        return {cpt.name: cpt for cpt in self.cpt_list}
+
+    def update_tag_list(self, new_tags, ref_cpt_list=None):
+        current_tags = self.tag_list
+        current_tags.sort()
+        new_tags.sort()
+        if new_tags == current_tags:  # list has not changed : exit method
+            return
+
+        if len(new_tags) > len(current_tags) and ref_cpt_list is None:
+            raise KeyError(f"You want more species ({new_tags}) than currently available ({current_tags})."
+                           f"You need to provide the corresponding Parameters with the ref_cpt_list key.")
+
+        for cpt in self.cpt_list:
+            # update tag list and species list
+            new_sp_list = []
+            for tag in new_tags:
+                if tag in cpt.tag_list:  # species already in tag list, keep it
+                    new_sp_list.append(list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0])
+                else:
+                    if ref_cpt_list is not None:
+                        ref_cpt = self.cpt_dict()[cpt.name]
+                        if tag in ref_cpt.tag_list:
+                        # the species is in the reference component, take it
+                            new_sp_list.append(ref_cpt.species_dict()[tag])
+
+            cpt.species_list = new_sp_list
+            cpt.tag_list = [sp.tag for sp in new_sp_list]
+
+        self.tag_list = new_tags
+
+        # update parameters
+        params = Parameters()
+        params.add_many(*[par for cpt in self.cpt_list for par in cpt.parameters])
+        self.params = params
+
+        # update windows to fit
+        for win in self.win_list:
+            win.set_rms_cal(self.rms_cal)
+            tag = win.transition.tag
+            if tag in self.tag_list and win.plot_nb in self.win_nb_fit[tag] and len(win.x_fit) >= 3:
+                win.in_fit = True
+            else:
+                win.in_fit = False
+        self.win_list_fit = [win for win in self.win_list if win.in_fit]
+
+        # update data to fit
+        if len(self.win_list_fit) > 0:
+            self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
+            self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
+
     @property
     def x_file(self):
         return self._x_file
@@ -1585,6 +1802,9 @@ class Component:
         #     sp.ntot.set(value=new_pars['{}_ntot_{}'.format(self.name, sp.tag)].value, is_init_value=False)
         #     sp.fwhm.set(value=new_pars['{}_fwhm_{}'.format(self.name, sp.tag)].value, is_init_value=False)
         #     # sp.tex = new_pars['{}_tex'.format(self.name, sp.tag)].value
+
+    def species_dict(self):
+        return {sp.tag: sp for sp in self.species_list}
 
     @property
     def vlsr(self):
