@@ -217,7 +217,7 @@ class ModelSpectrum(object):
             # model_config.get_windows()
 
         elif isinstance(configuration, ModelConfiguration):
-            model_config = copy.deepcopy(configuration)
+            model_config = copy.copy(configuration)
             # if model_config.minimize:
             #     model_config.get_data_to_fit()
             # if model_config.minimize or model_config.modeling:
@@ -521,13 +521,13 @@ class ModelSpectrum(object):
             self.model_fit.loads(self.model_config.jmodel_fit,
                                  funcdefs={'lte_model_func': generate_lte_model_func(self.model_info())})
 
-        if self.params is None:
-            self.make_params()
+        if self.model_config.params is None:
+            self.model_config.make_params()
 
         if self.model_config.jparams is not None:
             start_pars = Parameters().loads(self.model_config.jparams)
             for parname in self.params:
-                self.params[parname] = start_pars[parname]
+                self.model_config.params[parname] = start_pars[parname]
 
         # if self.model is None:
         #     self.generate_lte_model()
@@ -806,8 +806,8 @@ class ModelSpectrum(object):
                 print(f"    Iteration {int(iter // 100) * 100 + 1} : chi2 = {sum(resid**2)} ; "
                       f"reduced chi2 = {sum(resid**2) / (len(resid) - len([p for p in pars if pars[p].vary]))} ...")
 
-        if self.log:  # take log10 for tex and ntot
-            params = self.params
+        if self.log:  # take log10 for tex and ntot ; TODO : re-write
+            params = self.model_config.params
             for par in params:
                 # if 'tex' in par or 'ntot' in par:
                 if 'ntot' in par:
@@ -853,7 +853,7 @@ class ModelSpectrum(object):
         'propagate': Do not check for NaNs or missing values. The fit will try to ignore them.
         'omit': Remove NaNs or missing observations in data."""
         try:
-            self.model_fit = self.model.fit(self.y_fit, params=self.params, fmhz=self.x_fit, log=self.log,
+            self.model_fit = self.model.fit(self.y_fit, params=self.model_config.params, fmhz=self.x_fit, log=self.log,
                                             # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
                                             # tmb2ta=self.tmb2ta(self.x_fit), jypb2k=self.jypb(self.x_fit),
                                             nan_policy='omit',  #
@@ -920,9 +920,10 @@ class ModelSpectrum(object):
         #         p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
         #         p.user_data['log'] = False
 
-        # update components
+        # update parameters and components
+        self.model_config.params = self.model_fit.params
         for cpt in self.model_config.cpt_list:
-            cpt.update_parameters(self.params)
+            cpt.update_parameters(self.model_fit.params)
 
         # update vlr_plot
         if self.vlsr_file == 0:
@@ -2345,6 +2346,9 @@ class ModelCube(object):
         # self._source = configuration.get('source', None)
         # self.win_list = None
 
+        # continuum ; can have :
+        # - a list of values (one for each data cube)
+        # - a list of fits files with one value per pixel
         self.cont_info = configuration.get('cont_info', [])
         self._cont_data = []
         # retrieving the continuum
@@ -2355,8 +2359,7 @@ class ModelCube(object):
         #             if os.path.isfile(cont_file):  # assume it is a fits file
         #                 cont_info[key] = fits.open(cont_file)[0]
         if len(self.cont_info) > 0:
-            cont_info = utils.get_cubes(self.cont_info, check_spatial_shape=self.cubeshape[-2:])
-            self._cont_data = cont_info
+            self._cont_data = utils.get_cubes(self.cont_info, check_spatial_shape=self.cubeshape[-2:])
 
         # conversion factors : T = (conv_fact / nu^2) * I , with :
         # conv_fact = c^2 / (2*k_B*omega) * 1.e-26 (to convert Jy to mks)
@@ -2428,11 +2431,14 @@ class ModelCube(object):
 
         return beams
 
-    def read_frequencies(self):
-        # Read the data cubes and start and end frequencies of each cube :
+    def read_frequencies(self, fits_list=None):
+        # Read the data cubes and start and end frequencies of each cube
+        if fits_list is None:
+            fits_list = self._data_file
+
         fmhz_ranges = []
 
-        for i, f in enumerate(self._data_file):
+        for i, f in enumerate(fits_list):
             dat = SpectralCube.read(fits.open(f))
 
             # Extract the min and max frequency values of each cube
@@ -2613,7 +2619,7 @@ class ModelCube(object):
             # self._model = ModelSpectrum(configuration, verbose=verbose)
             # self._model.make_params()
             # self._params_user = self._model.params.copy()
-            config = copy.deepcopy(self._model_configuration)
+            config = copy.copy(self._model_configuration)
             # model = ModelSpectrum(self._model_configuration)
             # model.model_config.minimize = True
             # model.make_params()
@@ -2738,12 +2744,12 @@ class ModelCube(object):
 
             rms = {tag_i: [] for tag_i in self.tags}
             flux0 = {tag_i: [] for tag_i in self.tags}
-            for win in model.model_config.win_list_fit:
+            for win in config.win_list_fit:
                 fmhz = np.mean(win.x_file)  # win.transition.f_trans_mhz
                 if self._model_configuration.cont_free:
                     tc = 0.
                 else:
-                    tc = model.get_tc(fmhz)
+                    tc = config.tc(fmhz)
                 tag_i = win.transition.tag
                 rms[tag_i].append(win.rms)
                 flux0[tag_i].append(max(win.y_fit - tc))
