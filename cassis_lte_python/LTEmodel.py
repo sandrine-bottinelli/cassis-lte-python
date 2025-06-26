@@ -586,24 +586,6 @@ class ModelSpectrum(object):
         self.norm_factors = {key: 1 for key in self.norm_factors.keys()}
         self.log = False
 
-        # # save parameters for re-use
-        # # if self.model_config.jparams is None:
-        # #     self.model_config.jparams = self.params.dumps()
-        # if self.model_config.latest_valid_params is None:
-        #     self.model_config.latest_valid_params = self.params.copy()
-        # else:
-        #     REL_TOL = 1e-3
-        #     for parname, par in self.params.items():
-        #         tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
-        #         tol = par.value * 0.1
-        #         if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
-        #                                     for extrem in [par.min, par.max]]):
-        #         # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
-        #             self.model_config.latest_valid_params[parname] = self.params[parname]
-        #         # elif par.vary:
-        #         #     self.model_config.latest_valid_params[parname] = self.model_config._param
-        #         #     pass
-
         if print_report == 'long':
             # print(self.model_fit.fit_report())
             print(self.fit_report(report_kws=report_kws))
@@ -896,31 +878,6 @@ class ModelSpectrum(object):
 
         self.model = self.model_fit.model
 
-        # update parameters
-        # self.params = self.model_fit.params.copy()
-        # for par in self.params:
-        #     p = self.params[par]
-        #     pfit = self.model_fit.params[par]
-        #
-        #     p.correl = pfit.correl
-        #
-        #     nf = self.norm_factors[p.name]
-        #     if nf != 1.:
-        #         p.set(min=pfit.min * nf, max=pfit.max * nf, value=pfit.value * nf, is_init_value=False, expr=pfit.expr)
-        #         if pfit.stderr is not None:
-        #             p.stderr = nf * pfit.stderr
-        #
-        #     if p.user_data is not None and p.user_data.get('log', False):
-        #         p.init_value = p.user_data['value']
-        #         if pfit.stderr is not None:
-        #             try:
-        #                 p.stderr = (10 ** (pfit.value + pfit.stderr) - 10 ** (pfit.value - pfit.stderr)) / 2
-        #             except (OverflowError, RuntimeWarning):
-        #                 p.stderr = np.inf
-        #         val = round(10 ** pfit.value, 6) if p.vary or p.expr is not None else p.user_data['value']
-        #         p.set(value=val, min=p.user_data['min'], max=p.user_data['max'], is_init_value=False, expr=pfit.expr)
-        #         p.user_data['log'] = False
-
         # update parameters and components
         self.model_config.params = self.model_fit.params
         # for cpt in self.model_config.cpt_list:
@@ -928,7 +885,7 @@ class ModelSpectrum(object):
         for parname, par in self.model_config.parameters.items():
             par.set(param=self.model_fit.params[parname])
 
-        # update vlr_plot
+        # update vlsr_plot
         if self.vlsr_file == 0:
             self.model_config.vlsr_plot = self.cpt_list[0].vlsr
 
@@ -2608,8 +2565,6 @@ class ModelCube(object):
         #                zip(self.fmhz_ranges, self._noise_info)}
 
         # Start the snake loop
-        # model = self._model
-        # model.model_config.minimize = True
         config = None
 
         for pix in pix_list:
@@ -2621,17 +2576,8 @@ class ModelCube(object):
                 # the pixel is masked, go to the next one
                 continue
 
-            # self._model_configuration_user = copy.deepcopy(configuration)
-            # self._model = ModelSpectrum(configuration, verbose=verbose)
-            # self._model.make_params()
-            # self._params_user = self._model.params.copy()
             if config is None:
                 config = copy.copy(self._model_configuration)
-            # model = ModelSpectrum(self._model_configuration)
-            # model.model_config.minimize = True
-            # model.make_params()
-            # model.model = None
-            # model.model_fit = None
 
             data = np.concatenate([dat[:, j, i].array for dat in self._cubes])
             data = np.nan_to_num(data)
@@ -2643,7 +2589,6 @@ class ModelCube(object):
                 noiseValues = np.concatenate([dat[:, j, i].array for dat in self._cubes_noise])
                 rms_cal = {'[{:.1f}, {:.1f}]'.format(start, end): [noise, self._cal] for [start, end], noise in
                            zip(self.fmhz_ranges, noiseValues)}
-                # model.model_config.get_rms_cal_info(rms_cal_info=rms_cal)
                 config.rms_cal = rms_cal
                 # print('rms_cal = ', rms_cal)
 
@@ -2774,29 +2719,6 @@ class ModelCube(object):
                 if self.latest_valid_params is not None:
                     for parname, par in config.parameters.items():
                         par.set(param=self.latest_valid_params[parname])
-                    # config.params = self.latest_valid_params
-                    # model.params = copy.copy(model.model_config.latest_valid_params)
-                    # for par in config.params.values():
-                    #     config.params[par.name] = self.latest_valid_params[par.name]
-                    #     if par.vary and par.expr is None:
-                    #         val = par.value
-                    #         # diff = par.max - par.min
-                    #         # pc = 0.1
-                    #         # # if close to a boundary, use initial guess
-                    #         # if abs(val - par.min) < (pc * val) or abs(val - par.max) < (pc * val):
-                    #         #     par = self._params_user[par.name]
-                    #         #     continue
-                    #         # otherwise, shift boundaries
-                    #         if par.user_data is not None and par.user_data.get('factor', False):
-                    #             new_max = par.user_data['max_fact'] * val
-                    #             new_min = par.user_data['min_fact'] * val
-                    #         else:
-                    #             new_max = val + self.ref_pixel_info['params'][par.name].max - self.ref_pixel_info['params'][par.name].value
-                    #             new_min = val - (self.ref_pixel_info['params'][par.name].value - self.ref_pixel_info['params'][par.name].min)
-                    #
-                    #         config.params[par.name].set(min=new_min, max=new_max)
-
-                # model.params = model.check_params_boundaries(model.params, verbose=False)
 
                 # update velocity ranges in windows
                 # first_cpt = model.model_config.cpt_list[0].name
