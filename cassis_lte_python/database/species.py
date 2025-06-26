@@ -4,7 +4,7 @@ from numpy import interp, power, log10, genfromtxt
 import os
 import pandas as pd
 from cassis_lte_python.utils.settings import PARTITION_FUNCTION_DIR, FWHM_DEF
-from cassis_lte_python.sim.parameters import create_parameter
+from cassis_lte_python.sim.parameters import create_parameter, Parameter
 from cassis_lte_python.database.setupdb import DATABASE_SQL
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 
@@ -13,10 +13,14 @@ class Species:
     def __init__(self, tag, ntot=7.0e14, tex=100., fwhm=None, component=None):
         # super().__init__(self)
         self._tag = str(tag)  # make sure tag is stored as a string
-        self._ntot = create_parameter('ntot_{}'.format(tag), ntot)  # total column density [cm-2]
+        if isinstance(ntot, (int, float)):
+            ntot = {'value': ntot}
+        self._ntot = Parameter('ntot_{}'.format(tag), **ntot)  # total column density [cm-2]
         self._fwhm = fwhm
         if fwhm is not None:
-            self._fwhm = create_parameter('fwhm_{}'.format(tag), fwhm)  # line width [km/s]
+            if isinstance(fwhm, (int, float)):
+                fwhm = {'value': fwhm}
+            self._fwhm = Parameter('fwhm_{}'.format(tag), **fwhm)  # line width [km/s]
 
         self._tex = tex  # excitation temperature [K]
         self._component = component

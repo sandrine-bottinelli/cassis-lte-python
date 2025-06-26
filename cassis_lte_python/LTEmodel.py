@@ -610,11 +610,12 @@ class ModelSpectrum(object):
             print("")
         elif print_report == 'short':
             print("Best values:")
-            if any([p.stderr is None for cpt in self.model_config.cpt_list for p in cpt.parameters]):
+            if any([p.stderr is None for p in self.model_fit.params.values()]):
                 print("  Some uncertainties could not be estimated.")
             for cpt in self.model_config.cpt_list:
+                fit_pars = [p for p in self.model_fit.params.values() if cpt.name in p.name]
                 res = []
-                for p in cpt.parameters:
+                for p in fit_pars:
                     value = utils.format_float(p.value, nb_signif_digits=2)
                     if p.vary:
                         if p.expr is not None:
@@ -679,7 +680,7 @@ class ModelSpectrum(object):
                     f.writelines(header1)
                     f.write(hdr_comp_params[0][1])
                     for comp in self.model_config.cpt_list:
-                        pars = [par for par in comp.parameters if 'ntot' not in par.name]
+                        pars = [par for par in comp.parameters.values() if 'ntot' not in par.name]
                         for par in pars:
                             pmin = par.min if abs(par.min) not in [np.inf, float("inf")] else par.value
                             pmax = par.max if abs(par.max) not in [np.inf, float("inf")] else par.value
@@ -922,8 +923,10 @@ class ModelSpectrum(object):
 
         # update parameters and components
         self.model_config.params = self.model_fit.params
-        for cpt in self.model_config.cpt_list:
-            cpt.update_parameters(self.model_fit.params)
+        # for cpt in self.model_config.cpt_list:
+        #     cpt.update_parameters(self.model_fit.params)
+        for parname, par in self.model_config.parameters.items():
+            par.set(param=self.model_fit.params[parname])
 
         # update vlr_plot
         if self.vlsr_file == 0:
@@ -989,9 +992,9 @@ class ModelSpectrum(object):
         if self.model_fit.covar is not None:
             for cpt in self.cpt_list:
                 params = Parameters()
-                for par in self.params:
+                for par in self.model_fit.params:
                     if cpt.name in par:
-                        params[par] = self.params[par]
+                        params[par] = self.model_fit.params[par]
 
                 indices = [i for i, var_name in enumerate(self.model_fit.var_names) if cpt.name in var_name]
                 var_names = [self.model_fit.var_names[i] for i in indices]
@@ -2139,8 +2142,10 @@ class ModelSpectrum(object):
                     'Size': params['{}_size'.format(cpt.name)].value,
                     'NbMol': len(cpt.tag_list) if ic != 0 else len(cpt.tag_list) + len(extra_sp)
                     }
-            for isp, sp in enumerate(cpt.species_list):
+            # for isp, sp in enumerate(cpt.species_list):
+            for isp, tag in enumerate(cpt.tag_list):
                 molname = 'Mol{}'.format(isp + 1)
+                sp = list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0]
                 try:
                     fwhm = params['{}_fwhm'.format(cpt.name)].value
                 except KeyError:
@@ -2331,7 +2336,7 @@ class ModelCube(object):
         self.latest_valid_params = None
 
         self.tags = self._model_configuration.tag_list[:]  # make a copy
-        self.param_names = [p.name for cpt in self._model_configuration.cpt_list for p in cpt.parameters]
+        self.param_names = list(self._model_configuration.parameters.keys())
         self.user_params = self._model_configuration.params.copy()
 
         # create arrays of Nans for the output parameters, ensure to make for all components
@@ -2510,7 +2515,7 @@ class ModelCube(object):
             REL_TOL = 1e-3
             for parname, par in params.items():
                 tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
-                tol = par.value * 0.1
+                tol = np.abs(par.value) * 0.1
                 if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
                                             for extrem in [par.min, par.max]]):
                     # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
@@ -2537,7 +2542,7 @@ class ModelCube(object):
             redo = False
             for parname, par in model_spec.params.items():
                 # tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
-                tol = par.value * 0.1
+                tol = np.abs(par.value) * 0.05
                 if par.vary and any([math.isclose(par.value, extrem, abs_tol=tol) for extrem in [par.min, par.max]]):
                     # model_spec.params[parname] = self._params_user[parname]
                     model_spec.params = self.ref_pixel_info['params'].copy()
@@ -2605,6 +2610,7 @@ class ModelCube(object):
         # Start the snake loop
         # model = self._model
         # model.model_config.minimize = True
+        config = None
 
         for pix in pix_list:
             t1_start = process_time()
@@ -2619,7 +2625,8 @@ class ModelCube(object):
             # self._model = ModelSpectrum(configuration, verbose=verbose)
             # self._model.make_params()
             # self._params_user = self._model.params.copy()
-            config = copy.copy(self._model_configuration)
+            if config is None:
+                config = copy.copy(self._model_configuration)
             # model = ModelSpectrum(self._model_configuration)
             # model.model_config.minimize = True
             # model.make_params()
@@ -2806,11 +2813,13 @@ class ModelCube(object):
             if len(tags_new) > 0:
                 # mask_comp[j, i] = True
                 # update tag list ; NB: updates parameters and windows to fit
-                config.update_tag_list(tags_new, self._model_configuration.cpt_list)
+                config.update_tag_list(tags_new)
 
                 # update params values
                 if self.latest_valid_params is not None:
-                    config.params = self.latest_valid_params
+                    for parname, par in config.parameters.items():
+                        par.set(param=self.latest_valid_params[parname])
+                    # config.params = self.latest_valid_params
                     # model.params = copy.copy(model.model_config.latest_valid_params)
                     # for par in config.params.values():
                     #     config.params[par.name] = self.latest_valid_params[par.name]
@@ -2841,16 +2850,19 @@ class ModelCube(object):
                 #     win.v_range_fit = [model.params[f'{first_cpt}_vlsr'].value - dv for dv in delta_v]
                 #     win.compute_f_range_fit(model.model_config.vlsr_file)
 
+                if pix == (14, 2):
+                    pass
                 config.get_data_to_fit()
+                config.make_params()
 
                 # fit with the updated config
                 print("Fitting pixel : ", pix)
 
-                # if pix == (45, 25):
+                # if pix == (14, 2):
                 #     pass
                 try:
-                    # if pix == (35, 29):
-                    #     pass
+                    if pix == (14, 2):
+                        pass
                     model = ModelSpectrum(config)
                     # res = model.do_minimization()
                 except TypeError as e:
@@ -2860,10 +2872,13 @@ class ModelCube(object):
                 if pix == (8,9):
                     pass
                 # check if a parameter is close to a boundary ; if so, re-do fit from user's values
-                # if check_at_boundary(model):
-                #     model.model = None
+                if check_at_boundary(model):
+                    for parname, par in config.parameters.items():
+                        par.set(param=self.user_params[parname])
+                    model.model_config.make_params()
+                    # model.model = None
                 #     model.model_fit = None
-                #     res = model.do_minimization()
+                    model.do_minimization()
                 #
                 # if res is None:
                 #     print("Could not fit - going to next pixel")

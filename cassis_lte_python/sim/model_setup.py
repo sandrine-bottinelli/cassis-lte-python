@@ -7,7 +7,7 @@ from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
-from cassis_lte_python.sim.parameters import create_parameter, parameter_infos
+from cassis_lte_python.sim.parameters import create_parameter, parameter_infos, Parameter
 from cassis_lte_python.utils.settings import VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF
 import os
 import pandas as pd
@@ -243,7 +243,27 @@ class ModelConfiguration:
 
             self.constraints = constraints_dict
 
-        self.ref_pixel_info = None
+            # apply user constraints to parameters
+            params = self.parameters
+            for key, val in self.constraints.items():
+                if 'set_fwhm' in key:
+                    tag_ref = val.split('_')[-1]
+                    cpt = val.split('_')[0]
+                    for tag in self.tag_list:
+                        if tag != tag_ref:
+                            try:
+                                params[f'{cpt}_fwhm_{tag}'].set(expr=val)
+                            except KeyError:  # key does not exist, do nothing
+                                pass
+                else:
+                    try:
+                        params[key].set(expr=val)
+                    except KeyError:
+                        print(f"Constraints: {key.split('_')[-1]} is not in the tag list "
+                              f"or has been removed due to lack of transitions.")
+                        pass
+
+        # self.ref_pixel_info = None
         self.latest_valid_params = None
         self.tau_lim = configuration.get('tau_lim', np.inf)
         self.max_iter = configuration.get('max_iter', None)
@@ -1412,23 +1432,26 @@ class ModelConfiguration:
         params = Parameters()
 
         for icpt, cpt in enumerate(self.cpt_list):
-            for par in cpt.parameters:
-                if 'size' in par.name:
-                    par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
-                if 'tex' in par.name:
-                    par.set(min=self.tcmb if not isinstance(par.min, (float, int)) else max(par.min, self.tcmb))
-                params[par.name] = par
+            for parname, par in cpt.parameters.items():
+                params[parname] = create_parameter(parname, par.to_dict())
 
-            for isp, sp in enumerate(cpt.species_list):
-                for par in sp.parameters:
-                    par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
-                    params[par.name] = par
+            # for par in cpt.parameters:
+            #     if 'size' in par.name:
+            #         par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
+            #     if 'tex' in par.name:
+            #         par.set(min=self.tcmb if not isinstance(par.min, (float, int)) else max(par.min, self.tcmb))
+            #     params[par.name] = par
+            #
+            # for isp, sp in enumerate(cpt.species_list):
+            #     for par in sp.parameters:
+            #         par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
+            #         params[par.name] = par
 
         # Update parameters if possible :
         if json_params is not None:
             params.loads(json_params)
 
-        params = self.check_params_boundaries(params)
+        # params = self.check_params_boundaries(params)
         # # Check min/max Tex:
         # for icpt, cpt in enumerate(self.cpt_list):
         #     par = params[f'{cpt.name}_tex']
@@ -1474,7 +1497,7 @@ class ModelConfiguration:
         #     par.set(min=mini, max=maxi)
 
         # user constraints
-        if self.constraints is not None and self.ref_pixel_info is None:
+        if self.constraints is not None:
             for key, val in self.constraints.items():
                 if 'set_fwhm' in key:
                     tag_ref = val.split('_')[-1]
@@ -1578,32 +1601,33 @@ class ModelConfiguration:
         if new_tags == current_tags:  # list has not changed : exit method
             return
 
-        if len(new_tags) > len(current_tags) and ref_cpt_list is None:
-            raise KeyError(f"You want more species ({new_tags}) than currently available ({current_tags})."
-                           f"You need to provide the corresponding Parameters with the ref_cpt_list key.")
+        # if len(new_tags) > len(current_tags) and ref_cpt_list is None:
+        #     raise KeyError(f"You want more species ({new_tags}) than currently available ({current_tags})."
+        #                    f"You need to provide the corresponding Parameters with the ref_cpt_list key.")
 
         for cpt in self.cpt_list:
+            cpt.tag_list = [tag for tag in new_tags if tag in cpt.init_tag_list]
             # update tag list and species list
-            new_sp_list = []
-            for tag in new_tags:
-                if tag in cpt.tag_list:  # species already in tag list, keep it
-                    new_sp_list.append(list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0])
-                else:
-                    if ref_cpt_list is not None:
-                        ref_cpt = self.cpt_dict()[cpt.name]
-                        if tag in ref_cpt.tag_list:
-                        # the species is in the reference component, take it
-                            new_sp_list.append(ref_cpt.species_dict()[tag])
-
-            cpt.species_list = new_sp_list
-            cpt.tag_list = [sp.tag for sp in new_sp_list]
+            # new_sp_list = []
+            # for tag in new_tags:
+            #     if tag in cpt.tag_list:  # species already in tag list, keep it
+            #         new_sp_list.append(list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0])
+            #     else:
+            #         if ref_cpt_list is not None:
+            #             ref_cpt = self.cpt_dict()[cpt.name]
+            #             if tag in ref_cpt.tag_list:
+            #             # the species is in the reference component, take it
+            #                 new_sp_list.append(ref_cpt.species_dict()[tag])
+            #
+            # cpt.species_list = new_sp_list
+            # cpt.tag_list = [sp.tag for sp in new_sp_list]
 
         self.tag_list = new_tags
 
         # update parameters
-        params = Parameters()
-        params.add_many(*[par for cpt in self.cpt_list for par in cpt.parameters])
-        self.params = params
+        # params = Parameters()
+        # params.add_many(*[par for cpt in self.cpt_list for par in cpt.parameters])
+        # self.params = params
 
         # update windows to fit
         for win in self.win_list:
@@ -1619,6 +1643,13 @@ class ModelConfiguration:
         if len(self.win_list_fit) > 0:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
+
+    @property
+    def parameters(self):
+        params = {}
+        for cpt in self.cpt_list:
+            params.update(cpt.parameters)
+        return params
 
     @property
     def x_file(self):
@@ -1641,10 +1672,11 @@ class ModelConfiguration:
             if self.x_obs is not None and not np.array_equal(self.x_obs, self.x_file):
                 self._y_file = value[self.x_obs.argsort()]
             # update windows :
-            if self.ref_pixel_info is not None:
-                win_list = self.ref_pixel_info['windows']
-            else:
-                win_list = self.win_list
+            # if self.ref_pixel_info is not None:
+            #     win_list = self.ref_pixel_info['windows']
+            # else:
+            #     win_list = self.win_list
+            win_list = self.win_list
             new_win_list = []
             if len(win_list) > 0 and self.x_file is not None:
                 for win in win_list:
@@ -1721,16 +1753,24 @@ class Component:
 
         if vlsr is None:
             vlsr = VLSR_DEF  # TODO: find out why VLSR_DEF inside __init__ does not work
-        self._vlsr = create_parameter('{}_vlsr'.format(self.name), vlsr)  # km/s
+        elif isinstance(vlsr, (int, float)):
+            vlsr = {'value': vlsr}
+        self._vlsr = Parameter('{}_vlsr'.format(self.name), **vlsr)  # km/s
 
         if size is None:
             size = SIZE_DEF
-        self._size = create_parameter('{}_size'.format(self.name), size)  # arcsec
+        elif isinstance(size, (int, float)):
+            size = {'value': size}
+        self._size = Parameter('{}_size'.format(self.name), **size)  # arcsec
 
-        self._tex = create_parameter('{}_tex'.format(self.name), tex)  # K
+        if isinstance(tex, (int, float)):
+            tex = {'value': tex}
+        self._tex = Parameter('{}_tex'.format(self.name), **tex)  # K
 
         if fwhm is not None:
-            self._fwhm = create_parameter('{}_fwhm'.format(self.name), fwhm)
+            if isinstance(fwhm, (int, float)):
+                fwhm = {'value': fwhm}
+            self._fwhm = Parameter('{}_fwhm'.format(self.name), **fwhm)
         else:
             self._fwhm = None
 
@@ -1758,6 +1798,7 @@ class Component:
 
         self._species_list = cpt_species_list
         self._tag_list = [sp.tag for sp in self.species_list]
+        self._init_tag_list = self._tag_list
         self._parameters = []
 
         for sp in self.species_list:
@@ -1766,6 +1807,8 @@ class Component:
         self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
         # lowest temp for the component should be the highest value among the min values of the partition functions
         self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
+        self._tex.abs_min = self._tmin
+        self._tex.abs_max = self._tmax
 
         self.transition_list = None
 
@@ -1841,6 +1884,10 @@ class Component:
         self._tag_list = value
 
     @property
+    def init_tag_list(self):
+        return self._init_tag_list
+
+    @property
     def species_list(self):
         return self._species_list
 
@@ -1850,13 +1897,14 @@ class Component:
 
     @property
     def parameters(self):
-        pars = [self._vlsr, self._size, self._tex]
+        pars = {par.name: par for par in [self._vlsr, self._size, self._tex]}
         if self._fwhm is not None:
-            pars.append(self._fwhm)
+            pars[self._fwhm.name] = self._fwhm
         for sp in self.species_list:
-            pars.append(sp._ntot)
-            if self._fwhm is None:
-                pars.append(sp._fwhm)
+            if sp.tag in self._tag_list:
+                pars[sp._ntot.name] = sp._ntot
+                if self._fwhm is None:
+                    pars[sp._fwhm.name] = sp._fwhm
         return pars
 
     # def get_transitions(self, fmhz_ranges, **thresholds):  # not used -> keep??
