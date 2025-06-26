@@ -1644,6 +1644,55 @@ class ModelConfiguration:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
 
+    def avg_snr_per_species(self):
+        fluxes_freq_range = self.rms_cal.copy()
+        tags = self.tr_list_by_tag.keys()
+        for tag_i in tags:  # add two columns for each tag (total flux, number of points)
+            fluxes_freq_range[str(tag_i) + '_Fmax'] = [0.] * len(fluxes_freq_range)
+            fluxes_freq_range[str(tag_i) + '_Nwin'] = [0.] * len(fluxes_freq_range)
+
+        rms = {tag_i: [] for tag_i in tags}
+        flux0 = {tag_i: [] for tag_i in tags}
+        for win in self.win_list_fit:
+            fmhz = np.mean(win.x_file)  # win.transition.f_trans_mhz
+            if self.cont_free:
+                tc = 0.
+            else:
+                tc = self.tc(fmhz)
+            tag_i = win.transition.tag
+            rms[tag_i].append(win.rms)
+            flux0[tag_i].append(max(win.y_fit - tc))
+            row = utils.get_df_row_from_freq_range(fluxes_freq_range, fmhz)
+            idx = row.index
+            fluxes_freq_range.loc[idx, str(tag_i) + '_Fmax'] += max(win.y_fit - tc)
+            fluxes_freq_range.loc[idx, str(tag_i) + '_Nwin'] += 1
+
+        # create a dictionary to store the rounded SNR values
+        snr_tag_weighted = {}
+        snr_tag_avg = {}
+        for tag_i in tags:
+            flux0_tag = np.array(flux0[tag_i])
+            rms_tag = np.array(rms[tag_i])
+            wt_tag = 1. / (rms_tag ** 2)
+            snr_tag_weighted[tag_i] = np.sum(flux0_tag * wt_tag) / np.sqrt(np.sum(wt_tag))
+            snr_tag_avg[tag_i] = np.nanmean(flux0_tag / rms_tag)
+        # snr_tag3 = {}
+        # for key in flux_wt.keys():
+        #     flux0_tag = np.array(flux0[key])
+        #     wt_tag = np.array(wt[key])
+        #     var = 1./np.sum(wt_tag)
+        #     snr_tag3[key] = np.sum(flux0_tag * wt_tag) / np.sum(wt_tag) / np.sqrt(var)
+
+        snr_tag = snr_tag_avg
+        # if 'constraint' in self._model_configuration_user:
+        #     # This considers only rflux[0] values when constraints is True
+        #     tags_new = self.tags if list(snr_tag.values())[0] >= self._model_configuration_user['snr'] else []
+        # else:
+        #     # Consider all rflux values when constraints is False
+        #     tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
+
+        return snr_tag
+
     @property
     def parameters(self):
         params = {}
