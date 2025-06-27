@@ -1332,7 +1332,7 @@ class ModelConfiguration:
                         x_win, y_win = utils.select_from_ranges(self.x_file, f_range_search, y_values=self.y_file)
                         if len(x_win) <= 5 or len(set(y_win)) == 1:
                             continue
-                    win = Window(tr, len(win_list_tag) + 1, bl_corr=self.bl_corr)
+                    win = Window(tr, len(win_list_tag) + 1, bl_corr=self.bl_corr, v_ref_kms=self.cpt_list[0].vlsr)
                     win.x_file, win.y_file = x_win, y_win
                     win_list_tag.append(win)
                     fwhm_mhz = utils.delta_v_to_delta_f(self.fwhm_max, tr.f_trans_mhz)
@@ -1374,7 +1374,7 @@ class ModelConfiguration:
                         win_num = win.plot_nb
 
                         if win_num in v_range:  # window has range to be fitted
-                            win.v_range_fit = v_range[win_num]
+                            win.delta_v_range_fit = np.array(v_range[win_num]) - win.v_ref_kms
                             win.compute_f_range_fit(self.vlsr_file)
                             # f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
                             #                                        vref_kms=self.vlsr_file)
@@ -1978,7 +1978,7 @@ class Component:
 
 class Window:
     def __init__(self, transition=None, plot_nb=0, name="", v_range_fit=None, f_range_fit=None, rms=None, cal=None,
-                 x_mod=None, bl_corr=False):
+                 x_mod=None, bl_corr=False, v_ref_kms=0.):
         self.transition = transition
         self.plot_nb = plot_nb
         self._name = name
@@ -1989,6 +1989,8 @@ class Window:
         self.f_ranges_nofit = []
         self._v_range_plot = None
         self._f_range_plot = None
+        self._v_ref_kms = v_ref_kms
+        self._delta_v_range_fit = None
         self._rms = rms
         self._cal = cal
         self._x_fit = None
@@ -2052,9 +2054,28 @@ class Window:
     def v_range_fit(self):
         return self._v_range_fit
 
-    @v_range_fit.setter
-    def v_range_fit(self, value):
-        self._v_range_fit = value
+    # @v_range_fit.setter
+    # def v_range_fit(self, value):
+    #     self._v_range_fit = value
+
+    @property
+    def v_ref_kms(self):
+        return self._v_ref_kms
+
+    @v_ref_kms.setter
+    def v_ref_kms(self, value):
+        if self.delta_v_range_fit is not None:
+            self._v_range_fit = value + self.delta_v_range_fit
+        self._v_ref_kms = value
+
+    @property
+    def delta_v_range_fit(self):
+        return self._delta_v_range_fit
+
+    @delta_v_range_fit.setter
+    def delta_v_range_fit(self, value):
+        self._delta_v_range_fit = np.array(value)
+        self._v_range_fit = self.v_ref_kms + self._delta_v_range_fit
 
     @property
     def f_range_fit(self):

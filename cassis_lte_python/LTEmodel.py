@@ -2499,7 +2499,7 @@ class ModelCube(object):
             redo = False
             for parname, par in model_spec.params.items():
                 # tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
-                tol = np.abs(par.value) * 0.05
+                tol = np.abs(par.value) * 0.1
                 if par.vary and any([math.isclose(par.value, extrem, abs_tol=tol) for extrem in [par.min, par.max]]):
                     # model_spec.params[parname] = self._params_user[parname]
                     model_spec.params = self.ref_pixel_info['params'].copy()
@@ -2718,14 +2718,16 @@ class ModelCube(object):
                 # update params values
                 if self.latest_valid_params is not None:
                     for parname, par in config.parameters.items():
+                        # par.set(param=self.user_params[parname])
                         par.set(param=self.latest_valid_params[parname])
 
                 # update velocity ranges in windows
-                # first_cpt = model.model_config.cpt_list[0].name
-                # for win in model.win_list_fit:
-                #     delta_v = [model.model_config.latest_valid_params[f'{first_cpt}_vlsr'].init_value - v for v in win.v_range_fit]
-                #     win.v_range_fit = [model.params[f'{first_cpt}_vlsr'].value - dv for dv in delta_v]
-                #     win.compute_f_range_fit(model.model_config.vlsr_file)
+                first_cpt = config.cpt_list[0].name
+                for win in config.win_list_fit:
+                    win.v_ref_kms = self.latest_valid_params[f'{first_cpt}_vlsr'].init_value
+                    # delta_v = [model.model_config.latest_valid_params[f'{first_cpt}_vlsr'].init_value - v for v in win.v_range_fit]
+                    # win.v_range_fit = [model.params[f'{first_cpt}_vlsr'].value - dv for dv in delta_v]
+                    win.compute_f_range_fit(config.vlsr_file)
 
                 if pix == (14, 2):
                     pass
@@ -2738,7 +2740,7 @@ class ModelCube(object):
                 # if pix == (14, 2):
                 #     pass
                 try:
-                    if pix == (14, 2):
+                    if pix == (5, 10):
                         pass
                     model = ModelSpectrum(config)
                     # res = model.do_minimization()
@@ -2749,13 +2751,13 @@ class ModelCube(object):
                 if pix == (8,9):
                     pass
                 # check if a parameter is close to a boundary ; if so, re-do fit from user's values
-                if check_at_boundary(model):
-                    for parname, par in config.parameters.items():
-                        par.set(param=self.user_params[parname])
-                    model.model_config.make_params()
-                    # model.model = None
-                #     model.model_fit = None
-                    model.do_minimization()
+                # if check_at_boundary(model):
+                #     for parname, par in config.parameters.items():
+                #         par.set(param=self.user_params[parname])
+                #     model.model_config.make_params()
+                #     # model.model = None
+                # #     model.model_fit = None
+                #     model.do_minimization()
                 #
                 # if res is None:
                 #     print("Could not fit - going to next pixel")
