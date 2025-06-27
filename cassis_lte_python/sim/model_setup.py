@@ -1644,7 +1644,7 @@ class ModelConfiguration:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
 
-    def avg_snr_per_species(self):
+    def flux_rms_per_species(self):
         fluxes_freq_range = self.rms_cal.copy()
         tags = self.tr_list_by_tag.keys()
         for tag_i in tags:  # add two columns for each tag (total flux, number of points)
@@ -1667,12 +1667,21 @@ class ModelConfiguration:
             fluxes_freq_range.loc[idx, str(tag_i) + '_Fmax'] += max(win.y_fit - tc)
             fluxes_freq_range.loc[idx, str(tag_i) + '_Nwin'] += 1
 
-        # create a dictionary to store the rounded SNR values
-        snr_tag_weighted = {}
-        snr_tag_avg = {}
+        flux_rms = {}
         for tag_i in tags:
             flux0_tag = np.array(flux0[tag_i])
             rms_tag = np.array(rms[tag_i])
+            flux_rms[tag_i] = {'flux0': flux0_tag, 'rms': rms_tag, 'snr': flux0_tag/rms_tag}
+
+        return flux_rms
+
+    def avg_snr_per_species(self):
+        # create a dictionary to store the rounded SNR values
+        snr_tag_weighted = {}
+        snr_tag_avg = {}
+        for tag_i, flux_rms in self.flux_rms_per_species().items():
+            flux0_tag = flux_rms['flux0']
+            rms_tag = flux_rms['rms']
             wt_tag = 1. / (rms_tag ** 2)
             snr_tag_weighted[tag_i] = np.sum(flux0_tag * wt_tag) / np.sqrt(np.sum(wt_tag))
             snr_tag_avg[tag_i] = np.nanmean(flux0_tag / rms_tag)

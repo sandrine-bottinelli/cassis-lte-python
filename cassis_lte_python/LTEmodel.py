@@ -286,7 +286,8 @@ class ModelSpectrum(object):
         #     self.make_params(json_params=self.model_config.jparams)
         # except TypeError:
         #     pass
-
+        # if 'config_only' in kwargs:
+        #     pass
         if self.model_config.modeling:
             self.do_modeling()
 
@@ -879,7 +880,7 @@ class ModelSpectrum(object):
         self.model = self.model_fit.model
 
         # update parameters and components
-        self.model_config.params = self.model_fit.params
+        self.model_config.params = self.model_fit.params.copy()
         # for cpt in self.model_config.cpt_list:
         #     cpt.update_parameters(self.model_fit.params)
         for parname, par in self.model_config.parameters.items():
@@ -2688,14 +2689,25 @@ class ModelCube(object):
 
                 continue
 
-            # Find which species to fit based on average snr
+            # Find which species to fit based on snr
             print("\nPixel : ", pix)
             snr_tag = config.avg_snr_per_species()
             snr_fmt = {key: f'{val:.2f}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
             snr_list = [f"{key}: {val}" for key, val in snr_fmt.items()]
             print(f'    S/N = {" ; ".join(snr_list)}')
-
             tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
+            # flux_rms = config.flux_rms_per_species()
+            # snr_info = {}
+            # tags_new = []
+            # for tag, info in flux_rms.items():
+            #     nl = len([snr for snr in info['snr'] if snr >= self._model_configuration_user['snr']])
+            #     snr_info[tag] = f'{nl}/{len(info['snr'])}'
+            #     if nl >= 2:
+            #         tags_new.append(tag)
+            #
+            # print(f"Number of lines with SNR > {self._model_configuration_user['snr']} : "
+            #       f"{' ; '.join([f"{key}: {val}" for key, val in snr_info.items()])}")
+
             constraints = self._model_configuration_user.get('constraints', None)
             if len(tags_new) > 0 and constraints is not None:
                 # Check if constraint can be applied, if not, remove species
@@ -2737,8 +2749,8 @@ class ModelCube(object):
                 # fit with the updated config
                 print("Fitting pixel : ", pix)
 
-                # if pix == (14, 2):
-                #     pass
+                if pix == (13, 8):
+                    pass
                 try:
                     if pix == (5, 10):
                         pass
