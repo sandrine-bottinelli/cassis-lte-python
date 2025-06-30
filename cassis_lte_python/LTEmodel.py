@@ -910,9 +910,6 @@ class ModelSpectrum(object):
         for line in lines:
             if '(init' in line:  # reformat initial value
                 begin_line, end_line = line.rsplit(sep=" (", maxsplit=1)
-                init_label, init_val = end_line.split(' = ')
-                init_val = init_val.strip(')')
-                end_line = f"({init_label} = {utils.format_float(float(init_val))})"
 
                 err = ""
                 if "+/-" in begin_line:  # redefine begin_line and reformat error
@@ -924,6 +921,14 @@ class ModelSpectrum(object):
                 begin_line = begin_line.rstrip()
                 label, val = begin_line.rsplit(sep=' ', maxsplit=1)
                 begin_line = f"{label} {utils.format_float(float(val)): <{lmax}}"
+
+                init_label, init_val = end_line.split(' = ')
+                init_val = init_val.strip(')')
+                end_line = f"{init_label} = {utils.format_float(float(init_val))}"
+                parname = label.strip().strip(':')
+                end_line += (f" ; bounds = [{utils.format_float(self.model_fit.params[parname].min)},"
+                             f"{utils.format_float(self.model_fit.params[parname].max)}]")
+                end_line = f"({end_line})"
 
                 new_lines.append(" ".join([begin_line, err, end_line]))
 
