@@ -51,17 +51,18 @@ class Parameter:
 
         self.factors = None
         self.diffs = None
+        if user_data is None:
+            user_data = {}
         self.user_data = user_data
 
-        if user_data is not None:
-            if factor in user_data:
-                factor = user_data['factor']
-                min = user_data['min_fact']
-                max = user_data['max_fact']
-            if difference in user_data:
-                difference = user_data['difference']
-                min = user_data['min_diff']
-                max = user_data['max_diff']
+        if factor in user_data:
+            factor = user_data['factor']
+            min = user_data['min_fact']
+            max = user_data['max_fact']
+        if difference in user_data:
+            difference = user_data['difference']
+            min = user_data['min_diff']
+            max = user_data['max_diff']
 
         if factor:
             self.factors = np.array([min, max])
@@ -138,7 +139,7 @@ class Parameter:
     @value.setter
     def value(self, value):
         self._value = value
-        if self.factors is not None or self.diffs is not None:
+        if self.user_data.get('moving_bounds', False) and (self.factors is not None or self.diffs is not None):
             try:
                 mini, maxi = self.factors * value  # assume factors is not None
             except TypeError:
@@ -204,10 +205,11 @@ class Parameter:
 
 
 def parameter_infos(value=None, min=None, max=None, expr=None, vary=True,
-                    factor=False, difference=False):
+                    factor=False, difference=False, user_data=None):
     if factor and difference:
         raise KeyError("Can only have factor=True OR difference=True")
-    user_data = {}
+    if user_data is None:
+        user_data = {}
     if factor and value is not None:
         user_data['factor'] = True
         if min is not None and expr is None:

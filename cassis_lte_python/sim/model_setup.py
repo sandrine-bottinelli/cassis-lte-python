@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import io
 import sys
+from urllib.parse import uses_params
+
 from cassis_lte_python.utils import utils
 from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
@@ -880,7 +882,15 @@ class ModelConfiguration:
         rows_comps = lines_from_file[n_start_comps:n_end_comps]
         rows_comps = [line.rstrip() for line in rows_comps]
         fcomp = io.StringIO("\n".join(rows_comps))
-        cpt_df = pd.read_csv(fcomp, sep='\t', comment='#')
+        try:
+            cpt_df = pd.read_csv(fcomp, sep='\t', comment='#')
+        except ValueError:
+            raise IOError("Could not parse '{}'".format(fcomp))
+            # col_names = rows_comps[0].split('\t')
+            # cpt_dict = {c: [] for c in col_names}
+            # for i, row in enumerate(rows_comps[1:]):
+            #     for elt in row.split('\t'):
+            #         pass
         cpt_df = cpt_df.rename(columns=lambda x: x.strip())
         cpt_names = [name.split('_')[0] for name in cpt_df['name']]
         cpt_names = list(set(cpt_names))
@@ -899,8 +909,13 @@ class ModelConfiguration:
             if par_name not in valid_par_names:
                 raise Exception(f"Invalid parameter name {cpt_name}_{par_name}.")
             if cpt_name in cpt_dict:
-                cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'], value=row['value'],
-                                                               vary=row['vary'])
+                try:
+                    move = row['moving_bounds']
+                except KeyError:
+                    move = False
+                cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'],
+                                                               value=row['value'], vary=row['vary'],
+                                                               user_data={'moving_bounds': move})
 
         return cpt_dict
 
@@ -1014,7 +1029,12 @@ class ModelConfiguration:
                 sp_dict = {'tag': tag}
                 for par in pars:
                     if f'{cname}_{par}' in df.index:
-                        pmin, val, pmax, var = df.loc[f'{cname}_{par}'][tag].values
+                        try:
+                            pmin, val, pmax, var, move = df.loc[f'{cname}_{par}'][tag].values
+                        except ValueError:
+                            pmin, val, pmax, var = df.loc[f'{cname}_{par}'][tag].values
+                            move = False
+
                         try:
                             val = float(val)
                         except ValueError:
@@ -1028,7 +1048,8 @@ class ModelConfiguration:
                                                        min=pmin,
                                                        max=pmax,
                                                        vary=var,
-                                                       factor=factor)
+                                                       factor=factor,
+                                                       user_data={'moving_bounds': move})
                 cpt_dict[cname]['species'].append(sp_dict)
 
         return cpt_dict
