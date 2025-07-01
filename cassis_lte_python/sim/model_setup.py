@@ -2159,10 +2159,12 @@ class Window:
 
     @property
     def y_fit(self):
-        if self.f_range_fit is not None:
-            x_fit, y_fit = utils.select_from_ranges(self.x_file, self.f_range_fit, y_values=self.y_file)
-        else:
-            y_fit = self._y_fit
+        y_fit = self._y_fit
+        # if self.f_range_fit is not None:
+        #     x_fit, y_fit = utils.select_from_ranges(self.x_file, self.f_range_fit, y_values=self.y_file)
+        #     self.x_fit = x_fit  # need to save x_fit as well otherwise could have different number of points
+        # else:
+        #     y_fit = self._y_fit
         return y_fit
 
     @y_fit.setter
