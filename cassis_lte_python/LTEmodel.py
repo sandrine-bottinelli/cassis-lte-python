@@ -2300,7 +2300,7 @@ class ModelCube(object):
 
         self.tags = self._model_configuration.tag_list[:]  # make a copy
         self.param_names = list(self._model_configuration.parameters.keys())
-        self.user_params = self._model_configuration.params.copy()
+        self.user_params = copy.copy(self._model_configuration.parameters)
 
         # create arrays of Nans for the output parameters, ensure to make for all components
         array_dict = {'redchi2': np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)}
@@ -2440,7 +2440,7 @@ class ModelCube(object):
 
     def pixel_infos(self, mdl):
         pixel_info = {
-            'params': mdl.params.copy(),
+            'params': copy.deepcopy(mdl.model_config.parameters),
             # 'model': self.model.copy(),
             # 'model_fit': self.model_fit.copy(),
             'tag_list': mdl.model_config.tag_list.copy(),
@@ -2453,41 +2453,17 @@ class ModelCube(object):
         }
         return {**pixel_info, **cpt_info}
 
-    def shift_boundary(self, par):
-        val = par.value
-        if par.vary and par.expr is None:
-            if par.user_data is not None and par.user_data.get('factor', False):
-                new_max = par.user_data['max_fact'] * val
-                new_min = par.user_data['min_fact'] * val
-            else:
-                new_max = val + self.user_params[par.name].max - self.user_params[par.name].value
-                new_min = val - (self.user_params[par.name].value - self.user_params[par.name].min)
-
-            par.set(min=new_min, max=new_max)
-
-        return par
-
-    def save_latest_valid_params(self, params):
+    def save_latest_valid_params(self, params: dict):
         if self.latest_valid_params is None:
-            self.latest_valid_params = params.copy()
-            # shift boundaries
-            for parname, par in self.latest_valid_params.items():
-                self.latest_valid_params[parname] = self.shift_boundary(par)
+            self.latest_valid_params = copy.copy(params)
         else:
-            # save only if not at limit
-            REL_TOL = 1e-3
-            for parname, par in params.items():
-                tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
-                tol = np.abs(par.value) * 0.1
-                if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
-                                            for extrem in [par.min, par.max]]):
-                    # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
-                    self.latest_valid_params[parname] = self.shift_boundary(par)
-                # elif par.vary:
-                #     self.model_config.latest_valid_params[parname] = self.model_config._param
-                #     pass
-
-        # model.params = model.check_params_boundaries(model.params, verbose=False)
+            for parname, par in params.items():  # only replace parameters that have been fitted
+                if par.stderr != 0:  # parameter is not fixed and not an expression
+                    if par.at_boundary() and not par.user_data['moving_bounds']:
+                        # if a parameter is at a boundary and bounds are fixed, set value to user value
+                        # NB: in principle, a parameter with moving bounds should not be at a boundary
+                        par.value = par.user_value
+                    self.latest_valid_params[parname] = copy.copy(par)
 
     def use_ref_pixel(self, mdl, tag_list=None):
         params = self.ref_pixel_info['params'].copy()
@@ -2675,7 +2651,7 @@ class ModelCube(object):
 
                     # Save the model and the parameters
                     self.ref_pixel_info = self.pixel_infos(model)
-                    self.save_latest_valid_params(model.model_fit.params)
+                    self.save_latest_valid_params(model.model_config.parameters)
 
                     # for itag, tages in enumerate(self.tags):
                         # masks_ntot[j, i, itag] = True  # Mind, I do not mask the pixels with that !!!
@@ -2741,7 +2717,7 @@ class ModelCube(object):
                 # update velocity ranges in windows
                 first_cpt = config.cpt_list[0].name
                 for win in config.win_list_fit:
-                    win.v_ref_kms = self.latest_valid_params[f'{first_cpt}_vlsr'].init_value
+                    win.v_ref_kms = config.parameters[f'{first_cpt}_vlsr'].value
                     # delta_v = [model.model_config.latest_valid_params[f'{first_cpt}_vlsr'].init_value - v for v in win.v_range_fit]
                     # win.v_range_fit = [model.params[f'{first_cpt}_vlsr'].value - dv for dv in delta_v]
                     win.compute_f_range_fit(config.vlsr_file)
@@ -2780,7 +2756,7 @@ class ModelCube(object):
                 #     print("Could not fit - going to next pixel")
                 #     continue
                 save_to_log(pix, model, append=True)
-                self.save_latest_valid_params(model.params)
+                self.save_latest_valid_params(model.model_config.parameters)
 
                 self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 

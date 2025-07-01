@@ -1,4 +1,5 @@
 import numpy as np
+import math
 # from cassis_lte_python.utils.utils import format_float
 # from lmfit import Parameter
 from lmfit import Parameter as lmfitParameter
@@ -42,6 +43,7 @@ class Parameter:
         self._name = name
         self._value = value
         self._init_value = value
+        self._user_value = value
         self._vary = vary
         self._expr = expr
         self._stderr = None
@@ -124,6 +126,12 @@ class Parameter:
                 if val is not None:
                     setattr(self, arg, val)
 
+    def at_boundary(self):
+        REL_TOL = 0.01
+        at_lo_bound = math.isclose(self.value, self.min, abs_tol=np.abs(self.min) * REL_TOL)
+        at_hi_bound = math.isclose(self.value, self.max, abs_tol=np.abs(self.max) * REL_TOL)
+        return any([at_lo_bound, at_hi_bound])
+
     @property
     def name(self):
         return self._name
@@ -146,6 +154,10 @@ class Parameter:
                 mini, maxi = self.diffs + value
             self.min = mini
             self.max = maxi
+
+    @property
+    def user_value(self):
+        return self._user_value
 
     @property
     def stderr(self):
