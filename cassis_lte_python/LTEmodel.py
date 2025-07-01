@@ -153,7 +153,7 @@ def generate_lte_model_func(config: dict):
     return lte_model_func
 
 
-def make_model_config(configuration: (dict, str, ModelConfiguration), **kwargs):
+def make_model_config(configuration: (dict, str), **kwargs):
     if isinstance(configuration, str):  # string : load the file
         config = utils.load_json(configuration)
         # date = config.get('creation-date', datetime.datetime.now())
@@ -207,51 +207,9 @@ class ModelSpectrum(object):
     def __init__(self, configuration: (dict, str, ModelConfiguration), **kwargs):
         if isinstance(configuration, (dict, str)):  # dictionary or string
             model_config = make_model_config(configuration, **kwargs)
-            # if 'data_file' in model_config._configuration_dict or 'x_obs' in model_config._configuration_dict:
-            #     model_config.get_data()
-            #
-            # if 'tc' in model_config._configuration_dict:
-            #     model_config.get_continuum()
-
-            # model_config.get_linelist()
-            # model_config.get_windows()
 
         elif isinstance(configuration, ModelConfiguration):
             model_config = copy.copy(configuration)
-            # if model_config.minimize:
-            #     model_config.get_data_to_fit()
-            # if model_config.minimize or model_config.modeling:
-            #     model_config.get_continuum()
-            # # update tag list, parameters, and windows to fit (intensities, noise)
-            # tag_list = []
-            # for cpt in model_config.cpt_list:
-            #     tag_list.extend([str(t) for t in cpt.tag_list if str(t) not in tag_list])
-            # # determine whether tag_list has changed :
-            # recompute_win = True
-            # if len(tag_list) == len(model_config.tag_list) and all([tag in model_config.tag_list for tag in tag_list]):
-            #     recompute_win = False
-            # if recompute_win:
-            #     for cpt in model_config.cpt_list:  # should contain new tag list
-            #         current_tags = {sp.tag: sp for sp in cpt.species_list}
-            #         new_sp_list = []
-            #         for tag in cpt.tag_list:
-            #             if tag in current_tags.keys():
-            #                 new_sp_list.append(current_tags[tag])
-            #             else:
-            #                 new_sp_list.append(model_config.ref_pixel_info[cpt.name][tag])
-            #         cpt.species_list = new_sp_list
-            #     model_config.tag_list = tag_list
-            #     for win in model_config.win_list:
-            #         win.set_rms_cal(model_config.rms_cal)
-            #         tag = win.transition.tag
-            #         if tag in model_config.tag_list and win.plot_nb in model_config.win_nb_fit[tag] and len(win.x_fit) >= 3:
-            #             win.in_fit = True
-            #         else:
-            #             win.in_fit = False
-            #     model_config.win_list_fit = [win for win in model_config.win_list if win.in_fit]
-            #     if len(model_config.win_list_fit) > 0:
-            #         model_config.x_fit = np.concatenate([w.x_fit for w in model_config.win_list_fit], axis=None)
-            #         model_config.y_fit = np.concatenate([w.y_fit for w in model_config.win_list_fit], axis=None)
 
         else:  # unknown
             raise TypeError("Configuration must be a dictionary or a path to a configuration file "
@@ -259,11 +217,8 @@ class ModelSpectrum(object):
 
         self.model_config = model_config
 
-        # self.params = None
-        # self.norm_factors = None
         self.log = False
         self.normalize = False
-        # self.make_params()
 
         self.model = None
         self.model_fit = None
@@ -282,12 +237,6 @@ class ModelSpectrum(object):
                 self.log = self.model_config.fit_kws['log']
                 self.model_config.fit_kws.pop('log')
 
-        # try:
-        #     self.make_params(json_params=self.model_config.jparams)
-        # except TypeError:
-        #     pass
-        # if 'config_only' in kwargs:
-        #     pass
         if self.model_config.modeling:
             self.do_modeling()
 
@@ -510,12 +459,6 @@ class ModelSpectrum(object):
 
         if print_report is None:
             print_report = 'long' if self.model_config.print_report else 'short'
-        # if self.model_config.line_list_all is None:
-        #     self.model_config.get_linelist()
-        # if len(self.model_config.win_list) == 0:
-        #     self.get_windows()
-        # if len(self.model_config.win_list_fit) == 0:
-        #     self.model_config.get_data_to_fit()
         if self.model_config.jmodel_fit is not None:
             self.model_fit = ModelResult(self.model, self.params)
             self.model_fit.components = self.model.components
@@ -1564,40 +1507,8 @@ class ModelSpectrum(object):
 
         return os.path.join(dirname, filename)
 
-    # def update_params_dict(self, params, tag_list):
-    #     tag_list = [str(t) for t in tag_list]  # make sure we have a list of strings
-    #     for par in params:
-    #         if 'ntot' in par or 'fwhm' in par:
-    #             if par.split('_')[-1] not in tag_list:
-    #                 params.pop(par)
-    #     return params
-
-    # def save_ref_pixel(self):
-    #     ref_pixel_info = {
-    #         'params': self.params.copy(),
-    #         # 'model': self.model.copy(),
-    #         # 'model_fit': self.model_fit.copy(),
-    #         'tag_list': self.model_config.tag_list.copy(),
-    #         'windows': self.model_config.win_list.copy(),
-    #         'windows_fit': self.model_config.win_list_fit.copy()
-    #     }
-    #     cpt_info = {
-    #         cpt.name: {sp.tag: sp for sp in cpt.species_list}
-    #         for cpt in self.model_config.cpt_list
-    #     }
-    #     self.model_config.ref_pixel_info = {**ref_pixel_info, **cpt_info}
-    #     self.ref_pixel_info = {**ref_pixel_info, **cpt_info}
-
     def use_ref_pixel(self, tag_list=None):
         raise NotImplementedError("This method is deprecated.")
-        # params = self.ref_pixel_info['params'].copy()
-        # self.model_config.latest_valid_params = params
-        # # self.model = self.ref_pixel_info['model']
-        # if tag_list is not None:
-        #     params = self.update_params_dict(params, tag_list)
-        # self.params = params
-        # self.generate_lte_model()
-        # self.params = params
 
     def save_model(self, filename, dirname=None, ext='txt', full_spectrum=True):
         """
@@ -2288,13 +2199,6 @@ class ModelCube(object):
         self._model_configuration_user = copy.deepcopy(configuration)
         self._model_configuration = make_model_config(configuration)  # "reference" model
 
-        # self._model = ModelSpectrum(configuration, verbose=verbose)
-
-        # self._model.make_params()
-        # self._params_user = self._model.params.copy()
-        # self._model_configuration = ModelConfiguration(configuration, verbose=verbose)
-        # self._model_configuration = self._model.model_config
-
         self.ref_pixel_info = None
         self.latest_valid_params = None
 
@@ -2718,31 +2622,21 @@ class ModelCube(object):
                 first_cpt = config.cpt_list[0].name
                 for win in config.win_list_fit:
                     win.v_ref_kms = config.parameters[f'{first_cpt}_vlsr'].value
-                    # delta_v = [model.model_config.latest_valid_params[f'{first_cpt}_vlsr'].init_value - v for v in win.v_range_fit]
-                    # win.v_range_fit = [model.params[f'{first_cpt}_vlsr'].value - dv for dv in delta_v]
                     win.compute_f_range_fit(config.vlsr_file)
 
-                if pix == (14, 2):
-                    pass
                 config.get_data_to_fit()
                 config.make_params()
 
                 # fit with the updated config
                 print("Fitting pixel : ", pix)
 
-                if pix == (13, 8):
-                    pass
                 try:
-                    if pix == (5, 10):
-                        pass
                     model = ModelSpectrum(config)
                     # res = model.do_minimization()
                 except TypeError as e:
                     raise TypeError(e)
                     # pass
 
-                if pix == (8,9):
-                    pass
                 # check if a parameter is close to a boundary ; if so, re-do fit from user's values
                 # if check_at_boundary(model):
                 #     for parname, par in config.parameters.items():
@@ -2761,7 +2655,6 @@ class ModelCube(object):
                 self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 
                 for parname, param in model.model_fit.params.items():
-                    # param = model.params[par]
                     self.array_dict['{}'.format(param.name)][j, i] = param.value
                     self.err_dict['{}'.format(param.name)][j, i] = param.stderr
 

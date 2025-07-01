@@ -768,12 +768,12 @@ class ModelConfiguration:
                 elif next(iter(rms_cal_info))[0] == '[':  # info by frequency range
                     frange, fmin, fmax, rms, cal = [], [], [], [], []
                     for k, v in rms_cal_info.items():
-                        range = k.strip('[').strip(']').strip()  # remove brackets and spaces ; could be improved
-                        range = [float(elt) for elt in range.split(',')]  # convert comma-separated values to float
-                        range.sort()  # make sure it is order by increasing values
-                        frange.append(range)
-                        fmin.append(range[0])
-                        fmax.append(range[1])
+                        rg = k.strip('[').strip(']').strip()  # remove brackets and spaces ; could be improved
+                        rg = [float(elt) for elt in rg.split(',')]  # convert comma-separated values to float
+                        rg.sort()  # make sure it is order by increasing values
+                        frange.append(rg)
+                        fmin.append(rg[0])
+                        fmax.append(rg[1])
                         rms_val = float(v[0])
                         if rms_val == 0.:
                             rms_val = np.nan
@@ -1456,18 +1456,6 @@ class ModelConfiguration:
             for parname, par in cpt.parameters.items():
                 params[parname] = create_parameter(parname, par.to_dict())
 
-            # for par in cpt.parameters:
-            #     if 'size' in par.name:
-            #         par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
-            #     if 'tex' in par.name:
-            #         par.set(min=self.tcmb if not isinstance(par.min, (float, int)) else max(par.min, self.tcmb))
-            #     params[par.name] = par
-            #
-            # for isp, sp in enumerate(cpt.species_list):
-            #     for par in sp.parameters:
-            #         par.set(min=0. if not isinstance(par.min, (float, int)) else par.min)
-            #         params[par.name] = par
-
         # Update parameters if possible :
         if json_params is not None:
             params.loads(json_params)
@@ -1622,37 +1610,14 @@ class ModelConfiguration:
         if new_tags == current_tags:  # list has not changed : exit method
             return
 
-        # if len(new_tags) > len(current_tags) and ref_cpt_list is None:
-        #     raise KeyError(f"You want more species ({new_tags}) than currently available ({current_tags})."
-        #                    f"You need to provide the corresponding Parameters with the ref_cpt_list key.")
-
-        for cpt in self.cpt_list:
+        for cpt in self.cpt_list:  # update the tag list for each component
             cpt.tag_list = [tag for tag in new_tags if tag in cpt.init_tag_list]
-            # update tag list and species list
-            # new_sp_list = []
-            # for tag in new_tags:
-            #     if tag in cpt.tag_list:  # species already in tag list, keep it
-            #         new_sp_list.append(list(filter(lambda sp: sp.tag == tag, cpt.species_list))[0])
-            #     else:
-            #         if ref_cpt_list is not None:
-            #             ref_cpt = self.cpt_dict()[cpt.name]
-            #             if tag in ref_cpt.tag_list:
-            #             # the species is in the reference component, take it
-            #                 new_sp_list.append(ref_cpt.species_dict()[tag])
-            #
-            # cpt.species_list = new_sp_list
-            # cpt.tag_list = [sp.tag for sp in new_sp_list]
 
         self.tag_list = new_tags
 
-        # update parameters
-        # params = Parameters()
-        # params.add_many(*[par for cpt in self.cpt_list for par in cpt.parameters])
-        # self.params = params
-
         # update windows to fit
         for win in self.win_list:
-            win.set_rms_cal(self.rms_cal)
+            # win.set_rms_cal(self.rms_cal)  # ???
             tag = win.transition.tag
             if tag in self.tag_list and win.plot_nb in self.win_nb_fit[tag] and len(win.x_fit) >= 3:
                 win.in_fit = True
