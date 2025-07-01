@@ -206,6 +206,8 @@ class Parameter:
     @abs_min.setter
     def abs_min(self, value):
         self._abs_min = value
+        if value > self.min:
+            self._min = value
 
     @property
     def abs_max(self):
@@ -214,6 +216,8 @@ class Parameter:
     @abs_max.setter
     def abs_max(self, value):
         self._abs_max = value
+        if value < self.max:
+            self._max = value
 
 
 def parameter_infos(value=None, min=None, max=None, expr=None, vary=True,
