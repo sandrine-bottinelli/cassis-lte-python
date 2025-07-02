@@ -2345,8 +2345,7 @@ class ModelCube(object):
                                f'The cube {f} starts at {start_freq_MHz} MHz and overlaps '
                                f'with the cube {self._data_file[i - 1]}, which ends {fmhz_ranges[i - 1][-1]}.',
                                f'->Make sure none of the selected lines are in the overlap region']
-                    ModelSpectrum.LOGGER.warning(message)
-                    print('\n')
+                    ModelSpectrum.LOGGER.warning("\n    ".join(message) + "\n")
 
             fmhz_ranges.append([start_freq_MHz, end_freq_MHz])
 
@@ -2681,15 +2680,15 @@ class ModelCube(object):
             # Printouts for debugging
             # --------------------------------------------------------------------------------------------------------------------------
             if printDebug:
-                print('plot_name = ', plot_name)
-                print('config_name = ', config_name)
-                print('model_name = ', model_name)
-                print('result_name = ', result_name)
-                print('spec_name = ', spec_name)
-                print('tc = ', tc)
-                print("Fitting pixel : ", pix)
-                print("current list : model.tag_list = ", model.tag_list)  # current tag list
-                print('tags_new = ', tags_new)  # new tag list with S/N ≥ signal2noise
+                ModelCube.LOGGER.debug('plot_name = ', plot_name)
+                ModelCube.LOGGER.debug('config_name = ', config_name)
+                ModelCube.LOGGER.debug('model_name = ', model_name)
+                ModelCube.LOGGER.debug('result_name = ', result_name)
+                ModelCube.LOGGER.debug('spec_name = ', spec_name)
+                ModelCube.LOGGER.debug('tc = ', tc)
+                ModelCube.LOGGER.debug("Fitting pixel : ", pix)
+                ModelCube.LOGGER.debug("current list : model.tag_list = ", model.tag_list)  # current tag list
+                ModelCube.LOGGER.debug('tags_new = ', tags_new)  # new tag list with S/N ≥ signal2noise
                 # print("mask_comp shape:", mask_comp.shape)
                 # print("masks_ntot shape:", masks_ntot.shape)
 
@@ -2844,29 +2843,29 @@ class ModelCube(object):
                          overwrite=True)
 
     def print_infos(self):
-        print('output_dir = ', self.output_dir)
+        ModelCube.LOGGER.debug('output_dir = ', self.output_dir)
         # print('input_dir = ', self.input_dir)  # NB input_dir not provided in config
-        print('file_cube_list = ', self._data_file)
-        print('file_cont_list = ', self.cont_info)
-        print('cubeshape = ', self.cubeshape)
-        print('yunit = ', self.yunit)
-        print('fmhz_ranges = ', self.fmhz_ranges)
-        print('pix_list = ', self.pix_list)  # To check the list of pixels
+        ModelCube.LOGGER.debug('file_cube_list = ', self._data_file)
+        ModelCube.LOGGER.debug('file_cont_list = ', self.cont_info)
+        ModelCube.LOGGER.debug('cubeshape = ', self.cubeshape)
+        ModelCube.LOGGER.debug('yunit = ', self.yunit)
+        ModelCube.LOGGER.debug('fmhz_ranges = ', self.fmhz_ranges)
+        ModelCube.LOGGER.debug('pix_list = ', self.pix_list)  # To check the list of pixels
         if self.masked_pix_list is not None and not self.masked_pix_list.all():
-            print('mask = ', self.masked_pix_list)
+            ModelCube.LOGGER.debug('mask = ', self.masked_pix_list)
         print('')
-        print('tags = ', self.tags)
-        print('velocity ranges = ', self._model_configuration_user['v_range'])
-        print('componentConfig = ', self._model_configuration_user['components']['config'])
+        ModelCube.LOGGER.debug('tags = ', self.tags)
+        ModelCube.LOGGER.debug('velocity ranges = ', self._model_configuration_user['v_range'])
+        ModelCube.LOGGER.debug('componentConfig = ', self._model_configuration_user['components']['config'])
         try:
-            print('otherSpecies = ', self._model_configuration_user['plot_kws']['gui+file']['other_species'])
+            ModelCube.LOGGER.debug('otherSpecies = ', self._model_configuration_user['plot_kws']['gui+file']['other_species'])
         except KeyError:
-            print('otherSpecies not found')
+            ModelCube.LOGGER.debug('otherSpecies not found')
         if 'constraints' in self._model_configuration_user:
-            print("constraints = ", self._model_configuration_user['constraints'])
-        print('params = ', self.param_names)
-        print('array_dict = ', self.array_dict.keys())
-        print('err_dict = ', self.err_dict.keys())
+            ModelCube.LOGGER.debug("constraints = ", self._model_configuration_user['constraints'])
+        ModelCube.LOGGER.debug('params = ', self.param_names)
+        ModelCube.LOGGER.debug('array_dict = ', self.array_dict.keys())
+        ModelCube.LOGGER.debug('err_dict = ', self.err_dict.keys())
 
     # @property
     # def params(self):
