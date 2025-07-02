@@ -1,6 +1,6 @@
 import logging
 import os
-from cassis_lte_python.utils.settings import ENABLE_FILE_LOGGER, LOG_PATH
+from cassis_lte_python import ENABLE_FILE_LOGGER, LOG_PATH
 
 
 class CustomFormatter(logging.Formatter):
