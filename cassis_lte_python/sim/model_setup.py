@@ -22,7 +22,7 @@ import warnings
 
 class ModelConfiguration:
     LOGGER = CassisLogger.create('ModelConfiguration')
-    def __init__(self, configuration, verbose=True, check_tel_range=False):
+    def __init__(self, configuration, verbose=True):
         self._configuration_dict = configuration
 
         if 'v_range' in configuration and 'fit_freq_except' in configuration:
@@ -520,31 +520,9 @@ class ModelConfiguration:
         else:
             raise TypeError("Continuum must be a float, an integer or a 2-column tab-separated file (MHz K).")
 
-    def get_tuning_info(self, config=None, check_tel_range=False):
+    def get_tuning_info(self, config=None):
         if config is None:
             config = self._configuration_dict
-
-        # if 'tuning_info' in config:
-        if check_tel_range:  # check telescope ranges cover all data / all model values:
-            x_vals = self.x_file if len(self.x_file) > 0 else [min(self.x_mod), max(self.x_mod)]
-            extended = False
-            for x in x_vals:
-                # is_in_range = [val[0] <= x <= val[1] for val in config['tuning_info'].values()]
-                limits = list(config['tuning_info'].values())
-                limits = [item for sublist in limits for item in sublist]
-                if not utils.is_in_range(x, config['tuning_info'].values):
-                    # raise LookupError("Telescope ranges do not cover some of the data, e.g. at {} MHz.".format(x))
-                    extended = True
-                    nearest = utils.find_nearest(np.array(limits), x)
-                    for key, val in config['tuning_info'].items():
-                        # new_lo = 5. * np.floor(x / 5.) if val[0] == nearest else val[0]
-                        # new_hi = 5. * np.ceil(x / 5.) if val[1] == nearest else val[1]
-                        new_lo = np.floor(x) if val[0] == nearest else val[0]
-                        new_hi = np.ceil(x) if val[1] == nearest else val[1]
-                        config['tuning_info'][key] = [new_lo, new_hi]
-            if extended:
-                print("Some telescope ranges did not cover some of the data ; ranges were extended to :")
-                print(config['tuning_info'])
 
         tuning_info = {'fmhz_range': [], 'telescope': [], 'fmhz_min': [], 'fmhz_max': []}
         for key, val in config['tuning_info'].items():
