@@ -47,17 +47,21 @@ class File:
 
         if self.xunit is None:
             # xunit = input(f"X-axis unit not found, please provide it : ")
-            print(f"INFO - X-axis unit not found in {self.filepath}, setting it to {default_xunit}.")
-            print("INFO - To choose a different unit, e.g., GHz, "
-                  "please add the following line at the beginning of your file:")
-            print("       // unitx: GHz")
+            message = [f"X-axis unit not found in {self.filepath}, setting it to {default_xunit}.",
+                       "To choose a different unit, e.g., GHz, "
+                       "please add the following line at the beginning of your file:",
+                       "    // unitx: GHz"
+                       ]
+            LOGGER.warning(message)
             self._xunit = 'MHz'
         if self.yunit is None:
             # yunit = input(f"Y-axis unit not found, please provide it : ")
-            print(f"INFO - Y-axis unit not found in {self.filepath}, setting it to {default_yunit}.")
-            print("INFO - To choose a different unit, e.g., Jy/beam, "
-                  "please add the following line at the beginning of your file:")
-            print("       // unity: Jy/beam")
+            message = [f"Y-axis unit not found in {self.filepath}, setting it to {default_yunit}.",
+                       "To choose a different unit, e.g., Jy/beam, "
+                       "please add the following line at the beginning of your file:",
+                       "    // unity: Jy/beam"
+                       ]
+            LOGGER.warning(message)
             self._yunit = 'K'
 
         if self.xunit != 'MHz':
@@ -151,13 +155,13 @@ class File:
             tab_hdu_out = fits.BinTableHDU.from_columns(
                 [fits.Column(name='wave', format='D', array=self.xdata, unit=self.xunit),
                  fits.Column(name='flux', format='D', array=self.ydata, unit=self.yunit)],
-                header=self.header
+                 header=self.header
             )
             with fits.open(self.filepath) as hdu:
                 hdu[1] = tab_hdu_out
                 hdu.writeto(fileout, overwrite=True)
         else:
-            print("Unknown extension.")
+            raise TypeError("Unknown extension.")
 
     @property
     def xdata(self):
@@ -219,7 +223,7 @@ class DataFile(File):
             if 'vlsr' in k or 'VLSR' in k:
                 self.vlsr = float(v)
                 return
-        print(f"Vlsr not found, using {self.vlsr} km/s")
+        LOGGER.warning(f"Vlsr not found, using {self.vlsr} km/s")
 
     def read_beam(self):
         try:
@@ -299,7 +303,7 @@ class DataFile(File):
                 # set new unit
                 self._yunit = value
             else:
-                print(f"Cannot convert from {self._yunit} to {value}, nothing done.")
+                LOGGER.warning(f"Cannot convert from {self._yunit} to {value}, nothing done.")
 
 
 def load_json(path):
@@ -307,7 +311,7 @@ def load_json(path):
         with open(path) as f:
             return json.load(f)  # , cls=type(self))
     except FileNotFoundError:
-        print(f"File not found : {path}")
+        raise FileNotFoundError(f"File not found : {path}")
 
 
 def open_continuum_file(filepath):
@@ -919,9 +923,11 @@ def get_cubes(file_list, check_spatial_shape=None):
 
     if check_spatial_shape is not None:
         if (next(iter(nx_list)), next(iter(ny_list))) != check_spatial_shape:
+            message = ["RA/Dec dimensions are not the same: "]
             for hdul, file in zip(hduls, file_list):
-                print(f"RA/Dec dimensions of {file}: ({hdul[0].shape[-2]}, {hdul[0].shape[-1]})")
-            print(f"compared to {check_spatial_shape}")
+                message.append(f"{file}: ({hdul[0].shape[-2]}, {hdul[0].shape[-1]})")
+            message.append(f"compared to {check_spatial_shape}")
+            LOGGER.error("\n    ".join(message))
             raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
 
     return [SpectralCube.read(h) for h in hduls]
@@ -969,7 +975,7 @@ def get_single_mask(wcs: WCS, file, exclude=False):
         if exclude:
             mask = np.logical_not(mask)
     except TypeError:
-        print('Invalid region or region file. No masking.')
+        LOGGER.warning(f'Invalid region or region file for {file}. No masking.')
     return mask
 
 
