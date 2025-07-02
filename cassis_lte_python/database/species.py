@@ -32,8 +32,6 @@ class Species:
             self.set_component(component.name)
 
         sp_dic = get_species_info(self._tag)
-        if sp_dic is None:
-            raise IndexError("Tag {} not found in the database.".format(self._tag))
         self._id = sp_dic['id']
         self._name = sp_dic['name']
         self._database = sp_dic['database_name']
@@ -230,8 +228,7 @@ def get_species_info(tag: str, database=DATABASE_SQL.cursor()):
     cols_sp_info = [t[0] for t in res_catdir.description]
     all_rows = database.fetchall()
     if len(all_rows) == 0:
-        LOGGER.error(f"{tag} not found in the database -> ignoring.")
-        return None
+        raise IndexError(f"{tag} not found in the database.")
     sp_info = all_rows[-1]
     sp_info_dic = dict(zip(cols_sp_info, sp_info))
 
