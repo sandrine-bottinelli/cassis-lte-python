@@ -19,10 +19,14 @@ from scipy.interpolate import interp1d
 from lmfit import Parameters
 import warnings
 
+from cassis_lte_python.utils.utils import load_json
+
 
 class ModelConfiguration:
     LOGGER = CassisLogger.create('ModelConfiguration')
-    def __init__(self, configuration, verbose=True):
+    def __init__(self, configuration: (dict, str), verbose=True, **kwargs):
+        if isinstance(configuration, str):  # string : load the file
+            configuration = self.load_json(configuration, **kwargs)
         self._configuration_dict = configuration
 
         if 'v_range' in configuration and 'fit_freq_except' in configuration:
@@ -410,6 +414,43 @@ class ModelConfiguration:
         if self.minimize or self.modeling:
             self.make_params()
             self.get_data_to_fit(init=True)
+
+    def load_json(self, config_file, **kwargs):
+        config = utils.load_json(config_file)
+        # date = config.get('creation-date', datetime.datetime.now())
+        # if isinstance(date, str):
+        #     date = datetime.datetime.strptime(date.split(",")[0], "%Y-%m-%d")
+        if 'creation-date' not in config:  # old format for plot keywords
+            config['plot_kws'] = {'gui+file': config.get('plot_kws', {}),
+                                  'gui_only': config.get('gui_kws', {}),
+                                  'file_only': config.get('file_kws', {})}
+            config.pop('gui_kws')
+            config.pop('file_kws')
+        if ('gui_kws' in kwargs) or ('file_kws' in kwargs):
+            print('gui_kws and file_kws are deprecated keywords, please use the following instead:')
+            comment = "  # N.B. : can be also be removed/commented"
+            info_gui = "" if 'gui_kws' in kwargs else comment
+            info_file = "" if 'file_kws' in kwargs else comment
+            print("  'plot_kws': {")
+            print("       'gui_only':", kwargs.get('gui_kws', {}), info_gui, end=",\n")
+            print("       'file_only':", kwargs.get('file_kws', {}), info_file)
+            print("  }")
+
+            # update kwargs to new format
+            kwargs['plot_kws'] = {}
+            if 'gui_kws' in kwargs:
+                kwargs['plot_kws']['gui_only'] = kwargs['gui_kws']
+                kwargs.pop('gui_kws')
+            if 'file_kws' in kwargs:
+                kwargs['plot_kws']['file_only'] = kwargs['file_kws']
+                kwargs.pop('file_kws')
+
+        # update configuration
+        dflat = utils.flatten_dic(config)
+        dflat.update(utils.flatten_dic(kwargs))
+        configuration = utils.unflatten_dic(dflat)
+
+        return configuration
 
     def get_data(self, config=None):
         if config is None:

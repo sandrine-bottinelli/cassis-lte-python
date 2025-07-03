@@ -154,48 +154,6 @@ def generate_lte_model_func(config: dict):
     return lte_model_func
 
 
-def make_model_config(configuration: (dict, str), **kwargs):
-    if isinstance(configuration, str):  # string : load the file
-        config = utils.load_json(configuration)
-        # date = config.get('creation-date', datetime.datetime.now())
-        # if isinstance(date, str):
-        #     date = datetime.datetime.strptime(date.split(",")[0], "%Y-%m-%d")
-        if 'creation-date' not in config:  # old format for plot keywords
-            config['plot_kws'] = {'gui+file': config.get('plot_kws', {}),
-                                  'gui_only': config.get('gui_kws', {}),
-                                  'file_only': config.get('file_kws', {})}
-            config.pop('gui_kws')
-            config.pop('file_kws')
-        if ('gui_kws' in kwargs) or ('file_kws' in kwargs):
-            print('gui_kws and file_kws are deprecated keywords, please use the following instead:')
-            comment = "  # N.B. : can be also be removed/commented"
-            info_gui = "" if 'gui_kws' in kwargs else comment
-            info_file = "" if 'file_kws' in kwargs else comment
-            print("  'plot_kws': {")
-            print("       'gui_only':", kwargs.get('gui_kws', {}), info_gui, end=",\n")
-            print("       'file_only':", kwargs.get('file_kws', {}), info_file)
-            print("  }")
-
-            # update kwargs to new format
-            kwargs['plot_kws'] = {}
-            if 'gui_kws' in kwargs:
-                kwargs['plot_kws']['gui_only'] = kwargs['gui_kws']
-                kwargs.pop('gui_kws')
-            if 'file_kws' in kwargs:
-                kwargs['plot_kws']['file_only'] = kwargs['file_kws']
-                kwargs.pop('file_kws')
-
-        # update configuration
-        dflat = utils.flatten_dic(config)
-        dflat.update(utils.flatten_dic(kwargs))
-        config = utils.unflatten_dic(dflat)
-
-    else:  # it is a dictionary
-        config = configuration
-
-    return ModelConfiguration(config)
-
-
 class SimpleSpectrum:
     def __init__(self, xarray, yarray, xunit='mhz', yunit='K'):
         self.xval = xarray
@@ -208,7 +166,7 @@ class ModelSpectrum(object):
     LOGGER = CassisLogger.create('ModelSpectrum')
     def __init__(self, configuration: (dict, str, ModelConfiguration), **kwargs):
         if isinstance(configuration, (dict, str)):  # dictionary or string
-            model_config = make_model_config(configuration, **kwargs)
+            model_config = ModelConfiguration(configuration, **kwargs)
 
         elif isinstance(configuration, ModelConfiguration):
             model_config = copy.copy(configuration)
@@ -2205,7 +2163,7 @@ class ModelCube(object):
                                                         ymin=yref - delta, step=step)
 
         self._model_configuration_user = copy.deepcopy(configuration)
-        self._model_configuration = make_model_config(configuration)  # "reference" model
+        self._model_configuration = ModelConfiguration(configuration)  # "reference" model
 
         self.ref_pixel_info = None
         self.latest_valid_params = None
