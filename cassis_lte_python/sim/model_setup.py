@@ -1243,7 +1243,7 @@ class ModelConfiguration:
                         sp_list_ord = [sp] + sp_list_ord  # make sure the reference species is first
                 sp_list = sp_list_ord
             cpt = Component(cname, sp_list,
-                            isInteracting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
+                            is_interacting=cpt_dic.get('interacting', False) or cpt_dic.get('isInteracting', False),
                             vlsr=cpt_dic.get('vlsr'), tex=cpt_dic.get('tex'), size=cpt_dic.get('size'),
                             fwhm=cpt_dic.get('fwhm'))
             self.cpt_list.append(cpt)
@@ -1721,11 +1721,29 @@ class ModelConfiguration:
 
 class Component:
     LOGGER = CassisLogger.create('Component')
-    def __init__(self, name, species_list, isInteracting=False, vlsr=None, size=None, tex=100., fwhm=None, config=None):
+    def __init__(self, name: str, species_list: list, is_interacting=False,
+                 vlsr: (int, float, dict)=None, size: (int, float, dict)=None,
+                 tex: (int, float, dict)=100., fwhm: (int, float, dict)=None):
+        """
+        Returns an object describing a spherical component centered on an astrophysical source.
+
+        Each physical parameter (vlsr, size, tex, fwhm) can be provided as a float, an integer or a dictionary.
+        If a dictionary, the keys should match any of the inputs of a Parameter object.
+
+        Default values for vlsr, size and fwhm are from the config.ini file.
+
+        :param name: name of the component, e.g. c1, c2, etc.
+        :param species_list: a list of tags or of Species objects
+        :param is_interacting: whether the component is interacting or not
+        :param vlsr: the l.s.r. velocity of the component in km/s
+        :param size: the size of the component in arcsec
+        :param tex: the excitation temperature of the component in K
+        :param fwhm: the fwhm of the lines in km/s
+        """
         # super().__init__()
         self.name = name
 
-        self.isInteracting = isInteracting
+        self.isInteracting = is_interacting
 
         if vlsr is None:
             vlsr = VLSR_DEF  # TODO: find out why VLSR_DEF inside __init__ does not work
@@ -1841,16 +1859,16 @@ class Component:
                 Component.LOGGER.info("\n    ".join(message))
 
 
-    def update_parameters(self, new_pars):
-        self._vlsr = new_pars['{}_vlsr'.format(self.name)]
-        self._size = new_pars['{}_size'.format(self.name)]
-        self._tex = new_pars['{}_tex'.format(self.name)]
-        if '{}_fwhm'.format(self.name) in new_pars:
-            self._fwhm = new_pars['{}_fwhm'.format(self.name)]
-        for sp in self.species_list:
-            sp._ntot = new_pars['{}_ntot_{}'.format(self.name, sp.tag)]
-            if self._fwhm is None:
-                sp._fwhm = new_pars['{}_fwhm_{}'.format(self.name, sp.tag)]
+    # def update_parameters(self, new_pars):  # not used -> keep??
+    #     self._vlsr = new_pars['{}_vlsr'.format(self.name)]
+    #     self._size = new_pars['{}_size'.format(self.name)]
+    #     self._tex = new_pars['{}_tex'.format(self.name)]
+    #     if '{}_fwhm'.format(self.name) in new_pars:
+    #         self._fwhm = new_pars['{}_fwhm'.format(self.name)]
+    #     for sp in self.species_list:
+    #         sp._ntot = new_pars['{}_ntot_{}'.format(self.name, sp.tag)]
+    #         if self._fwhm is None:
+    #             sp._fwhm = new_pars['{}_fwhm_{}'.format(self.name, sp.tag)]
 
         # self.vlsr.set(value=new_pars['{}_vlsr'.format(self.name)].value, is_init_value=False)
         # self.size.set(value=new_pars['{}_size'.format(self.name)].value, is_init_value=False)
@@ -1859,67 +1877,6 @@ class Component:
         #     sp.ntot.set(value=new_pars['{}_ntot_{}'.format(self.name, sp.tag)].value, is_init_value=False)
         #     sp.fwhm.set(value=new_pars['{}_fwhm_{}'.format(self.name, sp.tag)].value, is_init_value=False)
         #     # sp.tex = new_pars['{}_tex'.format(self.name, sp.tag)].value
-
-    def species_dict(self):
-        return {sp.tag: sp for sp in self.species_list}
-
-    @property
-    def vlsr(self):
-        return self._vlsr.value
-
-    @property
-    def size(self):
-        return self._size.value
-
-    @property
-    def tex(self):
-        return self._tex.value
-
-    @property
-    def fwhm(self):
-        return self._fwhm.value if self._fwhm is not None else None
-
-    @property
-    def tmax(self):
-        self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
-        return self._tmax
-
-    @property
-    def tmin(self):
-        self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
-        return self._tmin
-
-    @property
-    def tag_list(self):
-        return self._tag_list
-
-    @tag_list.setter
-    def tag_list(self, value):
-        self._tag_list = value
-
-    @property
-    def init_tag_list(self):
-        return self._init_tag_list
-
-    @property
-    def species_list(self):
-        return self._species_list
-
-    @species_list.setter
-    def species_list(self, value):
-        self._species_list = value
-
-    @property
-    def parameters(self):
-        pars = {par.name: par for par in [self._vlsr, self._size, self._tex]}
-        if self._fwhm is not None:
-            pars[self._fwhm.name] = self._fwhm
-        for sp in self.species_list:
-            if sp.tag in self._tag_list:
-                pars[sp._ntot.name] = sp._ntot
-                if self._fwhm is None:
-                    pars[sp._fwhm.name] = sp._fwhm
-        return pars
 
     # def get_transitions(self, fmhz_ranges, **thresholds):  # not used -> keep??
     #     self.transition_list = get_transition_df(self.species_list, fmhz_ranges, **thresholds)
@@ -1939,6 +1896,75 @@ class Component:
 
     # def assign_spectrum(self, spec: SimpleSpectrum):
     #     self.model_spec = spec
+
+    @property
+    def vlsr(self):
+        return self._vlsr.value
+
+    @property
+    def size(self):
+        return self._size.value
+
+    @property
+    def tex(self):
+        return self._tex.value
+
+    @property
+    def fwhm(self):
+        return self._fwhm.value if self._fwhm is not None else None
+
+    @property
+    def tmax(self):
+        """Returns the maximum temperature in K for which the partition function of all species is defined."""
+        self._tmax = min([max(sp.pf[0]) for sp in self.species_list])
+        return self._tmax
+
+    @property
+    def tmin(self):
+        """Returns the minimum temperature in K for which the partition function of all species is defined."""
+        self._tmin = max([min(sp.pf[0]) for sp in self.species_list])
+        return self._tmin
+
+    @property
+    def tag_list(self):
+        """Returns the list of tags."""
+        return self._tag_list
+
+    @tag_list.setter
+    def tag_list(self, value):
+        self._tag_list = value
+
+    @property
+    def init_tag_list(self):
+        return self._init_tag_list
+
+    @property
+    def species_list(self):
+        """Returns the list of Species objects."""
+        return self._species_list
+
+    @species_list.setter
+    def species_list(self, value):
+        self._species_list = value
+
+    @property
+    def species_dict(self):
+        """Returns a dictionary with (key, val) = (tag, Species object)."""
+        return {sp.tag: sp for sp in self.species_list}
+
+    @property
+    def parameters(self):
+        """Returns a dictionary with (key, val) = (parameter name, Parameter object) for the following variables:
+        vlsr, size, tex, fwhm, ntot of each species in species_list."""
+        pars = {par.name: par for par in [self._vlsr, self._size, self._tex]}
+        if self._fwhm is not None:
+            pars[self._fwhm.name] = self._fwhm
+        for sp in self.species_list:
+            if sp.tag in self._tag_list:
+                pars[sp._ntot.name] = sp._ntot
+                if self._fwhm is None:
+                    pars[sp._fwhm.name] = sp._fwhm
+        return pars
 
 
 class Window:
