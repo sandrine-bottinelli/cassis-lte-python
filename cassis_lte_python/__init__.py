@@ -18,7 +18,11 @@ if not os.path.isfile(CONFIG_FILE):
 
 CONFIG.read(CONFIG_FILE)
 
-ENABLE_FILE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_FILE_LOGGER', fallback=True)
+
+if os.getenv("FILE_LOGGER") is not None and os.getenv("FILE_LOGGER").lower() == "false":
+    ENABLE_FILE_LOGGER = False
+else:
+    ENABLE_FILE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_FILE_LOGGER', fallback=True)
 LOG_PATH = CONFIG.get('LOGGER', 'LOG_PATH', fallback='logs')
-if not os.path.exists(LOG_PATH):
+if ENABLE_FILE_LOGGER and not os.path.exists(LOG_PATH):
     os.makedirs(LOG_PATH)
