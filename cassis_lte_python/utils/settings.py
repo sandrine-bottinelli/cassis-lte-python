@@ -44,6 +44,7 @@ if not os.path.isfile(SQLITE_FILE):
     else:
         raise FileNotFoundError(f'{SQLITE_FILE} not found.')
 
+LOGGER.info(f"Using database : {SQLITE_FILE}")
 
 def print_settings():
     message = ["Settings are :"]

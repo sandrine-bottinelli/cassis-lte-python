@@ -9,7 +9,7 @@ LOGGER = CassisLogger.create('setupdb')
 conn = None
 
 if os.path.isfile(SQLITE_FILE):
-    LOGGER.info(f"Using database : {SQLITE_FILE}")
+    # LOGGER.info(f"Using database : {SQLITE_FILE}")
     conn = sqlite3.connect(SQLITE_FILE)
 else:
     raise FileNotFoundError(f'{SQLITE_FILE} not found.')
