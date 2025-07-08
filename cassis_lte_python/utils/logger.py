@@ -9,7 +9,8 @@ class CustomFormatter(logging.Formatter):
     adapted from https://stackoverflow.com/a/56944256/3638629"""
 
     grey = '\x1b[38;21m'
-    blue = '\x1b[38;5;39m'
+    # blue = '\x1b[38;5;39m'
+    blue = '\x1b[38;5;27m'
     yellow = '\x1b[38;5;226m'
     red = '\x1b[38;5;196m'
     bold_red = '\x1b[31;1m'
