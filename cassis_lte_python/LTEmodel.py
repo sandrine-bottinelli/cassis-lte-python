@@ -2651,7 +2651,7 @@ class ModelCube(object):
                 # print("masks_ntot shape:", masks_ntot.shape)
 
     def make_maps(self):
-        params = self.array_dict.keys()
+        params = [parname for parname, par in self.user_params.items() if par.vary]
         ModelCube.LOGGER.info(f'Making maps for params : {", ".join(params)}')
         units = {
             'tex': 'Kelvin',
