@@ -2146,21 +2146,71 @@ class ModelCube(object):
         configuration['x_obs'] = np.concatenate([dat.spectral_axis.value / 1.e6 for dat in self._cubes])  # in MHz
 
         self._pix_info = configuration.get('pix_info', None)
-        if self._pix_info is None:
-            self.pix_list = []
-        else:
-            try:
-                (xref, yref, delta, step) = self._pix_info
-            except ValueError:
+        self._loop_info = configuration.get('loop_info', None)
+        if self._pix_info is None and self._loop_info is None:
+            raise ValueError("'loop_info' is missing.")
+
+        if self._pix_info is not None:
+            ModelCube.LOGGER.warning("'pix_info' is deprecated ; please use 'loop_info' instead, for example "
+                                     "'loop_info': {'start': (xref, yref), 'extent': 'all'} for the entire map.")
+            if len(self._pix_info) == 3:
                 (xref, yref, delta) = self._pix_info
-                step = 1
-            # Define the snake loop extent
-            if delta == -1:
-                ymax, xmax = self.cubeshape[-2:]
-                self.pix_list = utils.pixels_snake_loop(xref, yref, xmax - 1, ymax - 1, step=step)
+                self._loop_info = {'start': (xref, yref), 'delta': (delta, delta)}
+            elif len(self._pix_info) == 4:
+                (xref, yref, delta, step) = self._pix_info
+                self._loop_info = {'start': (xref, yref), 'delta': (delta, delta), 'step': step}
             else:
-                self.pix_list = utils.pixels_snake_loop(xref, yref, xref + delta, yref + delta, xmin=xref - delta,
-                                                        ymin=yref - delta, step=step)
+                raise IndexError("'pix_info' can only be of length 3 or 4")
+
+        if self._loop_info is not None:
+            try:
+                xref, yref = self._loop_info['start']
+            except KeyError:
+                raise KeyError("'loop_info' is missing 'start' key.")
+            extent = self._loop_info.get('extent', None)
+            delta = self._loop_info.get('delta', None)
+            if extent is None and delta is None:
+                raise KeyError("'loop_info' must have the 'extent' or 'delta' key.")
+            if extent is not None and delta is not None:
+                raise KeyError("'loop_info' can only have the 'extent' OR the 'delta' key, not both.")
+
+            loop_type = self._loop_info.get('type', 'gradient')
+            step = self._loop_info.get('step', 1.)
+
+            if extent is not None:
+                if extent == 'all':
+                    delta = (-1, -1)
+                elif extent == 'line':
+                    delta = (-1, 0)
+                elif extent == 'single':
+                    delta = (0, 0)
+                else:
+                    raise KeyError("'extent' can only be 'all', 'line' or 'single'.")
+
+            # Define the loop extent
+            ymax, xmax = self.cubeshape[-2:]
+            ymax -= 1
+            xmax -= 1
+            xmin, ymin = 0, 0
+            dx, dy = delta
+            if dx == 0 and dy == 0:
+                self.pix_list = [[(xref, yref)]]
+            elif dy == 0:
+                self.pix_list = utils.pixels_line(xref, yref, xmax, xmin, step)
+            else:
+
+                if dx != -1:
+                    xmin = xref - dx
+                    xmax = xref + dx
+                if dy != -1:
+                    ymin = yref - dy
+                    ymax = yref + dy
+
+                if loop_type == 'gradient':
+                    data = np.concatenate(self._cubes)
+                    self.pix_list = utils.pixels_gradient_loop(data, xref, yref, xmax, ymax, xmin=xmin, ymin=ymin)
+                elif loop_type == 'snake':
+                    self.pix_list = utils.pixels_snake_loop(xref, yref, xmax, ymax, xmin=xmin, ymin=ymin, step=step)
 
         self._model_configuration_user = copy.deepcopy(configuration)
         self._model_configuration = ModelConfiguration(configuration)  # "reference" model
@@ -2420,235 +2470,247 @@ class ModelCube(object):
         # Start the snake loop
         config = None
 
-        for pix in pix_list:
-            t1_start = process_time()
-            i, j = pix
-            if mask is not None and not mask[j, i]:
-                if pix == self._pix_info[:2]:  # ref pixel is masked out
-                    raise IndexError("Your reference pixel is masked out.")
-                # the pixel is masked, go to the next one
-                continue
+        if not isinstance(pix_list[0], list):
+            pix_list = [pix_list]
+        if self._loop_info is not None:
+            loop_type = self._loop_info.get('type', 'gradient')
 
-            if config is None:
-                config = copy.copy(self._model_configuration)
+        for sub_list in pix_list:
+            ref_pix = sub_list[0]
+            if self.ref_pixel_info is not None:  # ref_pixel_info exists : save it and reset
+                self.latest_valid_params = self.ref_pixel_info['params'].copy()
+                self.ref_pixel_info = None
+            for pix in sub_list:
+                t1_start = process_time()
+                i, j = pix
+                if mask is not None and not mask[j, i]:
+                    if pix == self._loop_info['start']:  # ref pixel is masked out
+                        raise IndexError("Your reference pixel is masked out.")
+                    # the pixel is masked, go to the next one
+                    continue
 
-            data = np.concatenate([dat[:, j, i].array for dat in self._cubes])
-            data = np.nan_to_num(data)
-            if len(set(data)) == 1:
-                ModelCube.LOGGER.warning(f'Not enough data to compute the model at pixel {pix}.')
-                continue
+                if config is None:
+                    config = copy.copy(self._model_configuration)
 
-            if len(self._cubes_noise) > 0:  # TODO: re-write this block
-                noiseValues = np.concatenate([dat[:, j, i].array for dat in self._cubes_noise])
-                rms_cal = {'[{:.1f}, {:.1f}]'.format(start, end): [noise, self._cal] for [start, end], noise in
-                           zip(self.fmhz_ranges, noiseValues)}
-                config.rms_cal = rms_cal
-                # print('rms_cal = ', rms_cal)
+                data = np.concatenate([dat[:, j, i].array for dat in self._cubes])
+                data = np.nan_to_num(data)
+                if len(set(data)) == 1:
+                    ModelCube.LOGGER.warning(f'Not enough data to compute the model at pixel {pix}.')
+                    continue
 
-            plot_name = "plot_{}_{}".format(i, j)
+                if len(self._cubes_noise) > 0:  # TODO: re-write this block
+                    noiseValues = np.concatenate([dat[:, j, i].array for dat in self._cubes_noise])
+                    rms_cal = {'[{:.1f}, {:.1f}]'.format(start, end): [noise, self._cal] for [start, end], noise in
+                               zip(self.fmhz_ranges, noiseValues)}
+                    config.rms_cal = rms_cal
+                    # print('rms_cal = ', rms_cal)
 
-            # ascii files to be saved in output_dir
-            config_name = "config_{}_{}".format(i, j)
-            model_name = "model_{}_{}".format(i, j)
-            result_name = "result_{}_{}".format(i, j)
-            spec_name = "spectrum_{}_{}".format(i, j)
-            output_files = {
-                'results': result_name,
-                'lam': config_name,
-                'obs': spec_name,
-                'model': model_name
-            }
+                plot_name = "plot_{}_{}".format(i, j)
 
-            cont_name = os.path.join(self.output_dir, "continuum_{}_{}".format(i, j) + ".txt")
+                # ascii files to be saved in output_dir
+                config_name = "config_{}_{}".format(i, j)
+                model_name = "model_{}_{}".format(i, j)
+                result_name = "result_{}_{}".format(i, j)
+                spec_name = "spectrum_{}_{}".format(i, j)
+                output_files = {
+                    'results': result_name,
+                    'lam': config_name,
+                    'obs': spec_name,
+                    'model': model_name
+                }
 
-            if len(self._cont_data) != 0:
-                cont_values = []
-                for k, cont_data in enumerate(self._cont_data):
-                    try:
-                        continuum = cont_data[0, 0, j, i].array
-                    except IndexError:
-                        continuum = cont_data[:, j, i][0].value
-                    cont_values.append(continuum)
-                if len(self.fmhz_ranges) > 1 and len(self._cont_data) == 1:  # TODO : check
-                    # only one continuum value for all frequency ranges -> replicate
-                    cont_values *= len(self.fmhz_ranges)
-                cont_df = pd.DataFrame({
-                    'fmhz_range': self.fmhz_ranges,
-                    'continuum': cont_values
-                })
-                # print to terminal if debug mode
-                if self._model_configuration.print_debug:
-                    message = [f"Continuum at pixel {pix}: "]
-                    if len(cont_df['continuum'].unique()) == 1:
-                        message.append(f"{cont_df['continuum'].unique()[0]} {self.yunit}")
+                cont_name = os.path.join(self.output_dir, "continuum_{}_{}".format(i, j) + ".txt")
+
+                if len(self._cont_data) != 0:
+                    cont_values = []
+                    for k, cont_data in enumerate(self._cont_data):
+                        try:
+                            continuum = cont_data[0, 0, j, i].array
+                        except IndexError:
+                            continuum = cont_data[:, j, i][0].value
+                        cont_values.append(continuum)
+                    if len(self.fmhz_ranges) > 1 and len(self._cont_data) == 1:  # TODO : check
+                        # only one continuum value for all frequency ranges -> replicate
+                        cont_values *= len(self.fmhz_ranges)
+                    cont_df = pd.DataFrame({
+                        'fmhz_range': self.fmhz_ranges,
+                        'continuum': cont_values
+                    })
+                    # print to terminal if debug mode
+                    if self._model_configuration.print_debug:
+                        message = [f"Continuum at pixel {pix}: "]
+                        if len(cont_df['continuum'].unique()) == 1:
+                            message.append(f"{cont_df['continuum'].unique()[0]} {self.yunit}")
+                        else:
+                            for _, row in cont_df.iterrows():
+                                message.append(f"{row['fmhz_range']} : {row['continuum']} {self.yunit}")
+                        ModelCube.LOGGER.info("\n    ".join(message))
+
+                    # save to file
+                    utils.write_continuum_file(cont_name, cont_df, yunit=self.yunit)
+                    tc = cont_name
+                    if self.yunit in UNITS['flux']:
+                        base, ext = os.path.splitext(cont_name)
+                        cont_name = base + '_K' + ext
+                        mid_freq = [np.array(freq_range).mean() for freq_range in cont_df['fmhz_range']]
+                        cont_df['continuum'] = cont_df['continuum'] * self._model_configuration.jypb(mid_freq)
+                        utils.write_continuum_file(cont_name, cont_df, yunit='K')
+                        # tc = cont_name
+                else:
+                    tc = 0.0
+
+                # update the observed values and name of pdf file
+                # ---------------------------------------------------------------
+                config.y_file = data
+                config.cont_info = tc
+                config.get_data_to_fit()
+                config.output_files = output_files
+                config.file_kws['filename'] = plot_name + ".pdf"
+
+                # ---------------------------------------------------------------
+
+                if pix == ref_pix:
+
+                    if self.ref_pixel_info is None:  # create the model on the first (brightest) pixel
+                        message = f"Fitting ref pixel : {pix}"
+                        if loop_type == 'gradient':
+                            message = f"Line {pix[1]} - " + message
+                        ModelCube.LOGGER.info(message)
+
+                        if self.latest_valid_params is not None:
+                            config.update_parameters(self.latest_valid_params)
+
+                        config.make_params()
+
+                        # Run the model
+                        model = ModelSpectrum(config)
+                        # res = model.do_minimization()
+
+                        # Save some info
+                        save_to_log(pix, model, append=False)
+
+                        # Save the model and the parameters
+                        self.ref_pixel_info = self.pixel_infos(model)
+                        self.save_latest_valid_params(model.model_config.parameters)
+
+                        # for itag, tages in enumerate(self.tags):
+                            # masks_ntot[j, i, itag] = True  # Mind, I do not mask the pixels with that !!!
+                        for parname, param in model.model_fit.params.items():
+                            # param = model.params[par]
+                            self.array_dict['{}'.format(param.name)][j, i] = param.value
+                            self.err_dict['{}'.format(param.name)][j, i] = param.stderr
+                        self.array_dict['redchi2'][j, i] = model.model_fit.redchi
+
                     else:
-                        for _, row in cont_df.iterrows():
-                            message.append(f"{row['fmhz_range']} : {row['continuum']} {self.yunit}")
-                    ModelCube.LOGGER.info("\n    ".join(message))
+                        message = f"Back to ref : {pix} - Do not fit again"
+                        if loop_type == 'gradient':
+                            message = f"Line {pix[1]} - " + message
+                        ModelCube.LOGGER.info(message)
+                        # model = self.use_ref_pixel(model)
+                        self.latest_valid_params = self.ref_pixel_info['params'].copy()
 
-                # save to file
-                utils.write_continuum_file(cont_name, cont_df, yunit=self.yunit)
-                tc = cont_name
-                if self.yunit in UNITS['flux']:
-                    base, ext = os.path.splitext(cont_name)
-                    cont_name = base + '_K' + ext
-                    mid_freq = [np.array(freq_range).mean() for freq_range in cont_df['fmhz_range']]
-                    cont_df['continuum'] = cont_df['continuum'] * self._model_configuration.jypb(mid_freq)
-                    utils.write_continuum_file(cont_name, cont_df, yunit='K')
-                    # tc = cont_name
-            else:
-                tc = 0.0
+                        pass
 
-            # update the observed values and name of pdf file
-            # ---------------------------------------------------------------
-            config.y_file = data
-            config.cont_info = tc
-            config.get_data_to_fit()
-            config.output_files = output_files
-            config.file_kws['filename'] = plot_name + ".pdf"
+                    continue
 
-            # ---------------------------------------------------------------
+                # Find which species to fit based on snr
+                snr_tag = config.avg_snr_per_species()
+                snr_fmt = {key: f'{val:.2f}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
+                snr_list = [f"{key}: {val}" for key, val in snr_fmt.items()]
+                tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
+                # flux_rms = config.flux_rms_per_species()
+                # snr_info = {}
+                # tags_new = []
+                # for tag, info in flux_rms.items():
+                #     nl = len([snr for snr in info['snr'] if snr >= self._model_configuration_user['snr']])
+                #     snr_info[tag] = f'{nl}/{len(info['snr'])}'
+                #     if nl >= 2:
+                #         tags_new.append(tag)
+                #
+                # print(f"Number of lines with SNR > {self._model_configuration_user['snr']} : "
+                #       f"{' ; '.join([f"{key}: {val}" for key, val in snr_info.items()])}")
 
-            if pix == self._pix_info[:2]:
+                message = [f"Pixel : {pix}",
+                           f'S/N = {" ; ".join(snr_list)}']
 
-                if self.ref_pixel_info is None:  # create the model on the first (brightest) pixel
-                    ModelCube.LOGGER.info(f"Fitting ref pixel : {pix}")
+                constraints = self._model_configuration_user.get('constraints', None)
+                if len(tags_new) > 0 and constraints is not None:
+                    # Check if constraint can be applied, if not, remove species
+                    for tag in tags_new:
+                        for key, val in constraints.items():
+                            if tag in key:
+                                tag_ref = val.split('_')[-1]
+                                if tag_ref not in tags_new:
+                                    message.append(f'{tag} linked to {tag_ref} -> not selected')
+                                    tags_new.remove(tag)
+                                    break
 
-                    # Run the model
-                    model = ModelSpectrum(config)
-                    # res = model.do_minimization()
+                message.append(f'tags_new = {", ".join(tags_new)}')
+                ModelCube.LOGGER.info("\n    ".join(message))
 
-                    # Save some info
-                    save_to_log(pix, model, append=False)
+                if len(tags_new) > 0:
+                    # mask_comp[j, i] = True
+                    # update tag list ; NB: updates parameters and windows to fit
+                    config.update_tag_list(tags_new)
 
-                    # Save the model and the parameters
-                    self.ref_pixel_info = self.pixel_infos(model)
+                    # update params values
+                    if self.latest_valid_params is not None:
+                        config.update_parameters(self.latest_valid_params)
+
+                    config.get_data_to_fit()
+                    config.make_params()
+
+                    # fit with the updated config
+                    ModelCube.LOGGER.info(f"Fitting pixel : {pix}")
+
+                    try:
+                        model = ModelSpectrum(config)
+                        # res = model.do_minimization()
+                    except TypeError as e:
+                        raise TypeError(e)
+                        # pass
+
+                    # check if a parameter is close to a boundary ; if so, re-do fit from user's values
+                    # if check_at_boundary(model):
+                    #     for parname, par in config.parameters.items():
+                    #         par.set(param=self.user_params[parname])
+                    #     model.model_config.make_params()
+                    #     # model.model = None
+                    # #     model.model_fit = None
+                    #     model.do_minimization()
+                    #
+                    # if res is None:
+                    #     print("Could not fit - going to next pixel")
+                    #     continue
+                    save_to_log(pix, model, append=True)
                     self.save_latest_valid_params(model.model_config.parameters)
 
-                    # for itag, tages in enumerate(self.tags):
-                        # masks_ntot[j, i, itag] = True  # Mind, I do not mask the pixels with that !!!
-                    for parname, param in model.model_fit.params.items():
-                        # param = model.params[par]
-                        self.array_dict['{}'.format(param.name)][j, i] = param.value
-                        self.err_dict['{}'.format(param.name)][j, i] = param.stderr
                     self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 
+                    for parname, param in model.model_fit.params.items():
+                        self.array_dict['{}'.format(param.name)][j, i] = param.value
+                        self.err_dict['{}'.format(param.name)][j, i] = param.stderr
+
+                    t1_stop = process_time()
+                    ModelCube.LOGGER.info(f'Execution time for pixel {pix} : {t1_stop - t1_start:.2f} seconds\n')
                 else:
-                    print("")
-                    ModelCube.LOGGER.info(f"Back to ref : {pix} - Do not fit again")
-                    # model = self.use_ref_pixel(model)
-                    self.latest_valid_params = self.ref_pixel_info['params'].copy()
+                    ModelCube.LOGGER.info(f'    S/N too low to compute a model\n')
+                # --------------------------------------------------------------------------------------------------------------------------
 
-                    pass
-
-                continue
-
-            # Find which species to fit based on snr
-            snr_tag = config.avg_snr_per_species()
-            snr_fmt = {key: f'{val:.2f}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
-            snr_list = [f"{key}: {val}" for key, val in snr_fmt.items()]
-            tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
-            # flux_rms = config.flux_rms_per_species()
-            # snr_info = {}
-            # tags_new = []
-            # for tag, info in flux_rms.items():
-            #     nl = len([snr for snr in info['snr'] if snr >= self._model_configuration_user['snr']])
-            #     snr_info[tag] = f'{nl}/{len(info['snr'])}'
-            #     if nl >= 2:
-            #         tags_new.append(tag)
-            #
-            # print(f"Number of lines with SNR > {self._model_configuration_user['snr']} : "
-            #       f"{' ; '.join([f"{key}: {val}" for key, val in snr_info.items()])}")
-
-            message = [f"Pixel : {pix}",
-                       f'S/N = {" ; ".join(snr_list)}']
-
-            constraints = self._model_configuration_user.get('constraints', None)
-            if len(tags_new) > 0 and constraints is not None:
-                # Check if constraint can be applied, if not, remove species
-                for tag in tags_new:
-                    for key, val in constraints.items():
-                        if tag in key:
-                            tag_ref = val.split('_')[-1]
-                            if tag_ref not in tags_new:
-                                message.append(f'{tag} linked to {tag_ref} -> not selected')
-                                tags_new.remove(tag)
-                                break
-
-            message.append(f'tags_new = {", ".join(tags_new)}')
-            ModelCube.LOGGER.info("\n    ".join(message))
-
-            if len(tags_new) > 0:
-                # mask_comp[j, i] = True
-                # update tag list ; NB: updates parameters and windows to fit
-                config.update_tag_list(tags_new)
-
-                # update params values
-                if self.latest_valid_params is not None:
-                    for parname, par in config.parameters.items():
-                        # par.set(param=self.user_params[parname])
-                        par.set(param=self.latest_valid_params[parname])
-
-                # update velocity ranges in windows
-                first_cpt = config.cpt_list[0].name
-                for win in config.win_list_fit:
-                    win.v_ref_kms = config.parameters[f'{first_cpt}_vlsr'].value
-                    win.compute_f_range_fit(config.vlsr_file)
-
-                config.get_data_to_fit()
-                config.make_params()
-
-                # fit with the updated config
-                ModelCube.LOGGER.info(f"Fitting pixel : {pix}")
-
-                try:
-                    model = ModelSpectrum(config)
-                    # res = model.do_minimization()
-                except TypeError as e:
-                    raise TypeError(e)
-                    # pass
-
-                # check if a parameter is close to a boundary ; if so, re-do fit from user's values
-                # if check_at_boundary(model):
-                #     for parname, par in config.parameters.items():
-                #         par.set(param=self.user_params[parname])
-                #     model.model_config.make_params()
-                #     # model.model = None
-                # #     model.model_fit = None
-                #     model.do_minimization()
-                #
-                # if res is None:
-                #     print("Could not fit - going to next pixel")
-                #     continue
-                save_to_log(pix, model, append=True)
-                self.save_latest_valid_params(model.model_config.parameters)
-
-                self.array_dict['redchi2'][j, i] = model.model_fit.redchi
-
-                for parname, param in model.model_fit.params.items():
-                    self.array_dict['{}'.format(param.name)][j, i] = param.value
-                    self.err_dict['{}'.format(param.name)][j, i] = param.stderr
-
-                t1_stop = process_time()
-                ModelCube.LOGGER.info(f'Execution time for pixel {pix} : {t1_stop - t1_start:.2f} seconds')
-            else:
-                ModelCube.LOGGER.info(f'    S/N too low to compute a model')
-            # --------------------------------------------------------------------------------------------------------------------------
-
-            # Printouts for debugging
-            # --------------------------------------------------------------------------------------------------------------------------
-            if printDebug:
-                ModelCube.LOGGER.debug('plot_name = ', plot_name)
-                ModelCube.LOGGER.debug('config_name = ', config_name)
-                ModelCube.LOGGER.debug('model_name = ', model_name)
-                ModelCube.LOGGER.debug('result_name = ', result_name)
-                ModelCube.LOGGER.debug('spec_name = ', spec_name)
-                ModelCube.LOGGER.debug('tc = ', tc)
-                ModelCube.LOGGER.debug("Fitting pixel : ", pix)
-                ModelCube.LOGGER.debug("current list : model.tag_list = ", model.tag_list)  # current tag list
-                ModelCube.LOGGER.debug('tags_new = ', tags_new)  # new tag list with S/N ≥ signal2noise
-                # print("mask_comp shape:", mask_comp.shape)
-                # print("masks_ntot shape:", masks_ntot.shape)
+                # Printouts for debugging
+                # --------------------------------------------------------------------------------------------------------------------------
+                if printDebug:
+                    ModelCube.LOGGER.debug('plot_name = ', plot_name)
+                    ModelCube.LOGGER.debug('config_name = ', config_name)
+                    ModelCube.LOGGER.debug('model_name = ', model_name)
+                    ModelCube.LOGGER.debug('result_name = ', result_name)
+                    ModelCube.LOGGER.debug('spec_name = ', spec_name)
+                    ModelCube.LOGGER.debug('tc = ', tc)
+                    ModelCube.LOGGER.debug("Fitting pixel : ", pix)
+                    ModelCube.LOGGER.debug("current list : model.tag_list = ", model.tag_list)  # current tag list
+                    ModelCube.LOGGER.debug('tags_new = ', tags_new)  # new tag list with S/N ≥ signal2noise
+                    # print("mask_comp shape:", mask_comp.shape)
+                    # print("masks_ntot shape:", masks_ntot.shape)
 
     def make_maps(self):
         params = [parname for parname, par in self.user_params.items() if par.vary]

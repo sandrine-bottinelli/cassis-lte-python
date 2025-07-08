@@ -1089,3 +1089,24 @@ def pixels_snake_loop(xref, yref, xmax, ymax, xmin=0, ymin=0, step=1):
     pix_list = snake(pix_list, direction='down')
 
     return pix_list
+
+
+def pixels_line(xref, yref, xmax, xmin, step=1):
+    line = [(x, yref) for x in range(xref, xmax + 1, step)]  # complete the line at yref, going right
+    line.extend([(x, yref) for x in range(xref, xmin - 1, -1 * step)])  # complete the line at yref, going left)
+    return line
+
+
+def pixels_gradient_loop(data, xref, yref, xmax, ymax, xmin=0, ymin=0, step=1):
+    if xmin == xmax and ymin == ymax:
+        return [[(xref, yref)]]
+
+    pix_list = [(pixels_line(xref, yref, xmax, xmin, step))]
+
+    # determine the brightest pixel in the next line as ref
+    for ly in [*range(yref+1, ymax+1), *range(yref-1, ymin-1, -1)]:
+        line_data = data[:, ly, xmin:xmax+1]
+        lx = np.unravel_index(np.nanargmax(line_data, axis=None), line_data.shape)[1]
+        pix_list.append(pixels_line(xmin + lx, ly, xmax, xmin, step))
+
+    return pix_list

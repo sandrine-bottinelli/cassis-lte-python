@@ -1561,6 +1561,18 @@ class ModelConfiguration:
             self.x_fit = np.concatenate([w.x_fit for w in self.win_list_fit], axis=None)
             self.y_fit = np.concatenate([w.y_fit for w in self.win_list_fit], axis=None)
 
+    def update_parameters(self, new_pars):
+        for parname, par in self.parameters.items():
+            # par.set(param=self.user_params[parname])
+            par.set(param=new_pars[parname])
+
+        # update velocity ranges in windows if not fixed
+        first_cpt = self.cpt_list[0].name
+        if self.parameters[f'{first_cpt}_vlsr'].vary:
+            for win in self.win_list_fit:
+                win.v_ref_kms = self.parameters[f'{first_cpt}_vlsr'].value
+                win.compute_f_range_fit(self.vlsr_file)
+
     def flux_rms_per_species(self):
         fluxes_freq_range = self.rms_cal.copy()
         tags = self.tr_list_by_tag.keys()
