@@ -2482,7 +2482,7 @@ class ModelCube(object):
         for sub_list in pix_list:
             ref_pix = sub_list[0]
             if self.ref_pixel_info is not None:  # ref_pixel_info exists : save it and reset
-                self.latest_valid_params = self.ref_pixel_info['params'].copy()
+                self.latest_valid_params = copy.copy(self.ref_pixel_info['params'])
                 self.ref_pixel_info = None
             for pix in sub_list:
                 t1_start = process_time()
