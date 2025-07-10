@@ -941,6 +941,9 @@ class ModelConfiguration:
                     move = row['moving_bounds']
                 except KeyError:
                     move = False
+                    if i == 0:
+                        ModelConfiguration.LOGGER.warning("Your component/species file is missing the 'moving_bounds' "
+                                                          "column ; assuming fixed boundaries.")
                 cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'],
                                                                value=row['value'], vary=row['vary'],
                                                                user_data={'moving_bounds': move})
