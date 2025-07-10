@@ -2207,7 +2207,7 @@ class ModelCube(object):
                     ymax = yref + dy
 
                 if loop_type == 'gradient':
-                    data = np.concatenate(self._cubes)
+                    data = np.concatenate([cube.hdu.data for cube in self._cubes])
                     self.pix_list = utils.pixels_gradient_loop(data, xref, yref, xmax, ymax, xmin=xmin, ymin=ymin)
                 elif loop_type == 'snake':
                     self.pix_list = utils.pixels_snake_loop(xref, yref, xmax, ymax, xmin=xmin, ymin=ymin, step=step)
