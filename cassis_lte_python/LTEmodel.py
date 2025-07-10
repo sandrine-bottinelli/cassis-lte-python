@@ -201,6 +201,7 @@ class ModelSpectrum(object):
             self.do_modeling()
 
         if self.model_config.minimize:
+            self.model_config.get_data_to_fit()
             self.do_minimization()
 
     def __getattr__(self, item):
@@ -720,6 +721,9 @@ class ModelSpectrum(object):
                 tc = self.get_tc(win.x_fit)
             wt.extend(utils.compute_weight(win.y_fit - tc, win.rms, win.cal))
         wt = np.array(wt)
+
+        if len(wt) != len(self.model_config.y_fit):
+            raise IndexError(f"Number of weights does not match number of data points.")
 
         # wt = None
         if fit_kws is None:
@@ -2563,7 +2567,6 @@ class ModelCube(object):
                 # ---------------------------------------------------------------
                 config.y_file = data
                 config.cont_info = tc
-                config.get_data_to_fit()
                 config.output_files = output_files
                 config.file_kws['filename'] = plot_name + ".pdf"
 
@@ -2657,7 +2660,6 @@ class ModelCube(object):
                     if self.latest_valid_params is not None:
                         config.update_parameters(self.latest_valid_params)
 
-                    config.get_data_to_fit()
                     config.make_params()
 
                     # fit with the updated config
