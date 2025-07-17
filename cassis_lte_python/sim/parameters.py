@@ -224,6 +224,33 @@ class Parameter:
             self._max = value
 
 
+class Parameters(dict):
+    def __init__(self, mapping=None, /, **kwargs):
+        super().__init__(mapping)
+
+    def update_parameters(self, new_parameters):
+        for parname, par in self.items():
+            if par.use_in_fit:
+                par.set(param=new_parameters[parname])
+
+    def copy_parameters(self, new_parameters):
+        for parname, par in self.items():
+            if parname in new_parameters:
+                self[parname] = copy.deepcopy(new_parameters[parname])
+
+    def set_attribute(self, attribute, value):
+        """
+        For all parameters, set the given attribute to the given value.
+
+        :param attribute: The attribute to set.
+        :param value: The value to set.
+        :return:
+        """
+        for parname, par in self.items():
+            setattr(par, attribute, value)
+            # par.set(attribute=value)
+
+
 def parameter_infos(value=None, min=None, max=None, expr=None, vary=True,
                     factor=False, difference=False, user_data=None):
     if factor and difference:
