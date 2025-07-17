@@ -2582,6 +2582,7 @@ class ModelCube(object):
 
                         if self.latest_valid_params is not None:
                             config.update_parameters(self.latest_valid_params)
+                            config.parameters.set_attribute('use_in_fit', True)
 
                         config.make_params()
 
