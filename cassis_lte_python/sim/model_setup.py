@@ -931,6 +931,9 @@ class ModelConfiguration:
             # if 'interacting' not in cpt_dict[cname]:
             #     cpt_dict[cname]['interacting'] = True
         valid_par_names = ['size', 'tex', 'vlsr', 'fwhm']
+        if 'moving_bounds' in cpt_df.columns:
+            with pd.option_context("future.no_silent_downcasting", True):
+                cpt_df['moving_bounds'] = cpt_df['moving_bounds'].fillna(False).infer_objects(copy=False)
         for i, row in cpt_df.iterrows():
             cpt_name, par_name = row['name'].rsplit('_', maxsplit=1)
             # check validity of labels
