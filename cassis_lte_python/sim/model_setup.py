@@ -1588,7 +1588,7 @@ class ModelConfiguration:
                 win.v_ref_kms = self.parameters[f'{first_cpt}_vlsr'].value
                 win.compute_f_range_fit(self.vlsr_file)
 
-    def flux_rms_per_species(self):
+    def flux_rms_per_species(self, win_list=None):
         fluxes_freq_range = self.rms_cal.copy()
         tags = self.tr_list_by_tag.keys()
         for tag_i in tags:  # add two columns for each tag (total flux, number of points)
@@ -1597,7 +1597,10 @@ class ModelConfiguration:
 
         rms = {tag_i: [] for tag_i in tags}
         flux0 = {tag_i: [] for tag_i in tags}
-        for win in self.win_list_fit:
+
+        if win_list is  None:
+            win_list = self.win_list_fit
+        for win in win_list:
             fmhz = np.mean(win.x_file)  # win.transition.f_trans_mhz
             if self.cont_free:
                 tc = 0.
@@ -1619,11 +1622,11 @@ class ModelConfiguration:
 
         return flux_rms
 
-    def avg_snr_per_species(self):
+    def avg_snr_per_species(self, win_list=None):
         # create a dictionary to store the rounded SNR values
         snr_tag_weighted = {}
         snr_tag_avg = {}
-        for tag_i, flux_rms in self.flux_rms_per_species().items():
+        for tag_i, flux_rms in self.flux_rms_per_species(win_list=win_list).items():
             flux0_tag = flux_rms['flux0']
             rms_tag = flux_rms['rms']
             wt_tag = 1. / (rms_tag ** 2)

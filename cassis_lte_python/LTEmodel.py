@@ -2617,8 +2617,8 @@ class ModelCube(object):
                     continue
 
                 # Find which species to fit based on snr
-                snr_tag = config.avg_snr_per_species()
-                snr_fmt = {key: f'{val:.2f}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
+                snr_tag = config.avg_snr_per_species(win_list=self._model_configuration.win_list_fit)
+                snr_fmt = {key: f'{int(val*100)/100}' if abs(val) >= 0.01 else f'{val:.2e}' for key, val in snr_tag.items()}
                 snr_list = [f"{key}: {val}" for key, val in snr_fmt.items()]
                 tags_new = [tages for tages, rflux in snr_tag.items() if rflux >= self._model_configuration_user['snr']]
                 # flux_rms = config.flux_rms_per_species()
