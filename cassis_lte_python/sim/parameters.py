@@ -5,6 +5,7 @@ from cassis_lte_python.utils.logger import CassisLogger
 # from cassis_lte_python.utils.utils import format_float
 # from lmfit import Parameter
 from lmfit import Parameter as lmfitParameter
+import copy
 
 
 LOGGER = CassisLogger.create('parameters')
@@ -52,6 +53,8 @@ class Parameter:
         self._vary = vary
         self._expr = expr
         self._stderr = None
+
+        self._use_in_fit = True
 
         self._min = min
         self._max = max
@@ -113,7 +116,7 @@ class Parameter:
                 'user_data': self.user_data}
 
     def set(self, value=None, min=None, max=None, expr=None, vary=None, stderr=None,
-            abs_min=None, abs_max=None, init=False, param=None):
+            abs_min=None, abs_max=None, use_int_fit=None, init=False, param=None):
         inputs = vars()
         inputs.pop('self')
         inputs.pop('init')
@@ -186,6 +189,17 @@ class Parameter:
     @vary.setter
     def vary(self, value):
         self._vary = value
+
+    @property
+    def use_in_fit(self):
+        return self._use_in_fit
+
+    @use_in_fit.setter
+    def use_in_fit(self, value):
+        if isinstance(value, bool):
+            self._use_in_fit = value
+        else:
+            raise TypeError(f"use_in_fit must be a bool and {value} is not a bool.")
 
     @property
     def min(self):

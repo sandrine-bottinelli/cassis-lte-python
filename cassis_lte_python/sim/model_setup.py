@@ -10,13 +10,13 @@ from cassis_lte_python.utils.observer import Observable
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
-from cassis_lte_python.sim.parameters import create_parameter, parameter_infos, Parameter
+from cassis_lte_python.sim.parameters import create_parameter, parameter_infos, Parameter, Parameters
 from cassis_lte_python.utils.settings import VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF
 import os
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
-from lmfit import Parameters
+from lmfit import Parameters as lmfitParameters
 import warnings
 
 from cassis_lte_python.utils.utils import load_json
@@ -1487,11 +1487,12 @@ class ModelConfiguration:
             self.x_fit, self.y_fit = None, None
 
     def make_params(self, json_params: str | None = None, normalize=False):
-        params = Parameters()
+        params = lmfitParameters()
 
         for icpt, cpt in enumerate(self.cpt_list):
             for parname, par in cpt.parameters.items():
-                params[parname] = create_parameter(parname, par.to_dict())
+                if par.use_in_fit:
+                    params[parname] = create_parameter(parname, par.to_dict())
 
         # Update parameters if possible : TODO: check
         if json_params is not None:
@@ -1549,6 +1550,14 @@ class ModelConfiguration:
 
         for cpt in self.cpt_list:  # update the tag list for each component
             cpt.tag_list = [tag for tag in new_tags if tag in cpt.init_tag_list]
+            for parname, par in cpt.parameters.items():
+                elts = parname.split('_')
+                if 'ntot' in elts:
+                    tag = elts[-1]
+                    if tag in cpt.tag_list:
+                        par.use_in_fit = True
+                    else:
+                        par.use_in_fit = False
 
         self.tag_list = new_tags
 
@@ -1642,7 +1651,7 @@ class ModelConfiguration:
         params = {}
         for cpt in self.cpt_list:
             params.update(cpt.parameters)
-        return params
+        return Parameters(params)
 
     @property
     def x_file(self):
@@ -1978,10 +1987,10 @@ class Component:
         if self._fwhm is not None:
             pars[self._fwhm.name] = self._fwhm
         for sp in self.species_list:
-            if sp.tag in self._tag_list:
-                pars[sp._ntot.name] = sp._ntot
-                if self._fwhm is None:
-                    pars[sp._fwhm.name] = sp._fwhm
+            # if sp.tag in self._tag_list:
+            pars[sp._ntot.name] = sp._ntot
+            if self._fwhm is None:
+                pars[sp._fwhm.name] = sp._fwhm
         return pars
 
 
