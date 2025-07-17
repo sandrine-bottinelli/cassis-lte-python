@@ -363,16 +363,21 @@ def retrieve_unit(infos: str | list, unit_type='xaxis') -> str:
 
 def format_float(value, fmt=None, nb_digits=6, nb_signif_digits=NB_DECIMALS, min_exponent=-2):
     """
+    Convert a float value to a desired formatted string.
 
-    :param value:
-    :param fmt: the format to use, e.g., "{:.3e}"
-    :param nb_digits: max exponent
-    :param nb_signif_digits:
-    :param min_exponent:
-    :return:
+    :param value: the value to format
+    :param fmt: the format to use, e.g., ".2f" or "{:.3e}"
+    :param nb_digits: number of digits above which exponent format will be used
+    :param nb_signif_digits: max number of decimal digits
+    :param min_exponent: power of 10 below which exponent format will be used
+    :return: the formatted value
     """
     if fmt:
-        return fmt.format(value)
+        if fmt.startswith("{"):
+            return fmt.format(value)
+        else:
+            fmt = '{:' + fmt + '}'
+            return fmt.format(value)
 
     power = np.log10(abs(value)) if value != 0 else 0.
     rpst = "e" if (power < min_exponent or power > nb_digits) else "f"
