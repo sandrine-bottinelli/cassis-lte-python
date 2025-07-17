@@ -131,10 +131,9 @@ class Parameter:
                 if val is not None:
                     setattr(self, arg, val)
 
-    def at_boundary(self):
-        REL_TOL = 0.01
-        at_lo_bound = math.isclose(self.value, self.min, abs_tol=np.abs(self.min) * REL_TOL)
-        at_hi_bound = math.isclose(self.value, self.max, abs_tol=np.abs(self.max) * REL_TOL)
+    def at_boundary(self, rel_tol=0.05):
+        at_lo_bound = math.isclose(self.value, self.min, abs_tol=np.abs(self.min) * rel_tol)
+        at_hi_bound = math.isclose(self.value, self.max, abs_tol=np.abs(self.max) * rel_tol)
         return any([at_lo_bound, at_hi_bound])
 
     @property
