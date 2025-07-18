@@ -789,10 +789,7 @@ class ModelSpectrum(object):
 
         # update parameters and components
         self.model_config.params = self.model_fit.params.copy()
-        # for cpt in self.model_config.cpt_list:
-        #     cpt.update_parameters(self.model_fit.params)
-        for parname, par in self.model_config.parameters.items():
-            par.set(param=self.model_fit.params[parname])
+        self.model_config.parameters.update_parameters(self.model_fit.params)
 
         # update vlsr_plot
         if self.vlsr_file == 0:
