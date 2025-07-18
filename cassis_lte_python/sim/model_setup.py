@@ -1431,7 +1431,10 @@ class ModelConfiguration:
                         win_num = win.plot_nb
 
                         if win_num in v_range:  # window has range to be fitted
-                            win.delta_v_range_fit = np.array(v_range[win_num]) - win.v_ref_kms
+                            if self.parameters[f'{self.cpt_list[0].name}_vlsr'].user_data['moving_bounds']:
+                                win.delta_v_range_fit = np.array(v_range[win_num]) - win.v_ref_kms
+                            else:
+                                win.v_range_fit = np.array(v_range[win_num])
                             win.compute_f_range_fit(self.vlsr_file)
                             # f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
                             #                                        vref_kms=self.vlsr_file)
@@ -1586,7 +1589,8 @@ class ModelConfiguration:
         if self.parameters[f'{first_cpt}_vlsr'].vary:
             for win in self.win_list_fit:
                 win.v_ref_kms = self.parameters[f'{first_cpt}_vlsr'].value
-                win.compute_f_range_fit(self.vlsr_file)
+                # if self.parameters[f'{first_cpt}_vlsr'].user_data['moving_bounds']:
+                #     win.compute_f_range_fit(self.vlsr_file)
 
     def flux_rms_per_species(self, win_list=None):
         fluxes_freq_range = self.rms_cal.copy()
@@ -2075,9 +2079,9 @@ class Window:
     def v_range_fit(self):
         return self._v_range_fit
 
-    # @v_range_fit.setter
-    # def v_range_fit(self, value):
-    #     self._v_range_fit = value
+    @v_range_fit.setter
+    def v_range_fit(self, value):
+        self._v_range_fit = value
 
     @property
     def v_ref_kms(self):
@@ -2087,6 +2091,7 @@ class Window:
     def v_ref_kms(self, value):
         if self.delta_v_range_fit is not None:
             self._v_range_fit = value + self.delta_v_range_fit
+            self.compute_f_range_fit(value)
         self._v_ref_kms = value
 
     @property
