@@ -2151,6 +2151,31 @@ class ModelCube(object):
         configuration['minimize'] = True
         configuration['x_obs'] = np.concatenate([dat.spectral_axis.value / 1.e6 for dat in self._cubes])  # in MHz
 
+        # Mask:
+        mask_info = configuration.get('mask_info', None)
+        if mask_info is None:
+            self.masked_pix_list = None
+        else:
+            mask_file = mask_info.get('file', None)
+            if mask_file is None:
+                raise KeyError("Missing mask file")
+            if not isinstance(mask_file, list):
+                mask_file = [mask_file]
+            if len(mask_file) > 2:
+                raise ValueError("Can only handle 1 or 2 mask files.")
+
+            self.masked_pix_list = utils.get_mask(self.wcs, mask_file,
+                                                  exclude=mask_info.get('exclude',True))
+
+            # region = utils.read_crtf(mask_file[0])
+            # self._sub_cubes = [cube.subcube_from_regions([region]) for cube in self._cubes]
+
+            # file1 = os.path.join(self._data_path, masks[0])
+            # file2 = None
+            # if len(masks) > 1:
+            #     file2 = os.path.join(self._data_path, masks[1])
+            # self._masked_pix_list = utils.get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
+
         self._pix_info = configuration.get('pix_info', None)
         self._loop_info = configuration.get('loop_info', None)
         if self._pix_info is None and self._loop_info is None:
@@ -2261,29 +2286,6 @@ class ModelCube(object):
         # 'jypb_MHz2': 1.e-26 * const.c.value ** 2 / 1.e12 / (2. * const.k_B.value * omega)})
 
         # configuration['beam_info'] = self.get_beams()
-
-        # Mask:
-        mask_info = configuration.get('mask_info', None)
-        if mask_info is None:
-            self.masked_pix_list = None
-        else:
-            mask_file = mask_info.get('file', None)
-            if mask_file is None:
-                raise KeyError("Missing mask file")
-            if not isinstance(mask_file, list):
-                mask_file = [mask_file]
-            if len(mask_file) > 2:
-                raise ValueError("Can only handle 1 or 2 mask files.")
-
-            self.masked_pix_list = utils.get_mask(self.wcs, mask_file,
-                                                  exclude=mask_info.get('exclude',True))
-
-
-            # file1 = os.path.join(self._data_path, masks[0])
-            # file2 = None
-            # if len(masks) > 1:
-            #     file2 = os.path.join(self._data_path, masks[1])
-            # self._masked_pix_list = utils.get_valid_pixels(self._wcs, file1, file2=file2, masked=True)
 
         # params = ['redchi']
         # for cpt in self._model_configuration.cpt_list:
