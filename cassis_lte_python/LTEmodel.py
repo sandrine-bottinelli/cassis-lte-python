@@ -2727,9 +2727,9 @@ class ModelCube(object):
 
                     # for parname, param in model.model_fit.params.items():
                     for parname, param in model.parameters.items():
-                        # if not param.at_boundary():
-                        self.array_dict['{}'.format(param.name)][j, i] = param.value
-                        self.err_dict['{}'.format(param.name)][j, i] = param.stderr
+                        if param.use_in_fit and not param.at_boundary():
+                            self.array_dict['{}'.format(param.name)][j, i] = param.value
+                            self.err_dict['{}'.format(param.name)][j, i] = param.stderr
 
                     t1_stop = process_time()
                     ModelCube.LOGGER.info(f'Execution time for pixel {pix} : {t1_stop - t1_start:.2f} seconds\n')
