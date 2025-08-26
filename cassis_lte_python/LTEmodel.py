@@ -2247,11 +2247,12 @@ class ModelCube(object):
         self._model_configuration = ModelConfiguration(configuration)  # "reference" model
 
         self.ref_pixel_info = None
-        self.latest_valid_params = None
+        self.latest_valid_params = copy.deepcopy(self._model_configuration.parameters)
 
         self.tags = self._model_configuration.tag_list[:]  # make a copy
         self.param_names = list(self._model_configuration.parameters.keys())
-        self.user_params = copy.copy(self._model_configuration.parameters)
+        self.user_params = copy.deepcopy(self._model_configuration.parameters)
+        self.parameters_array = np.full((self.cubeshape[-2], self.cubeshape[-1]), None, dtype='object')
 
         # create arrays of Nans for the output parameters, ensure to make for all components
         array_dict = {'redchi2': np.full((self.cubeshape[-2], self.cubeshape[-1]), np.nan)}
@@ -2384,15 +2385,15 @@ class ModelCube(object):
 
     def save_latest_valid_params(self, params: dict):
         if self.latest_valid_params is None:
-            self.latest_valid_params = copy.copy(params)
+            self.latest_valid_params = copy.deepcopy(params)
         else:
             for parname, par in params.items():  # only replace parameters that have been fitted
                 if par.stderr != 0:  # parameter is not fixed and not an expression
+                    self.latest_valid_params[parname] = copy.deepcopy(par)
                     if par.at_boundary() and not par.user_data['moving_bounds']:
                         # if a parameter is at a boundary and bounds are fixed, set value to user value
                         # NB: in principle, a parameter with moving bounds should not be at a boundary
-                        par.value = par.user_value
-                    self.latest_valid_params[parname] = copy.copy(par)
+                        self.latest_valid_params[parname].value = self.latest_valid_params[parname].user_value
 
     def use_ref_pixel(self, mdl, tag_list=None):
         params = self.ref_pixel_info['params'].copy()
@@ -2404,6 +2405,9 @@ class ModelCube(object):
         mdl.generate_lte_model()
         # self.params = params
         return mdl
+
+    def parameters_at_pix(self, pix):
+        return self.parameters_array[pix[1], pix[0]]
 
     def do_minimization(self, pix_list=None):
         def check_at_boundary(model_spec):
@@ -2480,13 +2484,17 @@ class ModelCube(object):
 
         if not isinstance(pix_list[0], list):
             pix_list = [pix_list]
+        loop_type = 'gradient'
         if self._loop_info is not None:
             loop_type = self._loop_info.get('type', 'gradient')
 
-        for sub_list in pix_list:
+        for i_line, sub_list in enumerate(pix_list):
             ref_pix = sub_list[0]
-            if self.ref_pixel_info is not None:  # ref_pixel_info exists : save it and reset
-                self.latest_valid_params = copy.copy(self.ref_pixel_info['params'])
+            if i_line > 0:  # not the first line
+                if ref_pix[1] == pix_list[0][0][1] - 1:  # line below start pixel -> take params from start pixel
+                    self.latest_valid_params = copy.deepcopy(self.parameters_at_pix(pix_list[0][0]))
+                else:  # otherwise, use parameters from the previous line
+                    self.latest_valid_params = copy.deepcopy(self.parameters_at_pix(pix_list[i_line-1][0]))
                 self.ref_pixel_info = None
             for pix in sub_list:
                 t1_start = process_time()
@@ -2578,7 +2586,7 @@ class ModelCube(object):
 
                 if pix == ref_pix:
 
-                    if self.ref_pixel_info is None:  # create the model on the first (brightest) pixel
+                    if self.parameters_array[j, i] is None:  # create the model on the first (brightest) pixel
                         message = f"Fitting ref pixel : {pix}"
                         if loop_type == 'gradient':
                             message = f"Line {pix[1]} - " + message
@@ -2600,11 +2608,15 @@ class ModelCube(object):
                         # Save the model and the parameters
                         self.ref_pixel_info = self.pixel_infos(model)
                         self.save_latest_valid_params(model.model_config.parameters)
+                        self.parameters_array[j, i] = copy.deepcopy(model.model_config.parameters)  # need deepcopy
 
                         # for itag, tages in enumerate(self.tags):
                             # masks_ntot[j, i, itag] = True  # Mind, I do not mask the pixels with that !!!
-                        for parname, param in model.model_fit.params.items():
+                        for parname, param in model.parameters.items():
                             # param = model.params[par]
+                            # if not param.at_boundary() :
+                            # if not param.at_boundary() or (
+                            #         param.at_boundary() and param.user_data['moving_bounds']):
                             self.array_dict['{}'.format(param.name)][j, i] = param.value
                             self.err_dict['{}'.format(param.name)][j, i] = param.stderr
                         self.array_dict['redchi2'][j, i] = model.model_fit.redchi
@@ -2615,7 +2627,9 @@ class ModelCube(object):
                             message = f"Line {pix[1]} - " + message
                         ModelCube.LOGGER.info(message)
                         # model = self.use_ref_pixel(model)
-                        self.latest_valid_params = self.ref_pixel_info['params'].copy()
+                        # for parname, par in self.latest_valid_params.items():
+                        #     par.set(param=self.ref_pixel_info['params'][parname])
+                        self.latest_valid_params = copy.deepcopy(self.parameters_at_pix(ref_pix))  # need deepcopy
 
                         pass
 
@@ -2691,10 +2705,13 @@ class ModelCube(object):
                     #     continue
                     save_to_log(pix, model, append=True)
                     self.save_latest_valid_params(model.model_config.parameters)
+                    self.parameters_array[j, i] = copy.deepcopy(model.model_config.parameters)
 
                     self.array_dict['redchi2'][j, i] = model.model_fit.redchi
 
-                    for parname, param in model.model_fit.params.items():
+                    # for parname, param in model.model_fit.params.items():
+                    for parname, param in model.parameters.items():
+                        # if not param.at_boundary():
                         self.array_dict['{}'.format(param.name)][j, i] = param.value
                         self.err_dict['{}'.format(param.name)][j, i] = param.stderr
 
