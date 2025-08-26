@@ -2227,7 +2227,7 @@ class ModelCube(object):
             if dx == 0 and dy == 0:
                 self.pix_list = [[(xref, yref)]]
             elif dy == 0:
-                self.pix_list = utils.pixels_line(xref, yref, xmax, xmin, step)
+                self.pix_list = self.pixels_line(xref, yref, xmax, xmin, step)
             else:
 
                 if dx != -1:
@@ -2238,8 +2238,9 @@ class ModelCube(object):
                     ymax = yref + dy
 
                 if loop_type == 'gradient':
-                    data = np.concatenate([cube.hdu.data for cube in self._cubes])
-                    self.pix_list = utils.pixels_gradient_loop(data, xref, yref, xmax, ymax, xmin=xmin, ymin=ymin)
+                    # data = np.concatenate([cube.hdu.data for cube in self._cubes])
+                    # data = np.ma.array(data, mask=~self.masked_pix_list)
+                    self.pix_list = self.pixels_gradient_loop( xref, yref, xmax, ymax, xmin=xmin, ymin=ymin)
                 elif loop_type == 'snake':
                     self.pix_list = utils.pixels_snake_loop(xref, yref, xmax, ymax, xmin=xmin, ymin=ymin, step=step)
 
@@ -2367,6 +2368,30 @@ class ModelCube(object):
             fmhz_ranges.append([start_freq_MHz, end_freq_MHz])
 
         return fmhz_ranges
+
+    def pixels_line(self, xref, yref, xmax, xmin, step=1):
+        line = [(x, yref) for x in range(xref, xmax + 1, step) if
+                self.masked_pix_list[yref, x]]  # complete the line at yref, going right
+        line.extend([(x, yref) for x in range(xref, xmin - 1, -1 * step) if
+                     self.masked_pix_list[yref, x]])  # complete the line at yref, going left)
+        return line
+
+    def pixels_gradient_loop(self, xref, yref, xmax, ymax, xmin=0, ymin=0, step=1):
+        if xmin == xmax and ymin == ymax:
+            return [[(xref, yref)]]
+
+        pix_list = [(self.pixels_line(xref, yref, xmax, xmin, step))]
+
+        # determine the brightest pixel in the next line as ref
+        data = np.concatenate([cube.hdu.data for cube in self._cubes])
+        for ly in [*range(yref + 1, ymax + 1), *range(yref - 1, ymin - 1, -1)]:
+            line_data = data[:, ly, xmin:xmax + 1]
+            lx = np.unravel_index(np.nanargmax(line_data, axis=None), line_data.shape)[1]
+            pl = self.pixels_line(xmin + lx, ly, xmax, xmin, step)
+            if len(pl) > 0:
+                pix_list.append(pl)
+
+        return pix_list
 
     def pixel_infos(self, mdl):
         pixel_info = {
