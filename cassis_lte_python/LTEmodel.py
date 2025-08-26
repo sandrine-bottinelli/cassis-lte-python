@@ -2410,26 +2410,6 @@ class ModelCube(object):
         return self.parameters_array[pix[1], pix[0]]
 
     def do_minimization(self, pix_list=None):
-        def check_at_boundary(model_spec):
-            redo = False
-            for parname, par in model_spec.params.items():
-                # tol = np.abs(par.max - par.min) * 0.1  # 10% of the range
-                tol = np.abs(par.value) * 0.1
-                if par.vary and any([math.isclose(par.value, extrem, abs_tol=tol) for extrem in [par.min, par.max]]):
-                    # model_spec.params[parname] = self._params_user[parname]
-                    model_spec.params = self.ref_pixel_info['params'].copy()
-                    redo = True
-                    break
-                # if par.stderr != 0 and all([not math.isclose(par.value, extrem, abs_tol=tol)
-                #                             for extrem in [par.min, par.max]]):
-                #     # value is not close to either boundary
-                #     # if par.stderr != 0 and (par.min + tol < par.value < par.max - tol):
-                #     model_spec.model_config.latest_valid_params[parname] = model_spec.params[parname]
-                # else:  # value close to one of the boundaries
-                #     if par.vary:
-                #         model_spec.model_config.latest_valid_params[parname] = self._params_user[parname]
-                #         redo = True
-            return redo
 
         def save_to_log(pix, mdl, append):
             params = mdl.model_fit.params
@@ -2692,13 +2672,21 @@ class ModelCube(object):
                         # pass
 
                     # check if a parameter is close to a boundary ; if so, re-do fit from user's values
-                    # if check_at_boundary(model):
-                    #     for parname, par in config.parameters.items():
-                    #         par.set(param=self.user_params[parname])
-                    #     model.model_config.make_params()
-                    #     # model.model = None
-                    # #     model.model_fit = None
-                    #     model.do_minimization()
+                    for _ in range(1):
+                        redo = False
+                        for parname, par in config.parameters.items():
+                            if par.at_boundary():
+                                # model_spec.params[parname] = self._params_user[parname]
+                                model.model_config.parameters[parname].set(param=self.user_params[parname])
+                                # config.update_parameters(self.user_params)
+                                # break
+                                redo = True
+                        if redo:
+                            ModelCube.LOGGER.info(f"At least one parameter at boundary : minimize again for {pix}")
+                            model.make_params()
+                            model.do_minimization()
+                        else:
+                            break
                     #
                     # if res is None:
                     #     print("Could not fit - going to next pixel")
