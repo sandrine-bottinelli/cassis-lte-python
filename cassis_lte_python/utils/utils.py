@@ -912,7 +912,7 @@ def compute_jypb2k(freq_mhz: float | int | list | np.ndarray,
 
 def get_cubes(file_list, check_spatial_shape=None):
     """
-    Retrieve data as SpectralCube objects. Checks whether the cubes in file_list have the same spatial shape.
+    Retrieve data as SpectralCube objects. Checks whether the cubes in file_list have the same spatial shape and extent.
 
     :param file_list: the list of files (absolute paths)
     :param check_spatial_shape: a two-element tuple representing the spatial shape of some other cube.
@@ -926,6 +926,25 @@ def get_cubes(file_list, check_spatial_shape=None):
     if len(nx_list) > 1 or len(ny_list) > 1:
         raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
 
+    cubes = [SpectralCube.read(h) for h in hduls]
+    # check that cubes have the same spatial extent:
+    # lat_list = set([cube.latitude_extrema for cube in cubes])
+    # lon_list = set([cube.longitude_extrema for cube in cubes])
+    # if len(lat_list) > 1 or len(lon_list) > 1:
+    #     raise ValueError("The cubes do not have the same extent in RA and/or Dec.")
+    diff_lat = [cubes[0].latitude_extrema != c.latitude_extrema for c in cubes[1:]]
+    diff_lat = [val.all() for val in diff_lat]
+    diff_lon = [cubes[0].longitude_extrema != c.longitude_extrema for c in cubes[1:]]
+    diff_lon = [val.all() for val in diff_lon]
+    if any(diff_lat + diff_lon):
+        files_diff_lat = np.array(file_list[1:])[np.array(diff_lat)]
+        files_diff_lon = np.array(file_list[1:])[np.array(diff_lon)]
+        # files_diff_lon = file_list[diff_lon]
+        files_diff = list(set(files_diff_lat + files_diff_lon))
+        message = (f"The following files have RA and/or Dec extent different from {file_list[0]}:\n"
+                   f"    {', '.join(files_diff)}")
+        raise ValueError(message)
+
     if check_spatial_shape is not None:
         if (next(iter(nx_list)), next(iter(ny_list))) != check_spatial_shape:
             message = ["RA/Dec dimensions are not the same: "]
@@ -935,7 +954,7 @@ def get_cubes(file_list, check_spatial_shape=None):
             LOGGER.error("\n    ".join(message))
             raise ValueError("The cubes do not have the same dimension(s) in RA and/or Dec.")
 
-    return [SpectralCube.read(h) for h in hduls]
+    return cubes
 
 
 def reduce_wcs_dim(wcs):
