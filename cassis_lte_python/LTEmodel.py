@@ -2154,7 +2154,7 @@ class ModelCube(object):
         # Mask:
         mask_info = configuration.get('mask_info', None)
         if mask_info is None:
-            self.masked_pix_list = None
+            self.masked_pix_list = np.full(self.cubeshape[-2:], True)
         else:
             mask_file = mask_info.get('file', None)
             if mask_file is None:
@@ -2386,10 +2386,13 @@ class ModelCube(object):
         data = np.concatenate([cube.hdu.data for cube in self._cubes])
         for ly in [*range(yref + 1, ymax + 1), *range(yref - 1, ymin - 1, -1)]:
             line_data = data[:, ly, xmin:xmax + 1]
-            lx = np.unravel_index(np.nanargmax(line_data, axis=None), line_data.shape)[1]
-            pl = self.pixels_line(xmin + lx, ly, xmax, xmin, step)
-            if len(pl) > 0:
-                pix_list.append(pl)
+            try:
+                lx = np.unravel_index(np.nanargmax(line_data, axis=None), line_data.shape)[1]
+                pl = self.pixels_line(xmin + lx, ly, xmax, xmin, step)
+                if len(pl) > 0:
+                    pix_list.append(pl)
+            except ValueError:
+                pass  # do nothing
 
         return pix_list
 
