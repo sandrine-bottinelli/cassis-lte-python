@@ -1764,7 +1764,7 @@ class Component:
         Each physical parameter (vlsr, size, tex, fwhm) can be provided as a float, an integer or a dictionary.
         If a dictionary, the keys should match any of the inputs of a Parameter object.
 
-        Default values for vlsr, size and fwhm are from the config.ini file.
+        Default values for vlsr, size and fwhm are from the settings.ini file.
 
         :param name: name of the component, e.g. c1, c2, etc.
         :param species_list: a list of tags or of Species objects

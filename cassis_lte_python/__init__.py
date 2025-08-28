@@ -3,8 +3,8 @@ import configparser
 
 
 module_dir = os.path.dirname(__file__)
-USER_CONFIG = os.path.join(module_dir, 'config.ini')
-DEFAULT_CONFIG = os.path.join(module_dir, 'config_defaults.ini')
+USER_CONFIG = os.path.join(module_dir, 'settings.ini')
+DEFAULT_CONFIG = os.path.join(module_dir, 'settings_defaults.ini')
 CONFIG = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation(),
                                    inline_comment_prefixes=('#',))
 
@@ -14,7 +14,7 @@ if not os.path.isfile(CONFIG_FILE):
         # print(f'{user_config} not found, using {default_config}\n')
         CONFIG_FILE = DEFAULT_CONFIG
     else:
-        raise FileNotFoundError('No configuration file found.')
+        raise FileNotFoundError('No settings file found.')
 
 CONFIG.read(CONFIG_FILE)
 

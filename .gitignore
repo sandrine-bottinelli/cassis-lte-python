@@ -5,9 +5,10 @@ __pycache__
 # ignore all directories starting with venv
 venv*/
 
-# ignore all config (.ini) files but not config_defaults.ini
+# ignore all settings (.ini) files but not settings_defaults.ini
 cassis_lte_python/config*.ini
-!cassis_lte_python/config_defaults.ini
+cassis_lte_python/settings*.ini
+!cassis_lte_python/settings_defaults.ini
 
 # ignore the generated documentation (will be generated automatically on gitlab)
 docs/build
