@@ -1828,7 +1828,13 @@ class ModelSpectrum(object):
 
         tels = self.tuning_info['telescope'].values
         if len(tels) > 1:
-            filepaths = [filebase + '_' + tel + '.' + ext for tel in tels]
+            if ext == 'ltm':
+                filepaths = []
+                for frange in self.tuning_info['fmhz_range'].values:
+                    frange_fmt = [utils.format_float(rg, fmt='.1f') for rg in frange]
+                    filepaths.append(filebase + '_' + frange_fmt[0] + '_' + frange_fmt[1] + '.' + ext)
+            elif ext == 'lam':
+                filepaths = [filebase + '_' + os.path.split(tel)[-1] + '.' + ext for tel in tels]
         else:
             filepaths = [filebase + '.' + ext]
 
