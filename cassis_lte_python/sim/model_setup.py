@@ -44,6 +44,15 @@ class ModelConfiguration:
             self.species_infos = utils.read_species_info(configuration['species_infos'], header=0)
 
         self.species_dict = configuration.get('species_dict', {})
+        if isinstance(self.species_dict, str) and os.path.isfile(self.species_dict):
+            species_dict = {}
+            with open(self.species_dict, 'r') as f:
+                for line in f.readlines():
+                    if line.startswith('#') or len(line.strip()) == 0:
+                        continue
+                    sh, tag = line.split('\t')
+                    species_dict[sh] = [t.strip() for t in tag.split('#')[0].split(',')]
+            self.species_dict = species_dict
 
         self.fwhm_max = 0.
         self.tag_list = configuration.get('inspect', [])
