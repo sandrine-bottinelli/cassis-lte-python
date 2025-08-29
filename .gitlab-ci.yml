@@ -9,7 +9,7 @@ pages:
   stage: deploy
   script:
     - python3 -m pip install -r requirements.txt -r requirements-sphinx.txt
-    - (export FILE_LOGGER="False" ; sphinx-build -M html docs/source/ build/)
+    - (export BUILDING_DOC="True" ; sphinx-build -M html docs/source/ build/)
     - mv build/html public
   artifacts:
     paths:

@@ -18,7 +18,11 @@ if not os.path.isfile(CONFIG_FILE):
 
 CONFIG.read(CONFIG_FILE)
 
-
+if os.getenv("BUILDING_DOC") is not None and os.getenv("BUILDING_DOC").lower() == "true":
+    BUILDING_DOC = True
+    ENABLE_FILE_LOGGER = False
+else:
+    BUILDING_DOC = False
 if os.getenv("FILE_LOGGER") is not None and os.getenv("FILE_LOGGER").lower() == "false":
     ENABLE_FILE_LOGGER = False
 else:

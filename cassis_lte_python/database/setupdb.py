@@ -12,7 +12,8 @@ if os.path.isfile(SQLITE_FILE):
     # LOGGER.info(f"Using database : {SQLITE_FILE}")
     conn = sqlite3.connect(SQLITE_FILE)
 else:
-    raise FileNotFoundError(f'{SQLITE_FILE} not found.')
+    pass  # raise done in settings.py ; pass here to avoid FileNotFound when building doc in gitlab CI
+    # raise FileNotFoundError(f'{SQLITE_FILE} not found.')
 
 # DATABASE_SQL = conn.cursor()
 DATABASE_SQL = conn

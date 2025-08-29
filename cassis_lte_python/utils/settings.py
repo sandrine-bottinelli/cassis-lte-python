@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from cassis_lte_python import CONFIG, CONFIG_FILE, USER_CONFIG
+from cassis_lte_python import CONFIG, CONFIG_FILE, USER_CONFIG, BUILDING_DOC
 from cassis_lte_python.utils.logger import CassisLogger
 
 
@@ -40,11 +40,18 @@ if not os.path.isfile(SQLITE_FILE):
             # update config :
             CONFIG['DATABASE']['SQLITE_FILE'] = SQLITE_FILE
         except IndexError:
-            raise FileNotFoundError(f'No file of the form cassisYYYYMMDD.db found in {parent_dir}.')
+            if BUILDING_DOC:
+                pass
+            else:
+                raise FileNotFoundError(f'No file of the form cassisYYYYMMDD.db found in {parent_dir}.')
     else:
-        raise FileNotFoundError(f'{SQLITE_FILE} not found.')
+        if BUILDING_DOC:
+            pass
+        else:
+            raise FileNotFoundError(f'{SQLITE_FILE} not found.')
 
-LOGGER.info(f"Using database : {SQLITE_FILE}")
+if not BUILDING_DOC:
+    LOGGER.info(f"Using database : {SQLITE_FILE}")
 
 def print_settings():
     message = ["Settings are :"]
