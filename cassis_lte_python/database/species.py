@@ -175,7 +175,9 @@ def get_species_thresholds(sp_threshold_infos: list | dict | str | os.PathLike,
         return sp_thresholds
 
 
-def get_partition_function(tag, db=DATABASE_SQL.cursor(), temp=None):
+def get_partition_function(tag, db=None, temp=None):
+    if db is None:
+        db = DATABASE_SQL.cursor()
     tref = []
     qlog = []
     pf_file = os.path.join(PARTITION_FUNCTION_DIR, '{}.txt'.format(tag))
@@ -222,7 +224,9 @@ def get_partition_function_tex(tref, qlog, temp, tag=''):
             # return np.power(10., qlog[find_nearest_id(np.array(tref),temp)])
 
 
-def get_species_info(tag: str, database=DATABASE_SQL.cursor()):
+def get_species_info(tag: str, database=None):
+    if database is None:
+        database = DATABASE_SQL.cursor()
     # retrieve infos from catdir :
     res_catdir = database.execute("SELECT * FROM catdir WHERE speciesid = {}".format(tag))
     cols_sp_info = [t[0] for t in res_catdir.description]
