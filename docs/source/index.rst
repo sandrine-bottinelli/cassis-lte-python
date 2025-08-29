@@ -6,8 +6,8 @@
 Welcome to CASSIS LTE Python's documentation!
 =============================================
 
-**CASSIS LTE Python** is a Python library to fit spectra
-using the same LTE algorithm as in the `CASSIS <https://cassis.irap.omp.eu>`_ software.
+**CASSIS LTE Python** is a Python library to perform LTE modeling and fit spectra
+using the same philosophy as in the `CASSIS <https://cassis.irap.omp.eu>`_ software.
 
 
 Contents

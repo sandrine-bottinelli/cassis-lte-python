@@ -1,4 +1,4 @@
-Accepted keys in the configuration directory
+Accepted keys in the configuration dictionary
 =============================================
 
 .. confval:: bandwidth
