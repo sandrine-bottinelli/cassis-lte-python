@@ -14,7 +14,6 @@ Contents
 ========
 
 .. toctree::
-   :maxdepth: 3
    :caption: Getting started
 
    installation/index
