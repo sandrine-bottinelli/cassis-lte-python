@@ -2909,29 +2909,29 @@ class ModelCube(object):
                          overwrite=True)
 
     def print_infos(self):
-        ModelCube.LOGGER.debug('output_dir = ', self.output_dir)
+        ModelCube.LOGGER.debug(f'output_dir = {self.output_dir}')
         # print('input_dir = ', self.input_dir)  # NB input_dir not provided in config
-        ModelCube.LOGGER.debug('file_cube_list = ', self._data_file)
-        ModelCube.LOGGER.debug('file_cont_list = ', self.cont_info)
-        ModelCube.LOGGER.debug('cubeshape = ', self.cubeshape)
-        ModelCube.LOGGER.debug('yunit = ', self.yunit)
-        ModelCube.LOGGER.debug('fmhz_ranges = ', self.fmhz_ranges)
-        ModelCube.LOGGER.debug('pix_list = ', self.pix_list)  # To check the list of pixels
+        ModelCube.LOGGER.debug(f'file_cube_list = {self._data_file}')
+        ModelCube.LOGGER.debug(f'file_cont_list = {self.cont_info}')
+        ModelCube.LOGGER.debug(f'cubeshape = {self.cubeshape}')
+        ModelCube.LOGGER.debug(f'yunit = {self.yunit}')
+        ModelCube.LOGGER.debug(f'fmhz_ranges = {self.fmhz_ranges}')
+        ModelCube.LOGGER.debug(f'pix_list = {self.pix_list}')  # To check the list of pixels
         if self.masked_pix_list is not None and not self.masked_pix_list.all():
-            ModelCube.LOGGER.debug('mask = ', self.masked_pix_list)
+            ModelCube.LOGGER.debug(f'mask = {self.masked_pix_list}')
         print('')
-        ModelCube.LOGGER.debug('tags = ', self.tags)
-        ModelCube.LOGGER.debug('velocity ranges = ', self._model_configuration_user['v_range'])
-        ModelCube.LOGGER.debug('componentConfig = ', self._model_configuration_user['components']['config'])
+        ModelCube.LOGGER.debug(f'tags = {self.tags}')
+        ModelCube.LOGGER.debug(f'velocity ranges = {self._model_configuration_user['v_range']}')
+        ModelCube.LOGGER.debug(f'componentConfig = {self._model_configuration_user['components']['config']}')
         try:
-            ModelCube.LOGGER.debug('otherSpecies = ', self._model_configuration_user['plot_kws']['gui+file']['other_species'])
+            ModelCube.LOGGER.debug(f'otherSpecies = {self._model_configuration_user['plot_kws']['gui+file']['other_species']}')
         except KeyError:
             ModelCube.LOGGER.debug('otherSpecies not found')
         if 'constraints' in self._model_configuration_user:
-            ModelCube.LOGGER.debug("constraints = ", self._model_configuration_user['constraints'])
-        ModelCube.LOGGER.debug('params = ', self.param_names)
-        ModelCube.LOGGER.debug('array_dict = ', self.array_dict.keys())
-        ModelCube.LOGGER.debug('err_dict = ', self.err_dict.keys())
+            ModelCube.LOGGER.debug(f"constraints = {self._model_configuration_user['constraints']}")
+        ModelCube.LOGGER.debug(f'params = {self.param_names}')
+        # ModelCube.LOGGER.debug(f'array_dict = {self.array_dict.keys()}')
+        # ModelCube.LOGGER.debug(f'err_dict = {self.err_dict.keys()}')
 
     # @property
     # def params(self):

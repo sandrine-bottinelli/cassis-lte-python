@@ -756,7 +756,7 @@ def read_telescope_file(telescope_file):
                                names=col_names, usecols=list(range(len(col_names))))
 
         if not tel_info['Frequency (MHz)'].is_monotonic_increasing:
-            warnings.warn(f"Warning : frequencies in telescope file {telescope_file} are not in ascending order.")
+            LOGGER.warning(f"Frequencies in telescope file {telescope_file} are not in ascending order.")
 
         tel_info['Diameter (m)'] = [tel_diam for _ in range(len(tel_info))]
 
