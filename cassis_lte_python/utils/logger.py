@@ -8,7 +8,7 @@ class CustomFormatter(logging.Formatter):
     from https://alexandra-zaharia.github.io/posts/make-your-own-custom-color-formatter-with-python-logging/,
     adapted from https://stackoverflow.com/a/56944256/3638629"""
 
-    grey = '\x1b[38;21m'
+    grey = '\x1b[38;5;7m'
     # blue = '\x1b[38;5;39m'
     blue = '\x1b[38;5;27m'
     yellow = '\x1b[38;5;226m'
@@ -38,14 +38,14 @@ class CassisLogger:
     @staticmethod
     def create(name: str):
         logger = logging.getLogger(name)
+        logger.setLevel(logging.DEBUG)
 
-        logger.setLevel(logging.INFO)
         # formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         # format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
         formatter = CustomFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
