@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import os
+import datetime
 from cassis_lte_python import CONFIG, CONFIG_FILE, USER_CONFIG, BUILDING_DOC
-from cassis_lte_python.utils.logger import CassisLogger
+# NB:
+#   - keep import of USER_CONFIG for use in other modules
+#   - do not import Cassis Logger in this module to avoid loop import
 
 
-LOGGER = CassisLogger.create("settings")
-
-if 'defaults' in CONFIG_FILE:
-    LOGGER.warning(f'{USER_CONFIG} not found, using {CONFIG_FILE}\n')
+# Reload config_file in case it has changed
+CONFIG.read(CONFIG_FILE)
 
 CASSIS_DIR = CONFIG.get('GENERAL', 'CASSIS_DIR')
 NB_DECIMALS = CONFIG.getint('GENERAL', 'NB_DECIMALS', fallback=2)
@@ -22,7 +23,14 @@ DPI_DEF = CONFIG.getint('PLOT', 'DPI')
 NROWS_DEF = CONFIG.getint('PLOT', 'NROWS', fallback=8)
 NCOLS_DEF = CONFIG.getint('PLOT', 'NCOLS', fallback=3)
 FONT_DEF = CONFIG.get('PLOT', 'FONT', fallback='DejaVu Sans')
+ENABLE_FILE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_FILE_LOGGER', fallback=True)
+LOG_PATH = CONFIG.get('LOGGER', 'LOG_PATH', fallback='logs')
 
+if ENABLE_FILE_LOGGER:
+    LOG_PATH = os.path.join(LOG_PATH, 'logs_' + datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%S"))
+    os.makedirs(LOG_PATH)
+
+SQLITE_FILE_USER = SQLITE_FILE
 if not os.path.isfile(SQLITE_FILE):
     parent_dir = os.path.dirname(SQLITE_FILE)
     # try to find a cassisYYYYMMDD.db file in the parent directory :
@@ -32,10 +40,6 @@ if not os.path.isfile(SQLITE_FILE):
                        if (f.endswith('.db') and f.startswith('cassis'))]
             db_list.sort()
             SQLITE_FILE_NEW = os.path.join(parent_dir, db_list[-1])
-            if 'YYYYMMDD' in SQLITE_FILE:  # generic file name
-                LOGGER.info(f'No specific sqlite file provided, using sqlite file {SQLITE_FILE_NEW}.\n')
-            else:
-                LOGGER.warning(f'{SQLITE_FILE} not found, using {SQLITE_FILE_NEW} instead.\n')
             SQLITE_FILE = SQLITE_FILE_NEW
             # update config :
             CONFIG['DATABASE']['SQLITE_FILE'] = SQLITE_FILE
@@ -50,10 +54,8 @@ if not os.path.isfile(SQLITE_FILE):
         else:
             raise FileNotFoundError(f'{SQLITE_FILE} not found.')
 
-if not BUILDING_DOC:
-    LOGGER.info(f"Using database : {SQLITE_FILE}")
 
-def print_settings():
+def print_settings():  # TODO: rewrite
     message = ["Settings are :"]
     for section in CONFIG.sections():
         for key, val in dict(CONFIG.items(section)).items():

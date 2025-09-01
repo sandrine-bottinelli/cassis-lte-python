@@ -8,7 +8,7 @@ from cassis_lte_python.utils.settings import NCOLS_DEF, NROWS_DEF, DPI_DEF, NB_D
 from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
 from cassis_lte_python.database.species import get_species_thresholds, Species
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
-from cassis_lte_python.utils.settings import SQLITE_FILE
+from cassis_lte_python.utils.settings import SQLITE_FILE, SQLITE_FILE_USER, BUILDING_DOC, CONFIG_FILE, USER_CONFIG
 from cassis_lte_python.utils.utils import get_df_row_from_freq_range
 import numpy as np
 from numpy.random import normal
@@ -30,6 +30,21 @@ from warnings import warn
 from typing_extensions import Literal
 import math
 import copy
+
+
+if not BUILDING_DOC:
+    LOGGER = CassisLogger.create("LTEmodel")
+
+    if 'defaults' in CONFIG_FILE:
+        LOGGER.warning(f'{USER_CONFIG} not found, using {CONFIG_FILE}.')
+    if os.path.isfile(SQLITE_FILE):
+        if not os.path.isfile(SQLITE_FILE_USER):
+            if 'YYYYMMDD' in SQLITE_FILE_USER:  # generic file name
+                LOGGER.info(f'No specific sqlite file provided, using sqlite file {SQLITE_FILE}.')
+            else:
+                LOGGER.warning(f'{SQLITE_FILE_USER} not found, using {SQLITE_FILE} instead.')
+        else:
+            LOGGER.info(f"Using database : {SQLITE_FILE}")
 
 
 def generate_lte_model_func(config: dict):

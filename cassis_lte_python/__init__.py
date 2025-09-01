@@ -2,6 +2,7 @@ import os
 import configparser
 
 
+# Determine whether to enable file logger upon import
 module_dir = os.path.dirname(__file__)
 USER_CONFIG = os.path.join(module_dir, 'settings.ini')
 DEFAULT_CONFIG = os.path.join(module_dir, 'settings_defaults.ini')
