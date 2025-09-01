@@ -2953,6 +2953,10 @@ class ModelCube(object):
     #     return self._model.param_names()
 
     @property
+    def log_path(self):
+        return self._model_configuration.log_path
+
+    @property
     def yunit(self):
         return self._model_configuration.yunit
 

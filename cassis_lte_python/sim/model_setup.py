@@ -11,7 +11,7 @@ from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from cassis_lte_python.sim.parameters import create_parameter, parameter_infos, Parameter, Parameters
-from cassis_lte_python.utils.settings import VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF
+from cassis_lte_python.utils.settings import VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF, LOG_PATH
 import os
 import pandas as pd
 import numpy as np
@@ -38,6 +38,8 @@ class ModelConfiguration:
 
         self.jparams = configuration.get('params', None)
         self.jmodel_fit = configuration.get('model_fit', None)
+
+        self.log_path = LOG_PATH
 
         self.species_infos = None
         if 'species_infos' in configuration:
