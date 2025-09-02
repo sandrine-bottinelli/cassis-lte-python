@@ -23,6 +23,7 @@ DPI_DEF = CONFIG.getint('PLOT', 'DPI')
 NROWS_DEF = CONFIG.getint('PLOT', 'NROWS', fallback=8)
 NCOLS_DEF = CONFIG.getint('PLOT', 'NCOLS', fallback=3)
 FONT_DEF = CONFIG.get('PLOT', 'FONT', fallback='DejaVu Sans')
+ENABLE_CONSOLE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_CONSOLE_LOGGER', fallback=True)
 ENABLE_FILE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_FILE_LOGGER', fallback=True)
 LOG_PATH = CONFIG.get('LOGGER', 'LOG_PATH', fallback='logs')
 

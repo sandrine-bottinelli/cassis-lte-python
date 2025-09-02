@@ -1,6 +1,6 @@
 import logging
 import os
-from cassis_lte_python.utils.settings import ENABLE_FILE_LOGGER, LOG_PATH
+from cassis_lte_python.utils.settings import ENABLE_CONSOLE_LOGGER, ENABLE_FILE_LOGGER, LOG_PATH
 
 
 class CustomFormatter(logging.Formatter):
@@ -44,20 +44,25 @@ class CassisLogger:
         logger = logging.getLogger(name)
         logger.setLevel(logging.DEBUG)
 
+        if not ENABLE_CONSOLE_LOGGER:
+            level = logging.WARNING  # TODO : issue with blank lines when running ModelCube
+        else:
+            level = logging.DEBUG
+
         # formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         # format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
         format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
         formatter = CustomFormatter(format)
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.DEBUG)
+        console_handler.setLevel(level)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
         if ENABLE_FILE_LOGGER:
             formatter = CustomFormatter(format, to_file=True)
             file_handler = logging.FileHandler(os.path.join(LOG_PATH, f'{name}.log'))
-            file_handler.setLevel(logging.INFO)
+            file_handler.setLevel(logging.DEBUG)
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
 
