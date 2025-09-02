@@ -2127,6 +2127,8 @@ class ModelCube(object):
         if self._data_path is not None:
             self._data_file = [os.path.join(self._data_path, f) for f in self._data_file]
 
+        configuration['data_type'] = 'cube'
+
         self.output_dir = configuration.get('output_dir', 'outputs')
         self.log_file = os.path.join(self.output_dir, 'logfile.txt')
 

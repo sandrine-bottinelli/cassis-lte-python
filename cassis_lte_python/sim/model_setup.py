@@ -40,6 +40,7 @@ class ModelConfiguration:
         self.jmodel_fit = configuration.get('model_fit', None)
 
         self.log_path = LOG_PATH
+        self._data_type = configuration.get('data_type', 'single')
 
         self.species_infos = None
         if 'species_infos' in configuration:
@@ -955,7 +956,7 @@ class ModelConfiguration:
                     move = row['moving_bounds']
                 except KeyError:
                     move = False
-                    if i == 0:
+                    if i == 0 and self._data_type == 'cube':
                         ModelConfiguration.LOGGER.warning("Your component/species file is missing the 'moving_bounds' "
                                                           "column ; assuming fixed boundaries.")
                 cpt_dict[cpt_name][par_name] = parameter_infos(min=row['min'], max=row['max'],
