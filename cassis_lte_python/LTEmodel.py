@@ -507,7 +507,8 @@ class ModelSpectrum(object):
 
         if print_report == 'long':
             # print(self.model_fit.fit_report())
-            ModelSpectrum.LOGGER.info("Fit report \n" + self.fit_report(report_kws=report_kws))
+            ModelSpectrum.LOGGER.debug("Fit report \n" + self.fit_report(report_kws=report_kws))
+            # ModelSpectrum.LOGGER.info("Fit report", extra={'detail': self.fit_report(report_kws=report_kws)})
             print("")
         elif print_report == 'short':
             short_report = ["Best values:"]
