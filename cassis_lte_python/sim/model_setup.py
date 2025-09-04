@@ -606,7 +606,8 @@ class ModelConfiguration:
                 tuning_info['fmhz_min'].append(r_min)
                 tuning_info['fmhz_max'].append(r_max)
         self.tuning_info = pd.DataFrame(tuning_info)
-        self.franges_mhz = tuning_info['fmhz_range']
+        self.tuning_info.sort_values(by='fmhz_min', inplace=True)
+        self.franges_mhz = self.tuning_info['fmhz_range'].values
 
         for tel, freq_user in self._configuration_dict['tuning_info'].items():
             # if isinstance(freq_user[0], list):
