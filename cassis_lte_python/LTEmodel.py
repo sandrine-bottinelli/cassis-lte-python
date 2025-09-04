@@ -2242,7 +2242,7 @@ class ModelCube(object):
                 raise KeyError("'loop_info' can only have the 'extent' OR the 'delta' key, not both.")
 
             loop_type = self._loop_info.get('type', 'gradient')
-            step = self._loop_info.get('step', 1.)
+            step = self._loop_info.get('step', 1)
 
             if extent is not None:
                 if extent == 'all':
