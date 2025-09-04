@@ -795,9 +795,9 @@ class ModelConfiguration:
         # extract rms/cal info
         if rms_cal_info is not None:
             if isinstance(rms_cal_info, dict):
-                # make sure we have floats:
-                for key, val in rms_cal_info.items():
-                    rms_cal_info[key] = [float(elt) for elt in val]
+                # make sure we have floats: ????
+                # for key, val in rms_cal_info.items():
+                #     rms_cal_info[key] = [float(elt) for elt in val]
                 if '*' in rms_cal_info:
                     self._rms_cal = pd.DataFrame({'freq_range': [[min(self.x_file), max(self.x_file)]],
                                                   'fmin': [min(self.x_file)],
@@ -1605,35 +1605,28 @@ class ModelConfiguration:
                 #     win.compute_f_range_fit(self.vlsr_file)
 
     def flux_rms_per_species(self, win_list=None):
-        fluxes_freq_range = self.rms_cal.copy()
-        tags = self.tr_list_by_tag.keys()
-        for tag_i in tags:  # add two columns for each tag (total flux, number of points)
-            fluxes_freq_range[str(tag_i) + '_Fmax'] = [0.] * len(fluxes_freq_range)
-            fluxes_freq_range[str(tag_i) + '_Nwin'] = [0.] * len(fluxes_freq_range)
-
-        rms = {tag_i: [] for tag_i in tags}
-        flux0 = {tag_i: [] for tag_i in tags}
-
-        if win_list is  None:
+        if win_list is None:
             win_list = self.win_list_fit
-        for win in win_list:
-            fmhz = np.mean(win.x_file)  # win.transition.f_trans_mhz
-            if self.cont_free:
-                tc = 0.
-            else:
-                tc = self.tc(fmhz)
-            tag_i = win.transition.tag
-            rms[tag_i].append(win.rms)
-            flux0[tag_i].append(max(win.y_fit - tc))
-            row = utils.get_df_row_from_freq_range(fluxes_freq_range, fmhz)
-            idx = row.index
-            fluxes_freq_range.loc[idx, str(tag_i) + '_Fmax'] += max(win.y_fit - tc)
-            fluxes_freq_range.loc[idx, str(tag_i) + '_Nwin'] += 1
+        d = {'win_id': [win.name for win in win_list],
+             'tag': [win.transition.tag for win in win_list],
+             'rms': [win.rms for win in win_list],
+             'cal': [win.cal for win in win_list],
+             'y_max': [max(win.y_file) for win in win_list]}
+        max_fluxes_windows = pd.DataFrame(data=d)
+
+        if self.cont_free:
+            tc = [0.] * len(win_list)
+        else:
+            tc = [self.tc(np.mean(win.x_file)) for win in win_list]
+        max_fluxes_windows['tc'] = tc
+
+        tags = self.tr_list_by_tag.keys()
 
         flux_rms = {}
         for tag_i in tags:
-            flux0_tag = np.array(flux0[tag_i])
-            rms_tag = np.array(rms[tag_i])
+            max_fluxes_windows_tag = max_fluxes_windows[max_fluxes_windows['tag'] == tag_i]
+            flux0_tag = max_fluxes_windows_tag['y_max'].values - max_fluxes_windows_tag['tc'].values
+            rms_tag = max_fluxes_windows_tag['rms']
             flux_rms[tag_i] = {'flux0': flux0_tag, 'rms': rms_tag, 'snr': flux0_tag/rms_tag}
 
         return flux_rms

@@ -2162,15 +2162,26 @@ class ModelCube(object):
         if not isinstance(tuning_info, dict):
             configuration['tuning_info'] = {tuning_info: self.fmhz_ranges}
 
-        self._noise_info = configuration['noise_info']
-        self._cal = configuration.get('calibration', 15.)
-        if isinstance(self._noise_info[0], str):
-            self._cubes_noise = utils.get_cubes(self._noise_info, check_spatial_shape=self.cubeshape[-2:])
-        else:
+        if 'noise_info' not in configuration and 'rms_cal' not in configuration:
+            raise KeyError("You need to provide the noise information either with the 'rms_cal' keyword,"
+            "or with a combination of 'noise_info' and 'calibration' keywords.")
+        if 'noise_info' in configuration:
+            self._noise_info = configuration['noise_info']
+            self._cal = configuration.get('calibration', 15.)
             self._cubes_noise = []
+            if isinstance(self._noise_info, list):
+                if isinstance(self._noise_info[0], str):
+                    self._cubes_noise = utils.get_cubes(self._noise_info, check_spatial_shape=self.cubeshape[-2:])
+            elif not isinstance(self._noise_info, (int, float)):
+                if isinstance(self._noise_info, dict):
+                    configuration['rms_cal'] = self._noise_info
+                elif isinstance(self._data_file, list) and len(self._data_file) > 1:
+                    raise TypeError("'noise_info' must be either a list of floats or a list of files.")
+                else:
+                    raise TypeError("'noise_info' must be either a float or a file.")
 
-        if isinstance(self._noise_info, list) and isinstance(self._noise_info[0], (float, int)):
-            configuration['rms_cal'] = {f'[{min(frange)}, {max(frange)}]': [rms, self._cal] for frange, rms in zip(self.fmhz_ranges, self._noise_info)}
+            if isinstance(self._noise_info, list) and isinstance(self._noise_info[0], (float, int)):
+                configuration['rms_cal'] = {f'[{min(frange)}, {max(frange)}]': [rms, self._cal] for frange, rms in zip(self.fmhz_ranges, self._noise_info)}
 
         configuration['minimize'] = True
         configuration['x_obs'] = np.concatenate([dat.spectral_axis.value / 1.e6 for dat in self._cubes])  # in MHz
