@@ -409,8 +409,11 @@ class ModelConfiguration:
             ModelConfiguration.LOGGER.warning("Your data seem to be in sky frequency : "
                   "you should provide the 'line_shift_kms' to ensure adequate search of transitions.")
             shift = max([cpt.vlsr for cpt in self.cpt_list])
-            ans = input(f"Do you want to use the largest Vlsr found in the components' starting values "
-                        f"({shift})? [Y/n] : ")
+            ModelConfiguration.LOGGER.warning(
+                f"By default, using the largest Vlsr found in the components' starting values ({shift} km/s).")
+            ans = 'y'
+            # ans = input(f"Do you want to use the largest Vlsr found in the components' starting values "
+            #             f"({shift})? [Y/n] : ")
             if ans.strip() in ['y', 'Y', '']:
                 self.line_shift_kms = shift
 

@@ -2214,7 +2214,8 @@ class ModelCube(object):
         self._pix_info = configuration.get('pix_info', None)
         self._loop_info = configuration.get('loop_info', None)
         if self._pix_info is None and self._loop_info is None:
-            raise ValueError("'loop_info' is missing.")
+            raise ValueError("'loop_info' is missing from the configuration. For example, for the entire map:\n "
+                             "'loop_info': {'start': (xref, yref), 'extent': 'all'} .")
 
         if self._pix_info is not None:
             ModelCube.LOGGER.warning("'pix_info' is deprecated ; please use 'loop_info' instead, for example "
