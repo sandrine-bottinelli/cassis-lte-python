@@ -442,14 +442,15 @@ class ModelConfiguration:
             config.pop('gui_kws')
             config.pop('file_kws')
         if ('gui_kws' in kwargs) or ('file_kws' in kwargs):
-            print('gui_kws and file_kws are deprecated keywords, please use the following instead:')
             comment = "  # N.B. : can be also be removed/commented"
             info_gui = "" if 'gui_kws' in kwargs else comment
             info_file = "" if 'file_kws' in kwargs else comment
-            print("  'plot_kws': {")
-            print("       'gui_only':", kwargs.get('gui_kws', {}), info_gui, end=",\n")
-            print("       'file_only':", kwargs.get('file_kws', {}), info_file)
-            print("  }")
+            msg = 'gui_kws and file_kws are deprecated keywords, please use the following instead:\n'
+            msg += "  'plot_kws': {\n"
+            msg += f"       'gui_only': {kwargs.get('gui_kws', {})} {info_gui}\n"
+            msg += f"       'file_only': {kwargs.get('file_kws', {})} {info_file}\n"
+            msg += "  }"
+            ModelConfiguration.LOGGER.warning(msg)
 
             # update kwargs to new format
             kwargs['plot_kws'] = {}

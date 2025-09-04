@@ -45,7 +45,7 @@ class CassisLogger:
         logger.setLevel(logging.DEBUG)
 
         if not ENABLE_CONSOLE_LOGGER:
-            level = logging.WARNING  # TODO : issue with blank lines when running ModelCube
+            level = logging.WARNING
         else:
             level = logging.DEBUG
 

@@ -507,9 +507,8 @@ class ModelSpectrum(object):
 
         if print_report == 'long':
             # print(self.model_fit.fit_report())
-            ModelSpectrum.LOGGER.debug("Fit report \n" + self.fit_report(report_kws=report_kws))
+            ModelSpectrum.LOGGER.debug("Fit report \n" + self.fit_report(report_kws=report_kws) + "\n")
             # ModelSpectrum.LOGGER.info("Fit report", extra={'detail': self.fit_report(report_kws=report_kws)})
-            print("")
         elif print_report == 'short':
             short_report = ["Best values:"]
             if any([p.stderr is None for p in self.model_fit.params.values()]):
@@ -535,8 +534,7 @@ class ModelSpectrum(object):
                         error = '(fixed)'
                     res.append(f"{p.name} = {value} {error}")
                 short_report.append(" ; ".join(res))
-            ModelSpectrum.LOGGER.info("\n    ".join(short_report))
-            print("")
+            ModelSpectrum.LOGGER.info("\n    ".join(short_report) + "\n")
         else:
             raise KeyError("print_report can only be 'long' or 'short'.")
 
@@ -1770,7 +1768,7 @@ class ModelSpectrum(object):
                 rms.append(rms_val)
 
             if np.isnan(np.array(rms)).any():
-                print(" ")
+                print(" ")  # TODO : check whether this is needed
             line_list['rms'] = rms
             line_list = line_list.dropna()
             x_vals = line_list.x_obs
@@ -2394,8 +2392,7 @@ class ModelCube(object):
                                      f"Make sure all your cubes are in increasing frequency order.")
                 if start_freq_MHz <= fmhz_ranges[i - 1][-1]:
                     # Issue a warning if overlap :
-                    print('\n')
-                    message = ['Frequency overlap : ',
+                    message = ['\nFrequency overlap : ',
                                f'The cube {f} starts at {start_freq_MHz} MHz and overlaps '
                                f'with the cube {self._data_file[i - 1]}, which ends {fmhz_ranges[i - 1][-1]}.',
                                f'->Make sure none of the selected lines are in the overlap region']
@@ -2818,128 +2815,128 @@ class ModelCube(object):
                 except (KeyError, TypeError):
                     pass  # do nothing
 
-    def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
-        if size is None:
-            size = max(self._nx, self._ny)
-            imin, imax = 0, self._nx
-            jmin, jmax = 0, self._ny
-        else:
-            size2 = int(size / 2)
-            pix0 = (0, 0) if pix_nb is None else pix_nb
-            imin, imax = pix0[0] - size2, pix0[0] + size2 + 1
-            jmin, jmax = pix0[1] - size2, pix0[1] + size2 + 1
-
-        if pix_nb is not None:
-            if single_pix:  # for one pixel
-                pix_list = [pix_nb]
-            else:  # spiral loop, starting from pix_nb
-                ip, jp = 0, 0
-                di, dj = 0, -1
-                pix_list = []
-                for _ in range(size ** 2):
-                    if (imin <= ip + pix_nb[0] < imax) and (jmin <= jp + pix_nb[1] < jmax):
-                        pix_list.append((ip + pix_nb[0], jp + pix_nb[1]))
-                    if (ip == jp) or ((ip == -jp) and (ip < 0)) or ((ip == 1 - jp) and (ip > 0)):
-                        # end of current segment, rotate direction
-                        di, dj = -dj, di
-                    ip, jp = ip + di, jp + dj
-
-        else:  # all pixels, starting from (0, 0)
-            pix_list = [(i, j) for i in range(self._nx) for j in range(self._ny)]
-
-        # loop over all pixels and fit lines
-        for (i, j) in pix_list:
-            if self._masked_pix_list is not None and (j, i) in self._masked_pix_list:
-                for par in self._param_arrays.keys():
-                    self._param_arrays[par][j, i] = 0.
-                continue
-
-            t1_start = process_time()
-
-            data = []
-            spec = []
-            # concatenate data from all files
-            for dat in self._cubes:
-                data.append(dat[:, j, i].array)
-                spec.append((dat.spectral_axis.to(u.MHz)).value)
-
-            self._model_configuration.get_data({'x_obs': spec, 'y_obs': data})
-            self._model_configuration.get_continuum({'tc': self._cont_data})
-
-            if self._model_configuration.win_list is None:
-                self._model_configuration.get_linelist()
-                self._model_configuration.get_windows()
-            else:
-                for win in self._model_configuration.win_list:
-                    _, ywin = utils.select_from_ranges(spec, [min(win.x_file), max(win.x_file)], y_values=data)
-                    win.y_file = ywin
-
-            # Create the model ; set verbose to False to prevent printing of number of transitions
-            model = ModelSpectrum(self._model_configuration, verbose=False)
-
-            # Perform the fit ; NB :
-            # max_nfev = maximum number of function evaluations
-            # xtol = Relative error in the approximate solution
-            # ftol = Relative error in the desired sum-of-squares
-            model.fit_model(max_nfev=5000, fit_kws={'xtol': 1.e-8, 'ftol': 1.e-7},
-                            print_report=False if pix_nb is None else True,
-                            report_kws={'show_correl': False})
-
-            # read out params into arrays, ensure to have for all components necessary
-            for par in model.params:
-                param = model.params[par]
-                self._param_arrays['{}_arr'.format(param.name)][j, i] = param.value
-            self._param_arrays['redchi_arr'][j, i] = model.model_fit.redchi
-
-            t1_stop = process_time()
-            if t1_stop - t1_start > 1.:
-                print("Execution time : {:.2f} seconds".format(t1_stop - t1_start))
-
-            if single_pix:
-                file = self._model_configuration.base_name + "_{}_{}".format(i, j)
-                model.save_model(file + "_spec", ext='txt')
-                model.write_lam(file + "_lam")
-                model.make_plot(filename=file + ".png", gui=False)
-            # model.save_config('test-config.txt', dirname=myPath)
-
-            # res = model.integrated_intensities()
-
-            t2_start = process_time()
-            model.make_plot(filename=self._model_configuration.base_name+"_plots_{}_{}".format(i, j)+".png", gui=False)
-            t2_stop = process_time()
-            print("Execution time : {:.2f} seconds".format(t2_stop - t2_start))
-
-    def make_maps_old(self):
-        # read out parameter arrays into fits files
-        units = {'tex': 'K', 'vlsr': 'km/s', 'fwhm': 'km/s', 'ntot': 'cm^-2', 'size': 'arcsec'}
-        hdr = utils.reduce_wcs_dim(self._wcs).to_header()
-
-        for param in self._param_arrays.keys():
-            unit = 'dimensionless'
-            vary = True
-            vals = param.split('_')
-            if len(vals) >= 2:
-                comp = vals[0]
-                par = vals[1]
-                unit = units[par]
-                if len(vals) == 3:
-                    tag = vals[2]
-                    for sp in self._configuration['components'][comp]['species']:
-                        if sp['tag'] == tag:
-                            vary = sp[par].get('vary', True)
-                else:
-                    vary = self._configuration['components'][comp][par].get('vary', True)
-
-            if not vary:
-                continue
-            for key, val in units.items():
-                if key in param:
-                    hdr['BUNIT'] = val
-                    continue
-            hdu = fits.PrimaryHDU(self._param_arrays['{}_arr'.format(param)], header=hdr)
-            hdul = fits.HDUList([hdu])
-            hdul.writeto(os.path.join(self._data_path, self._source + '_' + self._tag + '_' + param + '.fits'),
-                         overwrite=True)
+    # def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
+    #     if size is None:
+    #         size = max(self._nx, self._ny)
+    #         imin, imax = 0, self._nx
+    #         jmin, jmax = 0, self._ny
+    #     else:
+    #         size2 = int(size / 2)
+    #         pix0 = (0, 0) if pix_nb is None else pix_nb
+    #         imin, imax = pix0[0] - size2, pix0[0] + size2 + 1
+    #         jmin, jmax = pix0[1] - size2, pix0[1] + size2 + 1
+    #
+    #     if pix_nb is not None:
+    #         if single_pix:  # for one pixel
+    #             pix_list = [pix_nb]
+    #         else:  # spiral loop, starting from pix_nb
+    #             ip, jp = 0, 0
+    #             di, dj = 0, -1
+    #             pix_list = []
+    #             for _ in range(size ** 2):
+    #                 if (imin <= ip + pix_nb[0] < imax) and (jmin <= jp + pix_nb[1] < jmax):
+    #                     pix_list.append((ip + pix_nb[0], jp + pix_nb[1]))
+    #                 if (ip == jp) or ((ip == -jp) and (ip < 0)) or ((ip == 1 - jp) and (ip > 0)):
+    #                     # end of current segment, rotate direction
+    #                     di, dj = -dj, di
+    #                 ip, jp = ip + di, jp + dj
+    #
+    #     else:  # all pixels, starting from (0, 0)
+    #         pix_list = [(i, j) for i in range(self._nx) for j in range(self._ny)]
+    #
+    #     # loop over all pixels and fit lines
+    #     for (i, j) in pix_list:
+    #         if self._masked_pix_list is not None and (j, i) in self._masked_pix_list:
+    #             for par in self._param_arrays.keys():
+    #                 self._param_arrays[par][j, i] = 0.
+    #             continue
+    #
+    #         t1_start = process_time()
+    #
+    #         data = []
+    #         spec = []
+    #         # concatenate data from all files
+    #         for dat in self._cubes:
+    #             data.append(dat[:, j, i].array)
+    #             spec.append((dat.spectral_axis.to(u.MHz)).value)
+    #
+    #         self._model_configuration.get_data({'x_obs': spec, 'y_obs': data})
+    #         self._model_configuration.get_continuum({'tc': self._cont_data})
+    #
+    #         if self._model_configuration.win_list is None:
+    #             self._model_configuration.get_linelist()
+    #             self._model_configuration.get_windows()
+    #         else:
+    #             for win in self._model_configuration.win_list:
+    #                 _, ywin = utils.select_from_ranges(spec, [min(win.x_file), max(win.x_file)], y_values=data)
+    #                 win.y_file = ywin
+    #
+    #         # Create the model ; set verbose to False to prevent printing of number of transitions
+    #         model = ModelSpectrum(self._model_configuration, verbose=False)
+    #
+    #         # Perform the fit ; NB :
+    #         # max_nfev = maximum number of function evaluations
+    #         # xtol = Relative error in the approximate solution
+    #         # ftol = Relative error in the desired sum-of-squares
+    #         model.fit_model(max_nfev=5000, fit_kws={'xtol': 1.e-8, 'ftol': 1.e-7},
+    #                         print_report=False if pix_nb is None else True,
+    #                         report_kws={'show_correl': False})
+    #
+    #         # read out params into arrays, ensure to have for all components necessary
+    #         for par in model.params:
+    #             param = model.params[par]
+    #             self._param_arrays['{}_arr'.format(param.name)][j, i] = param.value
+    #         self._param_arrays['redchi_arr'][j, i] = model.model_fit.redchi
+    #
+    #         t1_stop = process_time()
+    #         if t1_stop - t1_start > 1.:
+    #             print("Execution time : {:.2f} seconds".format(t1_stop - t1_start))
+    #
+    #         if single_pix:
+    #             file = self._model_configuration.base_name + "_{}_{}".format(i, j)
+    #             model.save_model(file + "_spec", ext='txt')
+    #             model.write_lam(file + "_lam")
+    #             model.make_plot(filename=file + ".png", gui=False)
+    #         # model.save_config('test-config.txt', dirname=myPath)
+    #
+    #         # res = model.integrated_intensities()
+    #
+    #         t2_start = process_time()
+    #         model.make_plot(filename=self._model_configuration.base_name+"_plots_{}_{}".format(i, j)+".png", gui=False)
+    #         t2_stop = process_time()
+    #         print("Execution time : {:.2f} seconds".format(t2_stop - t2_start))
+    #
+    # def make_maps_old(self):
+    #     # read out parameter arrays into fits files
+    #     units = {'tex': 'K', 'vlsr': 'km/s', 'fwhm': 'km/s', 'ntot': 'cm^-2', 'size': 'arcsec'}
+    #     hdr = utils.reduce_wcs_dim(self._wcs).to_header()
+    #
+    #     for param in self._param_arrays.keys():
+    #         unit = 'dimensionless'
+    #         vary = True
+    #         vals = param.split('_')
+    #         if len(vals) >= 2:
+    #             comp = vals[0]
+    #             par = vals[1]
+    #             unit = units[par]
+    #             if len(vals) == 3:
+    #                 tag = vals[2]
+    #                 for sp in self._configuration['components'][comp]['species']:
+    #                     if sp['tag'] == tag:
+    #                         vary = sp[par].get('vary', True)
+    #             else:
+    #                 vary = self._configuration['components'][comp][par].get('vary', True)
+    #
+    #         if not vary:
+    #             continue
+    #         for key, val in units.items():
+    #             if key in param:
+    #                 hdr['BUNIT'] = val
+    #                 continue
+    #         hdu = fits.PrimaryHDU(self._param_arrays['{}_arr'.format(param)], header=hdr)
+    #         hdul = fits.HDUList([hdu])
+    #         hdul.writeto(os.path.join(self._data_path, self._source + '_' + self._tag + '_' + param + '.fits'),
+    #                      overwrite=True)
 
     def print_infos(self):
         ModelCube.LOGGER.debug(f'output_dir = {self.output_dir}')
@@ -2952,8 +2949,7 @@ class ModelCube(object):
         ModelCube.LOGGER.debug(f'pix_list = {self.pix_list}')  # To check the list of pixels
         if self.masked_pix_list is not None and not self.masked_pix_list.all():
             ModelCube.LOGGER.debug(f'mask = {self.masked_pix_list}')
-        print('')
-        ModelCube.LOGGER.debug(f'tags = {self.tags}')
+        ModelCube.LOGGER.debug(f'\ntags = {self.tags}')
         ModelCube.LOGGER.debug(f'velocity ranges = {self._model_configuration_user['v_range']}')
         ModelCube.LOGGER.debug(f'componentConfig = {self._model_configuration_user['components']['config']}')
         try:

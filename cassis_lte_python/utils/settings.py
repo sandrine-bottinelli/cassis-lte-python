@@ -67,4 +67,4 @@ def print_settings():  # TODO: rewrite
                 unit = "km/s"
             message.append(f"{key.upper()} = {val} {unit}")
     print("\n    ".join(message))
-    print("")
+    # print("")

@@ -6,6 +6,10 @@ from cassis_lte_python.utils.constants import C_LIGHT, K_B, H
 from cassis_lte_python.database.setupdb import DATABASE_SQL
 from cassis_lte_python.database.species import get_species_info
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
+from cassis_lte_python.utils.logger import CassisLogger
+
+
+LOGGER = CassisLogger.create('transitions')
 
 
 # Define dictionary for query fields and corresponding column names in the dataframe for transitions
@@ -213,7 +217,7 @@ def select_transitions(tran_df: pd.DataFrame, thresholds: dict | None = None, xr
         if xrange is not None:
             xrange = [[x + delta_v_to_delta_f(vlsr, sum(xr)/len(xr)) for x in xr] for xr in xrange]
         else:
-            print("INFO - No frequency range specified, ignoring the vlsr keyword.")
+            LOGGER.info("No frequency range specified, ignoring the vlsr keyword.")
 
     df_sub = pd.DataFrame()
     if xrange is not None:
