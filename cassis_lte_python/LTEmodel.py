@@ -2779,15 +2779,15 @@ class ModelCube(object):
                 # Printouts for debugging
                 # --------------------------------------------------------------------------------------------------------------------------
                 if printDebug:
-                    ModelCube.LOGGER.debug('plot_name = ', plot_name)
-                    ModelCube.LOGGER.debug('config_name = ', config_name)
-                    ModelCube.LOGGER.debug('model_name = ', model_name)
-                    ModelCube.LOGGER.debug('result_name = ', result_name)
-                    ModelCube.LOGGER.debug('spec_name = ', spec_name)
-                    ModelCube.LOGGER.debug('tc = ', tc)
-                    ModelCube.LOGGER.debug("Fitting pixel : ", pix)
-                    ModelCube.LOGGER.debug("current list : model.tag_list = ", model.tag_list)  # current tag list
-                    ModelCube.LOGGER.debug('tags_new = ', tags_new)  # new tag list with S/N ≥ signal2noise
+                    ModelCube.LOGGER.debug(f'plot_name = {plot_name}')
+                    ModelCube.LOGGER.debug(f'config_name = {config_name}')
+                    ModelCube.LOGGER.debug(f'model_name = {model_name}')
+                    ModelCube.LOGGER.debug(f'result_name = {result_name}')
+                    ModelCube.LOGGER.debug(f'spec_name = {spec_name}')
+                    ModelCube.LOGGER.debug(f'tc = {tc}')
+                    ModelCube.LOGGER.debug(f"Fitting pixel : {pix}")
+                    ModelCube.LOGGER.debug(f"current list : model.tag_list = {model.tag_list}")  # current tag list
+                    ModelCube.LOGGER.debug(f'tags_new = {tags_new}')  # new tag list with S/N ≥ signal2noise
                     # print("mask_comp shape:", mask_comp.shape)
                     # print("masks_ntot shape:", masks_ntot.shape)
 
