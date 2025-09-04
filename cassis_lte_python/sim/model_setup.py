@@ -1161,6 +1161,8 @@ class ModelConfiguration:
             c3_ntot	1e-3	1.0e14	1e3	True
         """
         config_key = [key for key in cpt_info.keys() if 'config' in key]  # look for key indicating a config file
+        if len(config_key) == 0 and self.species_infos is None:
+            raise ValueError("Missing components configuration file.")
         if len(config_key) > 0:
             cpt_config_file = cpt_info[config_key[0]]
             cpt_info.pop(config_key[0])  # remove the config item
