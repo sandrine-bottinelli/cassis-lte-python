@@ -17,6 +17,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import ticker
 import matplotlib
 # matplotlib.use('Agg')
+plt.ioff()
 
 DPI_DEF = SETTINGS.DPI_DEF
 NCOLS_DEF = SETTINGS.NCOLS_DEF
