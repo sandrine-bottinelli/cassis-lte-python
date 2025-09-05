@@ -1,9 +1,10 @@
 import os
 import sqlite3
-from cassis_lte_python.utils.settings import SQLITE_FILE
+from cassis_lte_python.utils.settings import SETTINGS
 from cassis_lte_python.utils.logger import CassisLogger
 
 
+SQLITE_FILE = SETTINGS.SQLITE_FILE
 LOGGER = CassisLogger.create('setupdb')
 
 conn = None

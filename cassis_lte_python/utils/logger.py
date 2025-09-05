@@ -1,6 +1,6 @@
 import logging
 import os
-from cassis_lte_python.utils.settings import ENABLE_CONSOLE_LOGGER, ENABLE_FILE_LOGGER, LOG_PATH
+from cassis_lte_python.utils.settings import SETTINGS
 
 
 class CustomFormatter(logging.Formatter):
@@ -44,7 +44,7 @@ class CassisLogger:
         logger = logging.getLogger(name)
         logger.setLevel(logging.DEBUG)
 
-        if not ENABLE_CONSOLE_LOGGER:
+        if not SETTINGS.ENABLE_CONSOLE_LOGGER:
             level = logging.WARNING
         else:
             level = logging.DEBUG
@@ -59,9 +59,9 @@ class CassisLogger:
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
-        if ENABLE_FILE_LOGGER:
+        if SETTINGS.ENABLE_FILE_LOGGER:
             formatter = CustomFormatter(format, to_file=True)
-            file_handler = logging.FileHandler(os.path.join(LOG_PATH, f'{name}.log'))
+            file_handler = logging.FileHandler(os.path.join(SETTINGS.LOG_PATH, f'{name}.log'))
             file_handler.setLevel(logging.DEBUG)
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)

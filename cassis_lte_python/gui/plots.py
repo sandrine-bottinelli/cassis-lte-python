@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.constants import COLOR_RESIDUAL
-from cassis_lte_python.utils.settings import DPI_DEF, NCOLS_DEF, NROWS_DEF, FONT_DEF
+from cassis_lte_python.utils.settings import SETTINGS
 # from cassis_lte_python.gui.basic_units import mhz, BasicUnit
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,6 +18,10 @@ from matplotlib import ticker
 import matplotlib
 # matplotlib.use('Agg')
 
+DPI_DEF = SETTINGS.DPI_DEF
+NCOLS_DEF = SETTINGS.NCOLS_DEF
+NROWS_DEF = SETTINGS.NROWS_DEF
+FONT_DEF = SETTINGS.FONT_DEF
 
 # Matplotlib global parameters
 matplotlib.rcParams['xtick.direction'] = 'in'  # Ticks inside

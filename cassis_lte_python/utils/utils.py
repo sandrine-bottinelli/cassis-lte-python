@@ -3,7 +3,7 @@ from typing import Literal
 
 from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
-from cassis_lte_python.utils.settings import TELESCOPE_DIR, NB_DECIMALS
+from cassis_lte_python.utils.settings import SETTINGS
 from cassis_lte_python.database.species import get_partition_function
 
 import numpy as np
@@ -20,7 +20,10 @@ import warnings
 import json
 
 
+TELESCOPE_DIR = SETTINGS.TELESCOPE_DIR
+NB_DECIMALS = SETTINGS.NB_DECIMALS
 LOGGER = CassisLogger.create('utils')
+
 
 class CustomJSONizer(json.JSONEncoder):
     def default(self, obj):

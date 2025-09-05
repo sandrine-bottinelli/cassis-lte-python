@@ -11,15 +11,23 @@ from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 from cassis_lte_python.database.species import Species, get_species_thresholds
 from cassis_lte_python.database.transitions import get_transition_df, select_transitions
 from cassis_lte_python.sim.parameters import create_parameter, parameter_infos, Parameter, Parameters
-from cassis_lte_python.utils.settings import VLSR_DEF, SIZE_DEF, NROWS_DEF, NCOLS_DEF, LOG_PATH
+from cassis_lte_python.utils.settings import SETTINGS
+from cassis_lte_python.utils import settings_infos
 import os
 import pandas as pd
 import numpy as np
 from scipy.interpolate import interp1d
 from lmfit import Parameters as lmfitParameters
 import warnings
+import datetime
 
 from cassis_lte_python.utils.utils import load_json
+
+
+VLSR_DEF = SETTINGS.VLSR_DEF
+SIZE_DEF = SETTINGS.SIZE_DEF
+NROWS_DEF = SETTINGS.NROWS_DEF
+NCOLS_DEF = SETTINGS.NCOLS_DEF
 
 
 class ModelConfiguration:
@@ -39,7 +47,11 @@ class ModelConfiguration:
         self.jparams = configuration.get('params', None)
         self.jmodel_fit = configuration.get('model_fit', None)
 
-        self.log_path = LOG_PATH
+        # set log path for logger
+        log_parent_dir = configuration.get('script_dir', None)
+        settings_infos.make_log_dir(log_parent_dir)
+        self.log_path = SETTINGS.LOG_PATH
+
         self._data_type = configuration.get('data_type', 'single')
 
         self.species_infos = None

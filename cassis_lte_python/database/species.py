@@ -4,12 +4,14 @@ from numpy import interp, power, log10, genfromtxt
 import os
 import pandas as pd
 from cassis_lte_python.utils.logger import CassisLogger
-from cassis_lte_python.utils.settings import PARTITION_FUNCTION_DIR, FWHM_DEF
+from cassis_lte_python.utils.settings import SETTINGS
 from cassis_lte_python.sim.parameters import create_parameter, Parameter
 from cassis_lte_python.database.setupdb import DATABASE_SQL
 from cassis_lte_python.database.constantsdb import THRESHOLDS_DEF
 
 
+PARTITION_FUNCTION_DIR = SETTINGS.PARTITION_FUNCTION_DIR
+FWHM_DEF = SETTINGS.FWHM_DEF
 LOGGER = CassisLogger.create('Species')
 
 
