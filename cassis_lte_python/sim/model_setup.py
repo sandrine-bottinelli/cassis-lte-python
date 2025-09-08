@@ -861,7 +861,10 @@ class ModelConfiguration:
             elif isinstance(rms_cal_info, str):
                 # TODO: TBC
                 # self._rms_cal_user = utils.read_noise_info(self._rms_cal_user)
-                fmin, fmax, rms, cal = np.loadtxt(rms_cal_info, delimiter='\t', unpack=True)
+                try:
+                    fmin, fmax, rms, cal = np.loadtxt(rms_cal_info, delimiter='\t', unpack=True)
+                except FileNotFoundError:
+                    raise FileNotFoundError(f"{rms_cal_info} not found.")
                 if isinstance(fmin, float):
                     frange = [fmin, fmax]
                 else:
