@@ -2,6 +2,7 @@ from cassis_lte_python.utils.settings import SETTINGS
 from cassis_lte_python.utils.logger import CassisLogger
 import os
 import datetime
+import shutil
 
 
 LOGGER = CassisLogger.create("Settings")
@@ -44,16 +45,16 @@ def print_settings_database():
             LOGGER.info(f"Using database : {SQLITE_FILE}")
 
 
-def make_log_dir(log_parent_dir: str):
-    if not os.path.exists(os.path.dirname(SETTINGS.LOG_PATH)):
-        if log_parent_dir is None:
-            SETTINGS.LOG_PATH = os.path.join('./', SETTINGS.LOG_PATH)
-        else:
-            SETTINGS.LOG_PATH = os.path.join(log_parent_dir, SETTINGS.LOG_PATH)
-        if SETTINGS.ENABLE_SUB_DIRS:
-            SETTINGS.LOG_PATH = os.path.join(SETTINGS.LOG_PATH,
-                                             'logs_' + datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%S"))
+def check_log_dir(log_parent_dir: str):
     if SETTINGS.ENABLE_FILE_LOGGER:
-        if not os.path.exists(SETTINGS.LOG_PATH):
-            os.makedirs(SETTINGS.LOG_PATH)
+        if os.path.dirname(SETTINGS.LOG_PATH_USER) == '':  # if LOG_PATH in user's settings is just a name
+            if not os.path.dirname(SETTINGS.LOG_PATH) == log_parent_dir:
+                # script not in cwd, move logs to script's directory
+                shutil.move(SETTINGS.LOG_PATH, log_parent_dir)
+                SETTINGS.LOG_PATH = log_parent_dir
+
+    #     if SETTINGS.ENABLE_SUB_DIRS:
+    #         SETTINGS.LOG_PATH = os.path.join(SETTINGS.LOG_PATH,
+    #                                          'logs_' + datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%S"))
+
         LOGGER.info(f"Logs will be written to: {SETTINGS.LOG_PATH}.")

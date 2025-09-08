@@ -61,7 +61,11 @@ class CassisLogger:
 
         if SETTINGS.ENABLE_FILE_LOGGER:
             formatter = CustomFormatter(format, to_file=True)
-            file_handler = logging.FileHandler(os.path.join(SETTINGS.LOG_PATH, f'{name}.log'))
+            if SETTINGS.LOG_FILE is not None:
+                log_file_path = os.path.join(SETTINGS.LOG_PATH, SETTINGS.LOG_FILE)
+            else:
+                log_file_path = os.path.join(SETTINGS.LOG_PATH, f'{name}.log')
+            file_handler = logging.FileHandler(log_file_path)
             file_handler.setLevel(logging.DEBUG)
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)

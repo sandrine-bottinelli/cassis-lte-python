@@ -10,6 +10,7 @@ from pathlib import Path
 
 class Settings:
     def __init__(self):
+        LOG_PATH_DEFAULT = 'logs'
 
         # Determine whether to enable file logger upon import
         module_dir = str(Path(__file__).resolve().parents[1])
@@ -52,7 +53,7 @@ class Settings:
         self.ENABLE_CONSOLE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_CONSOLE_LOGGER', fallback=True)
         self.ENABLE_FILE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_FILE_LOGGER', fallback=False)
         self.ENABLE_SUB_DIRS = CONFIG.getboolean('LOGGER', 'ENABLE_SUB_DIRS', fallback=True)
-        self.LOG_PATH = CONFIG.get('LOGGER', 'LOG_PATH', fallback='logs')
+        self.LOG_PATH_USER = CONFIG.get('LOGGER', 'LOG_PATH', fallback=LOG_PATH_DEFAULT)
 
         # Override ENABLE_FILE_LOGGER if env variable
         if os.getenv("BUILDING_DOC") is not None and os.getenv("BUILDING_DOC").lower() == "true":
@@ -62,6 +63,17 @@ class Settings:
             self.BUILDING_DOC = False
         if os.getenv("FILE_LOGGER") is not None and os.getenv("FILE_LOGGER").lower() == "false":
             self.ENABLE_FILE_LOGGER = False
+
+        self.LOG_FILE = None
+        if self.ENABLE_FILE_LOGGER:
+            self.LOG_FILE = 'logs_' + datetime.datetime.now().strftime("%Y-%m-%d_%Hh%Mm%S") + '.txt'
+            if self.LOG_PATH_USER == LOG_PATH_DEFAULT:
+                self.LOG_PATH = os.path.abspath(LOG_PATH_DEFAULT)
+            else:
+                self.LOG_PATH = os.path.abspath(self.LOG_PATH_USER)
+
+            if not os.path.exists(self.LOG_PATH):
+                os.makedirs(self.LOG_PATH)
 
         self.SQLITE_FILE_USER = SQLITE_FILE
         if not os.path.isfile(SQLITE_FILE):
