@@ -1823,7 +1823,7 @@ class ModelSpectrum(object):
         with open(self.set_filepath(filename, dirname=dirname, ext='txt'), 'w') as f:
             f.writelines(self.fit_report(report_kws={'show_correl': True}))
 
-    def write_cassis_file(self, filename, ext, dirname=None, datafile=None):
+    def write_cassis_file(self, filename, ext: str, dirname=None, datafile=None):
         def lam_item(name, value):
             if isinstance(value, float) and value != 0.:
                 return f'{name}={utils.format_float(value, nb_digits=4)}\n'
@@ -1831,19 +1831,38 @@ class ModelSpectrum(object):
 
         # ext = 'ltm' if self.x_file is None else 'lam'
 
+        if ext not in ['lam', 'ltm']:
+            raise ValueError(f"{ext} is not supported when writing CASSIS configuration files.")
+
         filebase = self.set_filepath(filename, dirname)
 
-        tels = self.tuning_info['telescope'].values
-        if len(tels) > 1:
+        # For .ltm, save one ltm per frequency range to avoid very large spectra -> keep original tuning_info
+        file_tuning_info = self.tuning_info.copy()
+        # For .lam, save one lam per unique telescope -> generate a tuning_info with unique tels
+        if ext == 'lam':
+            tels_unique = set(self.tuning_info['telescope'].values)
+            tuning_dict = {}
+            for tel in tels_unique:
+                tuning_info_tel = file_tuning_info[file_tuning_info['telescope'] == tel]
+                tuning_dict[tel] = [min(tuning_info_tel['fmhz_min']), max(tuning_info_tel['fmhz_max'])]
+            file_tuning_info = pd.DataFrame(tuning_dict.items(), columns=['telescope', 'fmhz_range'])
+            file_tuning_info['fmhz_min'] = [min(rg) for rg in file_tuning_info['fmhz_range']]
+            file_tuning_info['fmhz_max'] = [max(rg) for rg in file_tuning_info['fmhz_range']]
+
+        if len(file_tuning_info) > 1:  # more than one telescope or one frequency range
             if ext == 'ltm':
+                # save one ltm by frequency window
                 filepaths = []
                 for frange in self.tuning_info['fmhz_range'].values:
                     frange_fmt = [utils.format_float(rg, fmt='.1f') for rg in frange]
                     filepaths.append(filebase + '_' + frange_fmt[0] + '_' + frange_fmt[1] + '.' + ext)
-            elif ext == 'lam':
-                filepaths = [filebase + '_' + os.path.split(tel)[-1] + '.' + ext for tel in tels]
+            else:
+                # save one lam file per telescope
+                filepaths = [filebase + '_' + os.path.split(tel)[-1] + '.' + ext for tel in file_tuning_info['telescope'].values]
         else:
             filepaths = [filebase + '.' + ext]
+
+        file_tuning_info['cassis config file'] = filepaths
 
         if ext == 'ltm':
             tuning = {
@@ -1873,8 +1892,8 @@ class ModelSpectrum(object):
                 'nameData': nameData,
                 'telescopeData': '',  # TBD when writing the lam file
                 'typeFrequency': 'SKY' if self.vlsr_file == 0. else 'REST',
-                'minValue': min(self.x_file) / 1000.,  # will be updated when writing lam file if multi tel
-                'maxValue': max(self.x_file) / 1000.,  # will be updated when writing lam file if multi tel
+                'minValue': min(self.x_file) / 1000.,  # will be updated when writing lam/ltm file if multi tel/freq range
+                'maxValue': max(self.x_file) / 1000.,  # will be updated when writing lam/ltm file if multi tel/freq range
                 # 'minValue': min(self.x_mod) / 1000.,
                 # 'maxValue': max(self.x_mod) / 1000.,
                 'valUnit': 'GHZ',
@@ -1930,7 +1949,7 @@ class ModelSpectrum(object):
             'tbgUnit': 'K',
             'noise': np.mean(self.noise(self.x_mod)) * 1000.,  # TODO: compute at the same time as telescope
             'noiseUnit': 'mK',
-            'frequency': 'SKY' if self.cpt_list[0].vlsr != 0. else 'REST'
+            'frequency': 'SKY' if self.vlsr_file == 0. else 'REST'
         }
         if ext == 'lam':
             lte_radex = {'lteRadexSelected': 'true', **lte_radex, 'overSampling': self.oversampling}
@@ -2051,7 +2070,9 @@ class ModelSpectrum(object):
         if ext == 'lam':
             all_lines.append('# Generals Parameters\n\n')
 
-        for filepath, tel in zip(filepaths, tels):
+        for i, row in file_tuning_info.iterrows():
+            filepath = row['cassis config file']
+            tel = row['telescope']
             with open(filepath, 'w') as f:
                 tel_path = os.path.abspath(utils.search_telescope_file(tel))
                 if 'telescopeData' in tuning:
@@ -2059,11 +2080,9 @@ class ModelSpectrum(object):
                 if 'telescope' in tuning:
                     tuning['telescope'] = tel_path
                 lte_radex['telescope'] = tel_path
-                tel_info = self.model_config.tuning_info[self.model_config.tuning_info.telescope == tel]
-                if len(tels) > 1:
-                    tuning['minValue'] = tel_info.fmhz_min.min() / 1000
-                if len(tels) > 1:
-                    tuning['maxValue'] = tel_info.fmhz_max.max() / 1000
+                # tel_info = file_tuning_info[file_tuning_info.telescope == tel]
+                tuning['minValue'] = row.fmhz_min / 1000
+                tuning['maxValue'] = row.fmhz_max / 1000
                 f.writelines(all_lines)
                 if ext == 'ltm':
                     items = [tuning, thresholds, lte_radex]
