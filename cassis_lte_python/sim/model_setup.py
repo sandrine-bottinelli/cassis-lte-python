@@ -48,7 +48,8 @@ class ModelConfiguration:
         self.jmodel_fit = configuration.get('model_fit', None)
 
         # set log path for logger
-        log_parent_dir = configuration.get('script_dir', os.path.abspath(os.curdir))
+        script_dir = configuration.get('script_dir', os.path.abspath(os.curdir))
+        log_parent_dir = configuration.get('logs_dir', os.path.abspath(os.curdir))
         settings_infos.check_log_dir(log_parent_dir)
         self.log_path = SETTINGS.LOG_PATH
 
