@@ -2811,6 +2811,15 @@ class ModelCube(object):
             'ntot': 'cm^-2',
             'redchi2': 'Reduced chi-squared'
         }
+        # wcs = self.wcs.dropaxis(2)
+        cards_to_remove = ['NAXIS3', 'LINE', 'CRPIX3', 'CDELT3', 'CUNIT3', 'CTYPE3', 'CRVAL3', 'HISTORY', 'COMMENT']
+        for card in cards_to_remove:
+            self.hdr.remove(card, remove_all=True, ignore_missing=True)
+        self.hdr.set('NAXIS', 2)
+        self.hdr.set('WCSAXES', 2)
+        self.hdr.set('DATE', datetime.datetime.now().isoformat())
+        self.hdr.set('ORIGIN', 'CASSIS-LTE-PYTHON')
+
         for param in params:
             # Split the parameter name into a list of substrings
             if param.startswith('c'):  # we have a component
