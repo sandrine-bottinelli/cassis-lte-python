@@ -1180,84 +1180,84 @@ class ModelConfiguration:
             c2_ntot	1e-3	1.0e14	1e3	True
             c3_ntot	1e-3	1.0e14	1e3	True
         """
-        config_key = [key for key in cpt_info.keys() if 'config' in key]  # look for key indicating a config file
-        if len(config_key) == 0 and self.species_infos is None:
+        if self.comp_config_file is None and self.species_infos is None:
             raise ValueError("Missing components configuration file.")
+
+        config_key = [key for key in cpt_info.keys() if 'config' in key]  # look for key indicating a config file
         if len(config_key) > 0:
-            cpt_config_file = cpt_info[config_key[0]]
             cpt_info.pop(config_key[0])  # remove the config item
-            ntot_min_fact = None
-            ntot_max_fact = None
-            try:
-                with open(cpt_config_file) as f:
-                    all_lines = f.readlines()
-                    line_sp_infos = 0
-                    sp_table = True  # assume 2nd format with species infos (thresholds, column density) as table
-                    for i, line in enumerate(all_lines):
-                        if 'SPECIES INFOS' in line:  # 3rd format
-                            sp_table = False
-                        if 'SPECIES INFOS' in line or line.startswith('tag'):
-                            # fmt 2 or 3 : identify where the species information starts
-                            line_sp_infos = i
+        ntot_min_fact = None
+        ntot_max_fact = None
+        try:
+            with open(self.comp_config_file) as f:
+                all_lines = f.readlines()
+                line_sp_infos = 0
+                sp_table = True  # assume 2nd format with species infos (thresholds, column density) as table
+                for i, line in enumerate(all_lines):
+                    if 'SPECIES INFOS' in line:  # 3rd format
+                        sp_table = False
+                    if 'SPECIES INFOS' in line or line.startswith('tag'):
+                        # fmt 2 or 3 : identify where the species information starts
+                        line_sp_infos = i
+                        break
+
+                if line_sp_infos == 0:  # only component info, no thresholds per species
+                    lines = all_lines
+                else:  # both component and species infos -> separate them
+                    lines = [line.rstrip() for line in all_lines[:line_sp_infos]]  # comp info, dealt with later
+                    # here, deal with species infos
+                    lines_sp = all_lines[line_sp_infos:]
+                    for _ in range(len(lines_sp)):
+                        if lines_sp[0].startswith('#'):
+                            lines_sp.pop(0)  # remove the comment lines at the beginning of the block
+                        else:
                             break
 
-                    if line_sp_infos == 0:  # only component info, no thresholds per species
-                        lines = all_lines
-                    else:  # both component and species infos -> separate them
-                        lines = [line.rstrip() for line in all_lines[:line_sp_infos]]  # comp info, dealt with later
-                        # here, deal with species infos
-                        lines_sp = all_lines[line_sp_infos:]
-                        for _ in range(len(lines_sp)):
-                            if lines_sp[0].startswith('#'):
-                                lines_sp.pop(0)  # remove the comment lines at the beginning of the block
-                            else:
-                                break
+                    if sp_table:
+                        self.species_infos = utils.read_species_info(io.StringIO("".join(lines_sp)))
+                    else:
+                        # species infos by block : first need to separate each block
 
-                        if sp_table:
-                            self.species_infos = utils.read_species_info(io.StringIO("".join(lines_sp)))
-                        else:
-                            # species infos by block : first need to separate each block
+                        # First remove all comment lines
+                        # (otherwise there is an issue if the last line is a comment line)
+                        lines_sp = [line for line in lines_sp if not line.startswith('#')]
+                        # remove all blank lines
+                        lines_sp = [line for line in lines_sp if line.strip() != '']
 
-                            # First remove all comment lines
-                            # (otherwise there is an issue if the last line is a comment line)
-                            lines_sp = [line for line in lines_sp if not line.startswith('#')]
-                            # remove all blank lines
-                            lines_sp = [line for line in lines_sp if line.strip() != '']
+                        names_thresholds = lines_sp[0]
+                        # remove all "tag" lines
+                        lines_sp = [line for line in lines_sp if not line.startswith('tag')]
+                        block_indices = [i for i, line in enumerate(lines_sp) if line.split()[0].isdigit()]
+                        block_indices.append(len(lines_sp))
+                        infos_by_sp = [[names_thresholds] + lines_sp[block_indices[i]:block_indices[i + 1]]
+                                       for i in range(len(block_indices) - 1)]
 
-                            names_thresholds = lines_sp[0]
-                            # remove all "tag" lines
-                            lines_sp = [line for line in lines_sp if not line.startswith('tag')]
-                            block_indices = [i for i, line in enumerate(lines_sp) if line.split()[0].isdigit()]
-                            block_indices.append(len(lines_sp))
-                            infos_by_sp = [[names_thresholds] + lines_sp[block_indices[i]:block_indices[i + 1]]
-                                           for i in range(len(block_indices) - 1)]
+                        self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
 
-                            self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
+                        thresholds = [infos_by_sp[0][0]]  # column names
+                        for infos_sp in infos_by_sp:
+                            thresholds.append(infos_sp[1])  # for each species block, thresholds are at index 1
+                            # sp = infos_sp[1].split()[0]
+                            # sp_df =
+                        self.species_infos = utils.read_species_info(io.StringIO("".join(thresholds)))
 
-                            thresholds = [infos_by_sp[0][0]]  # column names
-                            for infos_sp in infos_by_sp:
-                                thresholds.append(infos_sp[1])  # for each species block, thresholds are at index 1
-                                # sp = infos_sp[1].split()[0]
-                                # sp_df =
-                            self.species_infos = utils.read_species_info(io.StringIO("".join(thresholds)))
+                cpt_info = self.read_comp_infos(lines, cpt_dict=cpt_info)
+                cpt_info = self.read_comp_params(lines, cpt_dict=cpt_info)
 
-                    cpt_info = self.read_comp_infos(lines, cpt_dict=cpt_info)
-                    cpt_info = self.read_comp_params(lines, cpt_dict=cpt_info)
+            # Default ntot factors
+            ntot_factors = [line for line in lines if "ntot_m" in line]
+            for elt in ntot_factors:
+                if "min" in elt:
+                    ntot_min_fact = float(elt.split("=")[-1])
+                if "max" in elt:
+                    ntot_max_fact = float(elt.split("=")[-1])
 
-                # Default ntot factors
-                ntot_factors = [line for line in lines if "ntot_m" in line]
-                for elt in ntot_factors:
-                    if "min" in elt:
-                        ntot_min_fact = float(elt.split("=")[-1])
-                    if "max" in elt:
-                        ntot_max_fact = float(elt.split("=")[-1])
+            if sp_table:
+                cpt_info = self.read_sp_table(cpt_dict=cpt_info, **{'ntot_min_fact': ntot_min_fact,
+                                                                    'ntot_max_fact': ntot_max_fact})
 
-                if sp_table:
-                    cpt_info = self.read_sp_table(cpt_dict=cpt_info, **{'ntot_min_fact': ntot_min_fact,
-                                                                        'ntot_max_fact': ntot_max_fact})
-
-            except FileNotFoundError:
-                raise FileNotFoundError(f"{cpt_config_file} was not found.")
+        except FileNotFoundError:
+            raise FileNotFoundError(f"{self.comp_config_file} was not found.")
 
         for cname in cpt_info.keys():
             if 'fwhm' not in cpt_info[cname]:
