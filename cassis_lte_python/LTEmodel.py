@@ -2811,6 +2811,12 @@ class ModelCube(object):
             'ntot': 'cm^-2',
             'redchi2': 'Reduced chi-squared'
         }
+        titles = {
+            'tex': 'Tex',
+            'vlsr': 'Vlsr',
+            'size': 'Source size',
+            'fwhm': 'FWHM',
+        }
         # wcs = self.wcs.dropaxis(2)
         cards_to_remove = ['NAXIS3', 'LINE', 'CRPIX3', 'CDELT3', 'CUNIT3', 'CTYPE3', 'CRVAL3', 'HISTORY', 'COMMENT']
         for card in cards_to_remove:
@@ -2823,14 +2829,25 @@ class ModelCube(object):
         for param in params:
             # Split the parameter name into a list of substrings
             if param.startswith('c'):  # we have a component
-                param_type = param.split('_')[1]
+                comp, param_type = param.split('_')
+                if param_type in titles.keys():
+                    title = titles[param_type]
+                else:
+                    tag = param.split('_')[-1]
+                    title = "Ntot " + self._model_configuration.tr_list_by_tag[tag][0].name.split(',')[0]
+                title = comp.upper() + " - " + title
             else:  # reduced chi2
                 param_type = param
+                title = "Reduced chi-squared"
 
             for arr, ext in zip([self.array_dict, self.err_dict], ['.fits', '_err.fits']):
                 try:
                     hdu = fits.PrimaryHDU(arr['{}'.format(param)], header=self.hdr)
                     hdu.header.set('BUNIT', units[param_type])
+                    if 'TITLE' in hdu.header:
+                        hdu.header.set('TITLE', title)
+                    else:
+                        hdu.header['TITLE'] = (title)
                     hdul = fits.HDUList([hdu])
                     hdul.writeto(os.path.join(self.output_dir, param + ext), overwrite=True)
                 except (KeyError, TypeError):
