@@ -2775,7 +2775,8 @@ class ModelCube(object):
 
                     # for parname, param in model.model_fit.params.items():
                     for parname, param in model.parameters.items():
-                        if param.use_in_fit and not param.at_boundary():
+                        # if param.use_in_fit and not param.at_boundary():
+                        if param.use_in_fit:
                             self.array_dict['{}'.format(param.name)][j, i] = param.value
                             self.err_dict['{}'.format(param.name)][j, i] = param.stderr
 
@@ -2800,7 +2801,26 @@ class ModelCube(object):
                     # print("mask_comp shape:", mask_comp.shape)
                     # print("masks_ntot shape:", masks_ntot.shape)
 
-    def make_maps(self):
+    def make_maps(self, keep_all_pix=True):
+        """
+        Creates the fits images for the varying parameters.
+
+        :param keep_all_pix: if False, use NaNs for parameters that are at boundary.
+        :return:
+        """
+        if not keep_all_pix:   # TODO: find more efficient way to do this
+            pix_list = self.pix_list
+            if isinstance(pix_list[0], list):
+                pix_list = []
+                for plist in pix_list:
+                    pix_list.extend(plist)
+
+            for (i, j) in pix_list:
+                for parname, param in self.parameters_array[j, i].items():
+                    if param.use_in_fit and param.at_boundary():
+                            self.array_dict['{}'.format(param.name)][j, i] = np.nan
+                            self.err_dict['{}'.format(param.name)][j, i] = np.nan
+
         params = [parname for parname, par in self.user_params.items() if par.vary]
         ModelCube.LOGGER.info(f'Making maps for params : {", ".join(params)}')
         units = {
