@@ -18,11 +18,36 @@ from scipy.interpolate import interp1d
 from datetime import timedelta
 import warnings
 import json
+import matplotlib.colors as colors
+import matplotlib.pyplot as plt
 
 
 TELESCOPE_DIR = SETTINGS.TELESCOPE_DIR
 NB_DECIMALS = SETTINGS.NB_DECIMALS
+
 LOGGER = CassisLogger.create('utils')
+
+FONT_DEF = 'Times'
+fontsize = 12
+plt.rc('font', size=fontsize)
+plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
+plt.rc(('xtick', 'ytick'), labelsize=fontsize)
+# plt.rcParams.update({"text.usetex": True})
+# plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = FONT_DEF
+
+labels = {
+    'Ntot': "$N_{tot}$",
+    'Vlsr': "$V_{LSR}$",
+    'FWHM': "FWHM"
+}
+units = {
+    'Ntot': "[cm$^{-2}$]",
+    'Vlsr': "[km s$^{-1}$]",
+    'FWHM': "[km s$^{-1}$]"
+}
+
+fig_size_single = (5, 4.5)
 
 
 class CustomJSONizer(json.JSONEncoder):
@@ -1116,3 +1141,179 @@ def pixels_snake_loop(xref, yref, xmax, ymax, xmin=0, ymin=0, step=1):
     pix_list = snake(pix_list, direction='down')
 
     return pix_list
+
+
+def make_map_image(fits_file=None, hdu=None, ntot_scaling='sqrt', fig_ax=None):
+    """
+    Make an image from the given fits file or from the given hdu.
+
+    :param fits_file:
+    :param hdu:
+    :param ntot_scaling:
+    :param fig_ax: a (fig, ax) tuple containing matplotlib figure axes
+    :return:
+    """
+    if fits_file is None and hdu is None:
+        raise ValueError("Must specify fits_file or hdu.")
+
+    if fits_file is not None:
+        hdu_list = fits.open(fits_file)
+        hdu = hdu_list[0]
+
+    wcs = WCS(hdu.header)
+
+    if fig_ax is None:
+        fig, ax = plt.subplots(
+            figsize=fig_size_single,
+            subplot_kw=dict(projection=wcs)
+        )
+    else:
+        fig, ax = fig_ax
+
+    param = hdu.header['TITLE']
+
+    try:
+        comp, param = param.split(" - ")
+    except ValueError:
+        if fits_file is not None:
+            comp = os.path.split(fits_file)[-1].split("_")[0].upper()
+        else:
+            comp = ""
+            LOGGER.warning("No component info found for {}".format(param))
+    try:
+        # Ntot
+        param, sp = param.split(maxsplit=1)
+        sp = list(sp)
+        char_groups = [sp[0]]
+        is_alpha = sp[0].isalpha()
+        for c, char in enumerate(sp[1:]):
+            types = [char.isalpha(), is_alpha]
+            if all(types) or not any(types):
+                char_groups[-1] += char
+            else:
+                char_groups.append(char)
+            is_alpha = char.isalpha()
+        sp_latex = ""
+        for elt in char_groups:
+            if elt.isalpha():
+                sp_latex += elt
+            else:
+                if int(elt) <= 6:
+                    sp_latex += f'$_{elt}$'
+                else:
+                    sp_latex += f'$^{{{elt}}}$'
+        title = "$N_{tot}$" + f"({sp_latex})" + " [cm$^{-2}$]"
+        scaling = colors.PowerNorm(gamma=0.5)
+        if ntot_scaling == 'sqrt':
+            pass
+        elif ntot_scaling == 'log':
+            scaling = colors.LogNorm()
+        else:
+            LOGGER.warning("Unknown ntot_scaling option, assuming sqrt.")
+    except ValueError:
+        # All others
+        param = param
+        title = labels[param] + " " + units[param]
+        scaling = colors.Normalize()
+
+    title = f"{comp} - " + title
+
+    # ax = plt.subplot(nrows, ncols, i+j+1, projection=wcs)
+    pos = ax.imshow(hdu.data, origin='lower', cmap='inferno', norm=scaling)
+    ax.set_xlabel("Right Ascension")
+    ax.set_ylabel("Declination")
+    ax.set_title(title)
+    fig.colorbar(pos, ax=ax, fraction=0.049, pad=0.0)
+    plt.tight_layout()
+
+    return fig, ax
+
+
+def save_all_map_images(map_dir, ntot_scaling='sqrt'):
+    """
+    For all files ending in .fits but not in _err.fits in the given directory, save the corresponding png image.
+
+    :param map_dir: directory where the fits files are located
+    :param ntot_scaling: type of scaling for the column density (sqrt or log)
+    :param one_file: if True, save all figures in one png file, one line per component
+    :return:
+    """
+    plt.close('all')
+    map_files = [f for f in os.listdir(map_dir) if f.endswith('fits') and 'err' not in f]
+    for map_file in map_files:
+        fig, ax = make_map_image(os.path.join(map_dir, map_file), ntot_scaling=ntot_scaling)
+        plt.tight_layout()
+        fig.savefig(os.path.join(map_dir, f'{os.path.splitext(map_file)[0]}.png'))
+
+
+def save_all_map_images_one_file(map_dir, ntot_scaling='sqrt'):
+    plt.close('all')
+    map_files = [f for f in os.listdir(map_dir) if f.endswith('fits') and 'err' not in f]
+    output_dir = map_dir
+
+    components = [os.path.split(map_file)[-1].split('_')[0] for map_file in map_files]
+    components = list(set(components))
+    components.sort()
+    map_files_by_cpt = {}
+    for cpt in components:
+        map_files_by_cpt[cpt] = [map_file for map_file in map_files if cpt in map_file]
+
+    nrows = len(components)
+    ncols = max([len(map_files_by_cpt[cpt]) for cpt in components])
+
+    fig_size = (fig_size_single[0]*ncols, fig_size_single[1]*nrows)
+    fig, axes = plt.subplots(
+        figsize = fig_size,
+        nrows=nrows, ncols=ncols
+    )
+
+    i = 0
+    for cpt, cpt_map_files in map_files_by_cpt.items():
+        for j in range(ncols):
+            if ncols == 1:
+                if nrows == 1:
+                    ax = axes
+                else:
+                    ax = axes[i]
+            elif nrows == 1:
+                ax = axes[j]
+            else:
+                ax = axes[i, j]
+            if j >= len(cpt_map_files):
+                ax.set_axis_off()
+                continue
+
+            # cpt_map_files.sort()
+            map_file = cpt_map_files[j]
+
+            fig, ax = make_map_image(fits_file=os.path.join(map_dir, map_file), ntot_scaling=ntot_scaling,
+                                     fig_ax=(fig, ax))
+
+            if i == nrows - 1:
+                ax.set_xlabel("Right Ascension")
+            else:
+                ax.set_xlabel("")
+            if j == 0:
+                ax.set_ylabel("Declination")
+                ax.text(-0.3, 0.5, f'Component {cpt[-1]}', transform=ax.transAxes,
+                        horizontalalignment='center',
+                        verticalalignment='center',
+                        rotation=90, fontsize=1.5*fontsize
+                        )
+            else:
+                ax.set_ylabel("")
+            # ax.set_title(title)
+            # fig.colorbar(pos, ax=ax, fraction=0.049, pad=0.0)
+
+        i += 1
+
+    # plt.tight_layout()
+    # ncols = 1
+    nrows = 1
+    plt.subplots_adjust(left=0.25-(ncols - 1)*0.075, right=0.925+(ncols - 1)*0.01, wspace=0.075+(ncols-1)*0.1,
+                        bottom=0.025+(nrows-1)*0.01, top=0.975+(nrows-1)*0.01, hspace=0.075-(nrows-1)*0.02)
+
+    # plt.show()
+
+    fig.savefig(os.path.join(output_dir, f'c_maps_{os.path.normpath(output_dir).split(os.path.sep)[-1]}.png'))
+    # fig.savefig(os.path.join(output_dir, f'c_maps_{"_".join(species)}.png'))

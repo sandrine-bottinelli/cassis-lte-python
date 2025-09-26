@@ -2849,7 +2849,7 @@ class ModelCube(object):
         for param in params:
             # Split the parameter name into a list of substrings
             if param.startswith('c'):  # we have a component
-                comp, param_type = param.split('_')
+                comp, param_type = param.split('_')[:2]
                 if param_type in titles.keys():
                     title = titles[param_type]
                 else:
@@ -2870,6 +2870,10 @@ class ModelCube(object):
                         hdu.header['TITLE'] = (title)
                     hdul = fits.HDUList([hdu])
                     hdul.writeto(os.path.join(self.output_dir, param + ext), overwrite=True)
+                    if ext == '.fits':
+                        fig, ax = utils.make_map_image(hdu=hdu)
+                        fig.savefig(os.path.join(self.output_dir, param + '.png'))
+
                 except (KeyError, TypeError):
                     pass  # do nothing
 
