@@ -2804,7 +2804,7 @@ class ModelCube(object):
                     # print("mask_comp shape:", mask_comp.shape)
                     # print("masks_ntot shape:", masks_ntot.shape)
 
-    def make_maps(self, keep_all_pix=True):
+    def make_maps(self, keep_all_pix=True, png_all=False):
         """
         Creates the fits images for the varying parameters.
 
@@ -2873,12 +2873,14 @@ class ModelCube(object):
                         hdu.header['TITLE'] = (title)
                     hdul = fits.HDUList([hdu])
                     hdul.writeto(os.path.join(self.output_dir, param + ext), overwrite=True)
-                    if ext == '.fits':
+                    if ext == '.fits' and png_all:
                         fig, ax = utils.make_map_image(hdu=hdu)
                         fig.savefig(os.path.join(self.output_dir, param + '.png'))
 
                 except (KeyError, TypeError):
                     pass  # do nothing
+
+        utils.save_all_map_images_one_file(self.output_dir)
 
     # def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
     #     if size is None:
@@ -3011,9 +3013,9 @@ class ModelCube(object):
         ModelCube.LOGGER.debug(f'cubeshape = {self.cubeshape}')
         ModelCube.LOGGER.debug(f'yunit = {self.yunit}')
         ModelCube.LOGGER.debug(f'fmhz_ranges = {self.fmhz_ranges}')
-        ModelCube.LOGGER.debug(f'pix_list = {self.pix_list}')  # To check the list of pixels
-        if self.masked_pix_list is not None and not self.masked_pix_list.all():
-            ModelCube.LOGGER.debug(f'mask = {self.masked_pix_list}')
+        # ModelCube.LOGGER.debug(f'pix_list = {self.pix_list}')  # To check the list of pixels
+        # if self.masked_pix_list is not None and not self.masked_pix_list.all():
+        #     ModelCube.LOGGER.debug(f'mask = {self.masked_pix_list}')
         ModelCube.LOGGER.debug(f'\ntags = {self.tags}')
         ModelCube.LOGGER.debug(f'velocity ranges = {self._model_configuration_user['v_range']}')
         ModelCube.LOGGER.debug(f'componentConfig = {self._model_configuration_user['components']['config']}')
