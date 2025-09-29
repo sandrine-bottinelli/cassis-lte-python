@@ -2230,14 +2230,17 @@ class ModelCube(object):
         if self._pix_info is not None:
             ModelCube.LOGGER.warning("'pix_info' is deprecated ; please use 'loop_info' instead, for example "
                                      "'loop_info': {'start': (xref, yref), 'extent': 'all'} for the entire map.")
-            if len(self._pix_info) == 3:
-                (xref, yref, delta) = self._pix_info
-                self._loop_info = {'start': (xref, yref), 'delta': (delta, delta)}
-            elif len(self._pix_info) == 4:
-                (xref, yref, delta, step) = self._pix_info
-                self._loop_info = {'start': (xref, yref), 'delta': (delta, delta), 'step': step}
+            if isinstance(self._pix_info, dict):
+                self._loop_info = self._pix_info
             else:
-                raise IndexError("'pix_info' can only be of length 3 or 4")
+                if len(self._pix_info) == 3:
+                    (xref, yref, delta) = self._pix_info
+                    self._loop_info = {'start': (xref, yref), 'delta': (delta, delta)}
+                elif len(self._pix_info) == 4:
+                    (xref, yref, delta, step) = self._pix_info
+                    self._loop_info = {'start': (xref, yref), 'delta': (delta, delta), 'step': step}
+                else:
+                    raise IndexError("'pix_info' can only be of length 3 or 4")
 
         if self._loop_info is not None:
             try:
