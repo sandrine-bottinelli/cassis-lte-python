@@ -3016,7 +3016,7 @@ class ModelCube(object):
         # ModelCube.LOGGER.debug(f'pix_list = {self.pix_list}')  # To check the list of pixels
         # if self.masked_pix_list is not None and not self.masked_pix_list.all():
         #     ModelCube.LOGGER.debug(f'mask = {self.masked_pix_list}')
-        ModelCube.LOGGER.debug(f'\ntags = {self.tags}')
+        ModelCube.LOGGER.debug(f'tags = {self.tags}')
         ModelCube.LOGGER.debug(f'velocity ranges = {self._model_configuration_user['v_range']}')
         ModelCube.LOGGER.debug(f'componentConfig = {self._model_configuration_user['components']['config']}')
         try:
