@@ -20,6 +20,7 @@ import warnings
 import json
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
+plt.ioff()
 
 
 TELESCOPE_DIR = SETTINGS.TELESCOPE_DIR
@@ -38,11 +39,13 @@ plt.rcParams["font.family"] = FONT_DEF
 
 labels = {
     'Ntot': "$N_{tot}$",
+    'Tex': "$T_{ex}$",
     'Vlsr': "$V_{LSR}$",
     'FWHM': "FWHM"
 }
 units = {
     'Ntot': "[cm$^{-2}$]",
+    'Tex': "[K]",
     'Vlsr': "[km s$^{-1}$]",
     'FWHM': "[km s$^{-1}$]"
 }
@@ -1248,6 +1251,7 @@ def save_all_map_images(map_dir, ntot_scaling='sqrt'):
 
 def save_all_map_images_one_file(map_dir, ntot_scaling='sqrt'):
     plt.close('all')
+    map_dir = os.path.abspath(map_dir)
     map_files = [f for f in os.listdir(map_dir) if f.endswith('fits') and 'err' not in f]
     output_dir = map_dir
 
@@ -1256,7 +1260,13 @@ def save_all_map_images_one_file(map_dir, ntot_scaling='sqrt'):
     components.sort()
     map_files_by_cpt = {}
     for cpt in components:
-        map_files_by_cpt[cpt] = [map_file for map_file in map_files if cpt in map_file]
+        file_list = []
+        par_list = ['ntot', 'tex', 'fwhm', 'size','vlsr']
+        for par in par_list:
+            sub_list = [map_file for map_file in map_files if cpt in map_file and par in map_file]
+            sub_list.sort()
+            file_list.extend(sub_list)
+        map_files_by_cpt[cpt] = file_list
 
     nrows = len(components)
     ncols = max([len(map_files_by_cpt[cpt]) for cpt in components])
@@ -1283,7 +1293,6 @@ def save_all_map_images_one_file(map_dir, ntot_scaling='sqrt'):
                 ax.set_axis_off()
                 continue
 
-            # cpt_map_files.sort()
             map_file = cpt_map_files[j]
 
             fig, ax = make_map_image(fits_file=os.path.join(map_dir, map_file), ntot_scaling=ntot_scaling,

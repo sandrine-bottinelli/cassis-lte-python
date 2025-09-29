@@ -2804,7 +2804,7 @@ class ModelCube(object):
                     # print("mask_comp shape:", mask_comp.shape)
                     # print("masks_ntot shape:", masks_ntot.shape)
 
-    def make_maps(self, keep_all_pix=True, png_all=False):
+    def make_maps(self, keep_all_pix=True, png_all=False, ntot_scaling='sqrt'):
         """
         Creates the fits images for the varying parameters.
 
@@ -2880,7 +2880,7 @@ class ModelCube(object):
                 except (KeyError, TypeError):
                     pass  # do nothing
 
-        utils.save_all_map_images_one_file(self.output_dir)
+        utils.save_all_map_images_one_file(self.output_dir, ntot_scaling=ntot_scaling)
 
     # def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
     #     if size is None:
