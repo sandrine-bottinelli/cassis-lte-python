@@ -967,6 +967,8 @@ class ModelConfiguration:
         if 'moving_bounds' in cpt_df.columns:
             with pd.option_context("future.no_silent_downcasting", True):
                 cpt_df['moving_bounds'] = cpt_df['moving_bounds'].fillna(False).infer_objects(copy=False)
+        else:
+            cpt_df['moving_bounds'] = [False] * len(cpt_df)
         for i, row in cpt_df.iterrows():
             cpt_name, par_name = row['name'].rsplit('_', maxsplit=1)
             # check validity of labels
@@ -1071,6 +1073,7 @@ class ModelConfiguration:
         sp_names = []
         pars = ['ntot', 'fwhm']
         for block in blocks_from_file:
+            block = [line.strip() for line in block]
             sp_name = block[1].split()[0]
             if sp_name not in sp_names:
                 sp_names.append(sp_name)
@@ -1086,9 +1089,14 @@ class ModelConfiguration:
             if any(sp_df.index.duplicated()):
                 raise ValueError(f"Duplicate parameter in {self.comp_config_file} for tag: {sp_name}")
             else:
+                if 'moving_bounds' in sp_df.columns:
+                    with pd.option_context("future.no_silent_downcasting", True):
+                        sp_df['moving_bounds'] = sp_df['moving_bounds'].fillna(False).infer_objects(copy=False)
+                else:
+                    sp_df['moving_bounds'] = [False] * len(sp_df)
                 sp_dfs.append(sp_df)
         df = pd.concat(sp_dfs, axis=1, keys=sp_names)
-        # print(df)
+
         for cname, sp_list in sp_list_by_cpt.items():
             for tag in sp_list:
                 if tag not in sp_names:
