@@ -2558,6 +2558,7 @@ class ModelCube(object):
 
         # Start the snake loop
         config = None
+        model = None
 
         if not isinstance(pix_list[0], list):
             pix_list = [pix_list]
@@ -2820,7 +2821,8 @@ class ModelCube(object):
                     ModelCube.LOGGER.debug(f'spec_name = {spec_name}')
                     ModelCube.LOGGER.debug(f'tc = {tc}')
                     ModelCube.LOGGER.debug(f"Fitting pixel : {pix}")
-                    ModelCube.LOGGER.debug(f"current list : model.tag_list = {model.tag_list}")  # current tag list
+                    if model is not None:
+                        ModelCube.LOGGER.debug(f"current tag list : {model.tag_list}")  # current tag list
                     ModelCube.LOGGER.debug(f'tags_new = {tags_new}')  # new tag list with S/N ≥ signal2noise
                     # print("mask_comp shape:", mask_comp.shape)
                     # print("masks_ntot shape:", masks_ntot.shape)
@@ -2840,10 +2842,11 @@ class ModelCube(object):
                     pix_list.extend(plist)
 
             for (i, j) in pix_list:
-                for parname, param in self.parameters_array[j, i].items():
-                    if param.use_in_fit and param.at_boundary():
-                            self.array_dict['{}'.format(param.name)][j, i] = np.nan
-                            self.err_dict['{}'.format(param.name)][j, i] = np.nan
+                if self.parameters_array[j, i] is not None:
+                    for parname, param in self.parameters_array[j, i].items():
+                        if param.use_in_fit and param.at_boundary():
+                                self.array_dict['{}'.format(param.name)][j, i] = np.nan
+                                self.err_dict['{}'.format(param.name)][j, i] = np.nan
 
         params = [parname for parname, par in self.user_params.items() if par.vary]
         ModelCube.LOGGER.info(f'Making maps for params : {", ".join(params)}')
