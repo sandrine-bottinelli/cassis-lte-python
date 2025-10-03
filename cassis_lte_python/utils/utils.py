@@ -49,6 +49,12 @@ units = {
     'Vlsr': "[km s$^{-1}$]",
     'FWHM': "[km s$^{-1}$]"
 }
+color_maps = {
+    'Ntot': 'inferno',
+    'Tex': 'inferno',
+    'Vlsr': 'RdYlBu_r', #'coolwarm',
+    'FWHM': 'viridis'
+}
 
 fig_size_single = (5, 4.5)
 
@@ -1146,90 +1152,135 @@ def pixels_snake_loop(xref, yref, xmax, ymax, xmin=0, ymin=0, step=1):
     return pix_list
 
 
-def make_map_image(fits_file=None, hdu=None, ntot_scaling='sqrt', fig_ax=None):
+def make_map_image(hdu, ntot_scaling='sqrt'):
     """
-    Make an image from the given fits file or from the given hdu.
+    Make an image from the given hdu(s).
 
-    :param fits_file:
-    :param hdu:
+    :param hdu: a single hdu or a list of hdus or a dictionary of hdus
     :param ntot_scaling:
     :param fig_ax: a (fig, ax) tuple containing matplotlib figure axes
     :return:
     """
-    if fits_file is None and hdu is None:
-        raise ValueError("Must specify fits_file or hdu.")
 
-    if fits_file is not None:
-        hdu_list = fits.open(fits_file)
-        hdu = hdu_list[0]
+    if not isinstance(hdu, (dict, list)):
+        hdu = [hdu]
 
-    wcs = WCS(hdu.header)
-
-    if fig_ax is None:
-        fig, ax = plt.subplots(
-            figsize=fig_size_single,
-            subplot_kw=dict(projection=wcs)
-        )
+    if isinstance(hdu, list):
+        if isinstance(hdu[0], list):  # we have a list of lists -> multi rows
+            hdu_dic = {i: hd for i, hd in enumerate(hdu)}
+        else:  # simple list -> one row
+            hdu_dic = {0: hdu}
+    elif isinstance(hdu, dict):
+        hdu_dic = hdu
     else:
-        fig, ax = fig_ax
+        raise TypeError('hdu should be a single hdu, a dictionary or a list of hdus')
 
-    param = hdu.header['TITLE']
+    nrows = len(hdu_dic)
+    ncols = max([len(row) for row in hdu_dic.values()])
 
-    try:
-        comp, param = param.split(" - ")
-    except ValueError:
-        if fits_file is not None:
-            comp = os.path.split(fits_file)[-1].split("_")[0].upper()
-        else:
-            comp = ""
-            LOGGER.warning("No component info found for {}".format(param))
-    try:
-        # Ntot
-        param, sp = param.split(maxsplit=1)
-        sp = list(sp)
-        char_groups = [sp[0]]
-        is_alpha = sp[0].isalpha()
-        for c, char in enumerate(sp[1:]):
-            types = [char.isalpha(), is_alpha]
-            if all(types) or not any(types):
-                char_groups[-1] += char
-            else:
-                char_groups.append(char)
-            is_alpha = char.isalpha()
-        sp_latex = ""
-        for elt in char_groups:
-            if elt.isalpha():
-                sp_latex += elt
-            else:
-                if int(elt) <= 6:
-                    sp_latex += f'$_{elt}$'
+    fig_size = (fig_size_single[0] * ncols, fig_size_single[1] * nrows)
+
+    wcs = WCS(next(iter(hdu_dic.values()))[0].header)
+    fig, axes = plt.subplots(
+        figsize=fig_size,
+        nrows=nrows, ncols=ncols,
+        subplot_kw=dict(projection=wcs)
+    )
+
+    i = 0
+    # NB: loop over dictionary to make sure we deal with the axes correctly, depending on its shape
+    for row, hdu_list in hdu_dic.items():
+        for j in range(ncols):
+            if ncols == 1:
+                if nrows == 1:
+                    ax = axes
                 else:
-                    sp_latex += f'$^{{{elt}}}$'
-        title = "$N_{tot}$" + f"({sp_latex})" + " [cm$^{-2}$]"
-        scaling = colors.PowerNorm(gamma=0.5)
-        if ntot_scaling == 'sqrt':
-            pass
-        elif ntot_scaling == 'log':
-            scaling = colors.LogNorm()
-        else:
-            LOGGER.warning("Unknown ntot_scaling option, assuming sqrt.")
-    except ValueError:
-        # All others
-        param = param
-        title = labels[param] + " " + units[param]
-        scaling = colors.Normalize()
+                    ax = axes[i]
+            elif nrows == 1:
+                ax = axes[j]
+            else:
+                ax = axes[i, j]
+            if j >= len(hdu_list):
+                ax.set_axis_off()
+                continue
 
-    title = f"{comp} - " + title
+            map_hdu = hdu_list[j]
+            param = map_hdu.header['TITLE']
 
-    # ax = plt.subplot(nrows, ncols, i+j+1, projection=wcs)
-    pos = ax.imshow(hdu.data, origin='lower', cmap='inferno', norm=scaling)
-    ax.set_xlabel("Right Ascension")
-    ax.set_ylabel("Declination")
-    ax.set_title(title)
-    fig.colorbar(pos, ax=ax, fraction=0.049, pad=0.0)
-    plt.tight_layout()
+            try:
+                comp, param = param.split(" - ")
+            except ValueError:
+                comp = ""
+                LOGGER.warning("No component info found for {}".format(param))
 
-    return fig, ax
+            try:
+                # Ntot
+                param, sp = param.split(maxsplit=1)
+                sp = list(sp)
+                char_groups = [sp[0]]
+                is_alpha = sp[0].isalpha()
+                for c, char in enumerate(sp[1:]):
+                    types = [char.isalpha(), is_alpha]
+                    if all(types) or not any(types):
+                        char_groups[-1] += char
+                    else:
+                        char_groups.append(char)
+                    is_alpha = char.isalpha()
+                sp_latex = ""
+                for elt in char_groups:
+                    if elt.isalpha():
+                        sp_latex += elt
+                    else:
+                        if int(elt) <= 6:
+                            sp_latex += f'$_{elt}$'
+                        else:
+                            sp_latex += f'$^{{{elt}}}$'
+                title = "$N_{tot}$" + f"({sp_latex})" + " [cm$^{-2}$]"
+                scaling = colors.PowerNorm(gamma=0.5)
+                if ntot_scaling == 'sqrt':
+                    pass
+                elif ntot_scaling == 'log':
+                    scaling = colors.LogNorm()
+                else:
+                    LOGGER.warning("Unknown ntot_scaling option, assuming sqrt.")
+            except ValueError:
+                # All others
+                title = labels[param] + " " + units[param]
+                scaling = colors.Normalize()
+
+            title = f"{comp} - " + title
+
+            pcm = ax.imshow(map_hdu.data, origin='lower', cmap=color_maps[param], norm=scaling)
+            cax = ax.inset_axes([1, 0, 0.05, 1])
+            fig.colorbar(pcm, cax=cax)
+
+            ax.set_title(title)
+
+            if i == nrows - 1:
+                ax.set_xlabel("Right Ascension")
+            else:
+                ax.set_xlabel("")
+                ax.tick_params(axis='x', labelbottom=False)
+
+            if j == 0:
+                ax.set_ylabel("Declination")
+                # ax.text(-0.3, 0.5, f'Component {cpt[-1]}', transform=ax.transAxes,
+                #         horizontalalignment='center',
+                #         verticalalignment='center',
+                #         rotation=90, fontsize=1.5*fontsize
+                #         )
+            else:
+                ax.set_ylabel("")
+                ax.tick_params(axis='y', labelleft=False)
+
+        i += 1
+
+    bb = [0, 0, 1.0, 1.0]
+    if ncols == 1:
+        bb = [0, 0, 0.95, 1.0]
+    plt.tight_layout(rect=bb)
+
+    return fig, axes
 
 
 def save_all_map_images(map_dir, ntot_scaling='sqrt'):
@@ -1238,7 +1289,6 @@ def save_all_map_images(map_dir, ntot_scaling='sqrt'):
 
     :param map_dir: directory where the fits files are located
     :param ntot_scaling: type of scaling for the column density (sqrt or log)
-    :param one_file: if True, save all figures in one png file, one line per component
     :return:
     """
     plt.close('all')
@@ -1258,71 +1308,17 @@ def save_all_map_images_one_file(map_dir, ntot_scaling='sqrt'):
     components = [os.path.split(map_file)[-1].split('_')[0] for map_file in map_files]
     components = list(set(components))
     components.sort()
-    map_files_by_cpt = {}
+    map_hdus_by_cpt = {}
     for cpt in components:
-        file_list = []
+        hdu_list = []
         par_list = ['ntot', 'tex', 'fwhm', 'size','vlsr']
         for par in par_list:
             sub_list = [map_file for map_file in map_files if cpt in map_file and par in map_file]
             sub_list.sort()
-            file_list.extend(sub_list)
-        map_files_by_cpt[cpt] = file_list
+            hdu_list.extend([fits.open(os.path.join(map_dir, fits_file))[0] for fits_file in sub_list])
+        map_hdus_by_cpt[cpt] = hdu_list
 
-    nrows = len(components)
-    ncols = max([len(map_files_by_cpt[cpt]) for cpt in components])
-
-    fig_size = (fig_size_single[0]*ncols, fig_size_single[1]*nrows)
-    fig, axes = plt.subplots(
-        figsize = fig_size,
-        nrows=nrows, ncols=ncols
-    )
-
-    i = 0
-    for cpt, cpt_map_files in map_files_by_cpt.items():
-        for j in range(ncols):
-            if ncols == 1:
-                if nrows == 1:
-                    ax = axes
-                else:
-                    ax = axes[i]
-            elif nrows == 1:
-                ax = axes[j]
-            else:
-                ax = axes[i, j]
-            if j >= len(cpt_map_files):
-                ax.set_axis_off()
-                continue
-
-            map_file = cpt_map_files[j]
-
-            fig, ax = make_map_image(fits_file=os.path.join(map_dir, map_file), ntot_scaling=ntot_scaling,
-                                     fig_ax=(fig, ax))
-
-            if i == nrows - 1:
-                ax.set_xlabel("Right Ascension")
-            else:
-                ax.set_xlabel("")
-            if j == 0:
-                ax.set_ylabel("Declination")
-                ax.text(-0.3, 0.5, f'Component {cpt[-1]}', transform=ax.transAxes,
-                        horizontalalignment='center',
-                        verticalalignment='center',
-                        rotation=90, fontsize=1.5*fontsize
-                        )
-            else:
-                ax.set_ylabel("")
-            # ax.set_title(title)
-            # fig.colorbar(pos, ax=ax, fraction=0.049, pad=0.0)
-
-        i += 1
-
-    # plt.tight_layout()
-    # ncols = 1
-    nrows = 1
-    plt.subplots_adjust(left=0.25-(ncols - 1)*0.075, right=0.925+(ncols - 1)*0.01, wspace=0.075+(ncols-1)*0.1,
-                        bottom=0.025+(nrows-1)*0.01, top=0.975+(nrows-1)*0.01, hspace=0.075-(nrows-1)*0.02)
-
-    # plt.show()
+    fig, axes = make_map_image(map_hdus_by_cpt, ntot_scaling=ntot_scaling)
 
     fig.savefig(os.path.join(output_dir, f'c_maps_{os.path.normpath(output_dir).split(os.path.sep)[-1]}.png'))
     # fig.savefig(os.path.join(output_dir, f'c_maps_{"_".join(species)}.png'))
