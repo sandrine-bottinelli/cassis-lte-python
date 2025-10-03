@@ -1011,7 +1011,11 @@ def read_crtf(file, use_region=None):
     :return: the region
     """
     try:
-        regs = Regions.read(file, format='crtf')
+        with open(file) as f:
+            regions_str = "".join(f.readlines())
+            regions_str = regions_str.replace("polyline", "poly")
+        regs = Regions.parse(regions_str, format='crtf')
+        # regs = Regions.read(file, format='crtf')
         if use_region is None:
             use_region = len(regs) - 1
             if len(regs) > 1:
