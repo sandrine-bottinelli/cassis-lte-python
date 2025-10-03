@@ -1659,8 +1659,8 @@ class ModelSpectrum(object):
                     if len(self.model_config.tuning_info) > 1:
                         header.append(f'{cmt} telescopes:\n')
                         for i, row in self.model_config.tuning_info.iterrows():
-                            header.append(f"{cmt}  {row['telescope']}: [{','.join([utils.format_float(freq, fmt='.3f') 
-                                                                                   for freq in row['fmhz_range']])}]\n")
+                            frange = ','.join([utils.format_float(freq, fmt='.3f')for freq in row['fmhz_range']])
+                            header.append(f"{cmt}  {row['telescope']}: [{frange}]\n")
                     else:
                         header.append(f'{cmt} telescope: ' + self.model_config.tuning_info.iloc[0]['telescope'] + '\n')
 
@@ -2249,15 +2249,20 @@ class ModelCube(object):
                 raise KeyError("'loop_info' is missing 'start' key.")
             extent = self._loop_info.get('extent', None)
             delta = self._loop_info.get('delta', None)
+            if delta is not None:
+                ModelCube.LOGGER.warning("'delta' is deprecated ; please use 'extent' instead.")
+                # if extent is None:
+                #     extent = delta
+
             if extent is None and delta is None:
-                raise KeyError("'loop_info' must have the 'extent' or 'delta' key.")
+                raise KeyError("'loop_info' must have the 'extent'.")
             if extent is not None and delta is not None:
-                raise KeyError("'loop_info' can only have the 'extent' OR the 'delta' key, not both.")
+                raise KeyError("'loop_info' can only have the 'extent' key.")
 
             loop_type = self._loop_info.get('type', 'gradient')
             step = self._loop_info.get('step', 1)
 
-            if extent is not None:
+            if isinstance(extent, str):
                 if extent == 'all':
                     delta = (-1, -1)
                 elif extent == 'line':
@@ -2265,26 +2270,38 @@ class ModelCube(object):
                 elif extent == 'single':
                     delta = (0, 0)
                 else:
-                    raise KeyError("'extent' can only be 'all', 'line' or 'single'.")
+                    raise KeyError("if a string, 'extent' can only be 'all', 'line' or 'single'.")
+            else:
+                delta = extent
+
+            if len(delta) == 4:  # we have (dxmin, dxmax, dymin, dymax)
+                (dxmin, dxmax, dymin, dymax) = (abs(d) for d in delta)
+            elif len(delta) == 2:  # we have (dx, dy)
+                dx, dy = (abs(d) for d in delta)
+                dxmin, dxmax, dymin, dymax = dx, dx, dy, dy
+            else:
+                raise ValueError("'extent' should be (dx, dy) or (dxmin, dxmax, dymin, dymax).")
+            deltas = [dxmin, dxmax, dymin, dymax]
 
             # Define the loop extent
             ymax, xmax = self.cubeshape[-2:]
             ymax -= 1
             xmax -= 1
             xmin, ymin = 0, 0
-            dx, dy = delta
-            if dx == 0 and dy == 0:
+            # dx, dy = delta
+            if all([d == 0 for d in deltas]):
                 self.pix_list = [[(xref, yref)]]
-            elif dy == 0:
+            elif dymin == 0 and dymax == 0:
                 self.pix_list = self.pixels_line(xref, yref, xmax, xmin, step)
             else:
-
-                if dx != -1:
-                    xmin = xref - dx
-                    xmax = xref + dx
-                if dy != -1:
-                    ymin = yref - dy
-                    ymax = yref + dy
+                if dxmin != -1:
+                    xmin = xref - dxmin
+                if dxmax != -1:
+                    xmax = xref + dxmax
+                if dymin != -1:
+                    ymin = yref - dymin
+                if dymax != -1:
+                    ymax = yref + dymax
 
                 if loop_type == 'gradient':
                     # data = np.concatenate([cube.hdu.data for cube in self._cubes])
@@ -2292,6 +2309,10 @@ class ModelCube(object):
                     self.pix_list = self.pixels_gradient_loop( xref, yref, xmax, ymax, xmin=xmin, ymin=ymin)
                 elif loop_type == 'snake':
                     self.pix_list = utils.pixels_snake_loop(xref, yref, xmax, ymax, xmin=xmin, ymin=ymin, step=step)
+                elif loop_type == 'basic':
+                    self.pix_list = [(x, y) for y in range(ymin, ymax + 1) for x in range(xmin, xmax + 1)]
+                else:
+                    raise KeyError("'loop_type' should be 'gradient', 'snake' or 'basic'.")
 
         self._model_configuration_user = copy.deepcopy(configuration)
         self._model_configuration = ModelConfiguration(configuration)  # "reference" model
@@ -2540,7 +2561,7 @@ class ModelCube(object):
 
         if not isinstance(pix_list[0], list):
             pix_list = [pix_list]
-        loop_type = 'gradient'
+        loop_type = 'snake'
         if self._loop_info is not None:
             loop_type = self._loop_info.get('type', 'gradient')
 
@@ -2648,7 +2669,7 @@ class ModelCube(object):
                             message = f"Line {pix[1]} - " + message
                         ModelCube.LOGGER.info(message)
 
-                        if self.latest_valid_params is not None:
+                        if self.latest_valid_params is not None and loop_type != 'basic':
                             config.update_parameters(self.latest_valid_params)
                             config.parameters.set_attribute('use_in_fit', True)
 
@@ -2738,7 +2759,7 @@ class ModelCube(object):
                     if self.latest_valid_params is not None:
                         config.update_parameters(self.latest_valid_params)
 
-                    config.make_params()
+                    config.make_params(user_value=loop_type == 'basic')
 
                     # fit with the updated config
                     ModelCube.LOGGER.info(f"Fitting pixel : {pix}")
@@ -3017,10 +3038,10 @@ class ModelCube(object):
         # if self.masked_pix_list is not None and not self.masked_pix_list.all():
         #     ModelCube.LOGGER.debug(f'mask = {self.masked_pix_list}')
         ModelCube.LOGGER.debug(f'tags = {self.tags}')
-        ModelCube.LOGGER.debug(f'velocity ranges = {self._model_configuration_user['v_range']}')
-        ModelCube.LOGGER.debug(f'componentConfig = {self._model_configuration_user['components']['config']}')
+        ModelCube.LOGGER.debug(f"velocity ranges = {self._model_configuration_user['v_range']}")
+        ModelCube.LOGGER.debug(f"componentConfig = {self._model_configuration_user['components']['config']}")
         try:
-            ModelCube.LOGGER.debug(f'otherSpecies = {self._model_configuration_user['plot_kws']['gui+file']['other_species']}')
+            ModelCube.LOGGER.debug(f"otherSpecies = {self._model_configuration_user['plot_kws']['gui+file']['other_species']}")
         except KeyError:
             ModelCube.LOGGER.debug('otherSpecies not found')
         if 'constraints' in self._model_configuration_user:

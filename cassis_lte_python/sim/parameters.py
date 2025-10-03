@@ -111,8 +111,9 @@ class Parameter:
             res.append(f"expr='{self.expr}'")
         return f"<Parameter '{self.name}', {', '.join(res)}>"
 
-    def to_dict(self):
-        return {'value': self.value, 'min': self.min, 'max': self.max, 'expr': self.expr, 'vary': self.vary,
+    def to_dict(self, user_value=False):
+        val = self._user_value if user_value else self.value
+        return {'value': val, 'min': self.min, 'max': self.max, 'expr': self.expr, 'vary': self.vary,
                 'user_data': self.user_data}
 
     def set(self, value=None, min=None, max=None, expr=None, vary=None, stderr=None,

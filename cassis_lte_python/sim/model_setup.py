@@ -1524,13 +1524,13 @@ class ModelConfiguration:
         else:
             self.x_fit, self.y_fit = None, None
 
-    def make_params(self, json_params: str | None = None, normalize=False):
+    def make_params(self, json_params: str | None = None, normalize=False, user_value=False):
         params = lmfitParameters()
 
         for icpt, cpt in enumerate(self.cpt_list):
             for parname, par in cpt.parameters.items():
                 if par.use_in_fit:
-                    params[parname] = create_parameter(parname, par.to_dict())
+                    params[parname] = create_parameter(parname, par.to_dict(user_value=user_value))
 
         # Update parameters if possible : TODO: check
         if json_params is not None:
