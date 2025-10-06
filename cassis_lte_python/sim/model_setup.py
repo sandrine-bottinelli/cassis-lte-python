@@ -52,6 +52,7 @@ class ModelConfiguration:
         log_parent_dir = configuration.get('logs_dir', os.path.abspath(os.curdir))
         settings_infos.check_log_dir(log_parent_dir)
         self.log_path = SETTINGS.LOG_PATH
+        self.log_file = SETTINGS.LOG_FILE
 
         self._data_type = configuration.get('data_type', 'single')
 

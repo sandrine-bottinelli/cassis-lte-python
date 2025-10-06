@@ -2140,7 +2140,7 @@ class ModelCube(object):
         configuration['data_type'] = 'cube'
 
         self.output_dir = configuration.get('output_dir', 'outputs')
-        self.log_file = os.path.join(self.output_dir, 'logfile.txt')
+        self.log_file_loop = os.path.join(self.output_dir, 'logfile_loop.txt')
 
         self._cubes = utils.get_cubes(self._data_file)
         self.cubeshape = self._cubes[0].shape
@@ -2515,11 +2515,11 @@ class ModelCube(object):
             #     'red_chi2': self.model_fit.redchi,
             #     'params': self.model_fit.params
             if not append:
-                with open(self.log_file, "w") as f:
+                with open(self.log_file_loop, "w") as f:
                     cols = ["x_pix", "y_pix", "iterations", "Exec time (s)", "red_chi2", "tags_new"]
                     cols += self.param_names
                     f.write("\t".join(cols) + "\n")
-            with (open(self.log_file, "a") as f):
+            with (open(self.log_file_loop, "a") as f):
                 line = [str(p) for p in pix]
                 line += utils.format_variable(mdl.model_fit.nfev)
                 line += utils.format_variable(mdl._minimization_time)
