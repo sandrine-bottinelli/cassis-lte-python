@@ -415,7 +415,9 @@ class ModelSpectrum(object):
 
         if self.params is None:
             self.make_params(json_params=self.model_config.jparams)
+        if self.model is None:
             self.generate_lte_model()
+            self.compute_model_intensities()
 
         if self.plot_gui or self.plot_file:
             self.do_plots()
@@ -673,7 +675,7 @@ class ModelSpectrum(object):
                         else:
                             self.setup_plot_la(win_list, **self.file_kws)
                     # Compute errors if necessary
-                    if self.model_fit.covar is not None:
+                    if self.model_fit is not None and self.model_fit.covar is not None:
                         for win in self.model_config.win_list_file:
                             if win.y_mod_err is None and self.file_kws['model_err']:
                                 win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
@@ -935,10 +937,16 @@ class ModelSpectrum(object):
             params = self.params
 
         if cpt is None:
-            cpt = self.model_config.cpt_list
+            res = self.model.func(x_values, log=False, cpt=self.model_config.cpt_list,
+                                  line_center_only=line_center_only, return_tau=False,
+                                  **params)
+            self.model_config.y_mod = res
+        else:
+            res = self.model.func(x_values, log=False, cpt=cpt,
+                                  line_center_only=line_center_only, return_tau=False,
+                                  **params)
 
-        return self.model.func(x_values, log=False, cpt=cpt, line_center_only=line_center_only, return_tau=False,
-                               **params)
+        return res
         # if cpt is not None:
         #     c_best_pars = {}
         #     for pname, par in params.items():

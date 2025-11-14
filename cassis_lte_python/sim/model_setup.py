@@ -71,6 +71,8 @@ class ModelConfiguration:
                     species_dict[sh] = [t.strip() for t in tag.split('#')[0].split(',')]
             self.species_dict = species_dict
 
+        self.thresholds = configuration.get('thresholds', None)
+
         self.fwhm_max = 0.
         self.tag_list = configuration.get('inspect', [])
         self.cpt_list = []
@@ -213,8 +215,8 @@ class ModelConfiguration:
 
         self.f_err_mhz_max = configuration.get('f_err_mhz_max', None)
 
-        if 'thresholds' in configuration and configuration['thresholds'] is not None:
-            self.thresholds = get_species_thresholds(configuration['thresholds'],
+        if self.thresholds is not None:
+            self.thresholds = get_species_thresholds(self.thresholds,
                                                      select_species=self.tag_list,
                                                      return_list_sp=False)
         elif self.species_infos is not None:
@@ -1189,7 +1191,7 @@ class ModelConfiguration:
             c2_ntot	1e-3	1.0e14	1e3	True
             c3_ntot	1e-3	1.0e14	1e3	True
         """
-        if self.comp_config_file is None and self.species_infos is None:
+        if self.comp_config_file is None and self.species_infos is None and self.thresholds is None:
             raise ValueError("Missing components configuration file.")
 
         config_key = [key for key in cpt_info.keys() if 'config' in key]  # look for key indicating a config file
@@ -1197,76 +1199,77 @@ class ModelConfiguration:
             cpt_info.pop(config_key[0])  # remove the config item
         ntot_min_fact = None
         ntot_max_fact = None
-        try:
-            with open(self.comp_config_file) as f:
-                all_lines = f.readlines()
-                line_sp_infos = 0
-                sp_table = True  # assume 2nd format with species infos (thresholds, column density) as table
-                for i, line in enumerate(all_lines):
-                    if 'SPECIES INFOS' in line:  # 3rd format
-                        sp_table = False
-                    if 'SPECIES INFOS' in line or line.startswith('tag'):
-                        # fmt 2 or 3 : identify where the species information starts
-                        line_sp_infos = i
-                        break
-
-                if line_sp_infos == 0:  # only component info, no thresholds per species
-                    lines = all_lines
-                else:  # both component and species infos -> separate them
-                    lines = [line.rstrip() for line in all_lines[:line_sp_infos]]  # comp info, dealt with later
-                    # here, deal with species infos
-                    lines_sp = all_lines[line_sp_infos:]
-                    for _ in range(len(lines_sp)):
-                        if lines_sp[0].startswith('#'):
-                            lines_sp.pop(0)  # remove the comment lines at the beginning of the block
-                        else:
+        if self.comp_config_file is not None:
+            if os.path.isfile(self.comp_config_file):
+                with open(self.comp_config_file) as f:
+                    all_lines = f.readlines()
+                    line_sp_infos = 0
+                    sp_table = True  # assume 2nd format with species infos (thresholds, column density) as table
+                    for i, line in enumerate(all_lines):
+                        if 'SPECIES INFOS' in line:  # 3rd format
+                            sp_table = False
+                        if 'SPECIES INFOS' in line or line.startswith('tag'):
+                            # fmt 2 or 3 : identify where the species information starts
+                            line_sp_infos = i
                             break
 
-                    if sp_table:
-                        self.species_infos = utils.read_species_info(io.StringIO("".join(lines_sp)))
-                    else:
-                        # species infos by block : first need to separate each block
+                    if line_sp_infos == 0:  # only component info, no thresholds per species
+                        lines = all_lines
+                    else:  # both component and species infos -> separate them
+                        lines = [line.rstrip() for line in all_lines[:line_sp_infos]]  # comp info, dealt with later
+                        # here, deal with species infos
+                        lines_sp = all_lines[line_sp_infos:]
+                        for _ in range(len(lines_sp)):
+                            if lines_sp[0].startswith('#'):
+                                lines_sp.pop(0)  # remove the comment lines at the beginning of the block
+                            else:
+                                break
 
-                        # First remove all comment lines
-                        # (otherwise there is an issue if the last line is a comment line)
-                        lines_sp = [line for line in lines_sp if not line.startswith('#')]
-                        # remove all blank lines
-                        lines_sp = [line for line in lines_sp if line.strip() != '']
+                        if sp_table:
+                            self.species_infos = utils.read_species_info(io.StringIO("".join(lines_sp)))
+                        else:
+                            # species infos by block : first need to separate each block
 
-                        names_thresholds = lines_sp[0]
-                        # remove all "tag" lines
-                        lines_sp = [line for line in lines_sp if not line.startswith('tag')]
-                        block_indices = [i for i, line in enumerate(lines_sp) if line.split()[0].isdigit()]
-                        block_indices.append(len(lines_sp))
-                        infos_by_sp = [[names_thresholds] + lines_sp[block_indices[i]:block_indices[i + 1]]
-                                       for i in range(len(block_indices) - 1)]
+                            # First remove all comment lines
+                            # (otherwise there is an issue if the last line is a comment line)
+                            lines_sp = [line for line in lines_sp if not line.startswith('#')]
+                            # remove all blank lines
+                            lines_sp = [line for line in lines_sp if line.strip() != '']
 
-                        self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
+                            names_thresholds = lines_sp[0]
+                            # remove all "tag" lines
+                            lines_sp = [line for line in lines_sp if not line.startswith('tag')]
+                            block_indices = [i for i, line in enumerate(lines_sp) if line.split()[0].isdigit()]
+                            block_indices.append(len(lines_sp))
+                            infos_by_sp = [[names_thresholds] + lines_sp[block_indices[i]:block_indices[i + 1]]
+                                           for i in range(len(block_indices) - 1)]
 
-                        thresholds = [infos_by_sp[0][0]]  # column names
-                        for infos_sp in infos_by_sp:
-                            thresholds.append(infos_sp[1])  # for each species block, thresholds are at index 1
-                            # sp = infos_sp[1].split()[0]
-                            # sp_df =
-                        self.species_infos = utils.read_species_info(io.StringIO("".join(thresholds)))
+                            self.read_sp_block(infos_by_sp, cpt_dict=cpt_info)  # add column density info to cpt_info
 
-                cpt_info = self.read_comp_infos(lines, cpt_dict=cpt_info)
-                cpt_info = self.read_comp_params(lines, cpt_dict=cpt_info)
+                            thresholds = [infos_by_sp[0][0]]  # column names
+                            for infos_sp in infos_by_sp:
+                                thresholds.append(infos_sp[1])  # for each species block, thresholds are at index 1
+                                # sp = infos_sp[1].split()[0]
+                                # sp_df =
+                            self.species_infos = utils.read_species_info(io.StringIO("".join(thresholds)))
 
-            # Default ntot factors
-            ntot_factors = [line for line in lines if "ntot_m" in line]
-            for elt in ntot_factors:
-                if "min" in elt:
-                    ntot_min_fact = float(elt.split("=")[-1])
-                if "max" in elt:
-                    ntot_max_fact = float(elt.split("=")[-1])
+                    cpt_info = self.read_comp_infos(lines, cpt_dict=cpt_info)
+                    cpt_info = self.read_comp_params(lines, cpt_dict=cpt_info)
 
-            if sp_table:
-                cpt_info = self.read_sp_table(cpt_dict=cpt_info, **{'ntot_min_fact': ntot_min_fact,
-                                                                    'ntot_max_fact': ntot_max_fact})
+                # Default ntot factors
+                ntot_factors = [line for line in lines if "ntot_m" in line]
+                for elt in ntot_factors:
+                    if "min" in elt:
+                        ntot_min_fact = float(elt.split("=")[-1])
+                    if "max" in elt:
+                        ntot_max_fact = float(elt.split("=")[-1])
 
-        except FileNotFoundError:
-            raise FileNotFoundError(f"{self.comp_config_file} was not found.")
+                if sp_table:
+                    cpt_info = self.read_sp_table(cpt_dict=cpt_info, **{'ntot_min_fact': ntot_min_fact,
+                                                                        'ntot_max_fact': ntot_max_fact})
+
+            else:
+                raise FileNotFoundError(f"{self.comp_config_file} was not found.")
 
         for cname in cpt_info.keys():
             if 'fwhm' not in cpt_info[cname]:
@@ -1298,7 +1301,7 @@ class ModelConfiguration:
                             fwhm=cpt_dic.get('fwhm'))
             self.cpt_list.append(cpt)
 
-            if cpt_dic.get('fwhm') is not None:
+            if cpt_dic.get('fwhm') is not None and isinstance(cpt_dic['fwhm'], dict):
                 if cpt_dic.get('fwhm')['max'] is not None and cpt_dic.get('fwhm')['max'] != np.inf:
                     self.fwhm_max = max(self.fwhm_max, cpt_dic.get('fwhm')['max'])
                 else:
@@ -1337,7 +1340,7 @@ class ModelConfiguration:
                     self.win_list.append(Window(name=f'{rmin}-{rmax} MHz',
                                                 x_mod=self.x_mod[(self.x_mod >= min(r)) & (self.x_mod <= max(r))]))
             else:
-                self.win_list = [Window(name='Full spectrum')]
+                self.win_list = [Window(name='Full spectrum', x_mod=self.x_mod)]
             return
 
         self.get_rms_cal_info()
