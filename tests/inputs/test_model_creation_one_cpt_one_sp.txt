@@ -1,0 +1,25 @@
+{
+  "telescope": "iram",
+  "telescope_range": [100000, 150000],
+  "noise": 0.0,
+  "components": {
+    "name": "c1",
+    "vlsr": 0.0,
+    "size": 20.0,
+    "tex": 30.0,
+    "fwhm": 2.0,
+    "is_interacting": false,
+    "species": {
+      "tag": 41505,
+      "ntot": 1e14
+    }
+  },
+  "thresholds": {
+    "41505": {
+      "eup_max": 150
+    }
+  },
+  "freq_range": [147173.3, 147176.3],
+  "freq_step": 0.1,
+  "tc": 0.0
+}
