@@ -2269,7 +2269,7 @@ class ModelCube(object):
             if extent is not None and delta is not None:
                 raise KeyError("'loop_info' can only have the 'extent' key.")
 
-            loop_type = self._loop_info.get('type', 'gradient')
+            loop_type = self._loop_info.get('type', 'snake')
             step = self._loop_info.get('step', 1)
 
             if isinstance(extent, str):
@@ -2287,8 +2287,11 @@ class ModelCube(object):
             if len(delta) == 4:  # we have (dxmin, dxmax, dymin, dymax)
                 (dxmin, dxmax, dymin, dymax) = (abs(d) for d in delta)
             elif len(delta) == 2:  # we have (dx, dy)
-                dx, dy = (abs(d) for d in delta)
-                dxmin, dxmax, dymin, dymax = dx, dx, dy, dy
+                if sum(delta) == -2:  # both dx and dy are -1
+                    dxmin, dxmax, dymin, dymax = -1, -1, -1, -1
+                else:
+                    dx, dy = (abs(d) for d in delta)
+                    dxmin, dxmax, dymin, dymax = dx, dx, dy, dy
             else:
                 raise ValueError("'extent' should be (dx, dy) or (dxmin, dxmax, dymin, dymax).")
             deltas = [dxmin, dxmax, dymin, dymax]
