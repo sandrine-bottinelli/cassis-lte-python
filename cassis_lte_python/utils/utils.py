@@ -995,10 +995,10 @@ def get_cubes(file_list, check_spatial_shape=None):
 
 
 def reduce_wcs_dim(wcs):
-    dim = len(wcs.array_shape)
+    dim = wcs.naxis  # len(wcs.array_shape)
     while dim > 2:
-        wcs = wcs.dropaxis(2)
-        dim = len(wcs.array_shape)
+        wcs = wcs.dropaxis(-1)
+        dim = wcs.naxis  # len(wcs.array_shape)
     return wcs
 
 

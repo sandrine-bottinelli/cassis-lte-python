@@ -23,7 +23,7 @@ import pandas as pd
 import datetime
 import json
 from spectral_cube import SpectralCube
-# from astropy.wcs import WCS
+from astropy.wcs import WCS
 from time import process_time
 from warnings import warn
 from typing_extensions import Literal
@@ -2151,9 +2151,11 @@ class ModelCube(object):
         self.log_file_loop = os.path.join(self.output_dir, 'logfile_loop.txt')
 
         self._cubes = utils.get_cubes(self._data_file)
+        self._hdus = [fits.open(f)[0] for f in self._data_file]
         self.cubeshape = self._cubes[0].shape
-        self.wcs = self._cubes[0].wcs
         self.hdr = self._cubes[0].header
+        # self.wcs = self._cubes[0].wcs
+        self.wcs = WCS(self.hdr)
 
         self.fmhz_ranges = self.read_frequencies()
 
@@ -2460,7 +2462,10 @@ class ModelCube(object):
         pix_list = [(self.pixels_line(xref, yref, xmax, xmin, step))]
 
         # determine the brightest pixel in the next line as ref
-        data = np.concatenate([cube.hdu.data for cube in self._cubes])
+        if len(self._hdus) > 1:
+            data = np.concatenate([hdu.data for hdu in self._hdus])
+        else:
+            data = self._hdus[0].data
         for ly in [*range(yref + 1, ymax + 1), *range(yref - 1, ymin - 1, -1)]:
             line_data = data[:, ly, xmin:xmax + 1]
             try:
