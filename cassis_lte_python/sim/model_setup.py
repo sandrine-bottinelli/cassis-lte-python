@@ -1649,10 +1649,11 @@ class ModelConfiguration:
              'y_max': [max(win.y_file) for win in win_list]}
         max_fluxes_windows = pd.DataFrame(data=d)
 
-        if self.cont_free:
-            tc = [0.] * len(win_list)
-        else:
-            tc = [self.tc(np.mean(win.x_file)) for win in win_list]
+        # if self.cont_free:
+        #     tc = [0.] * len(win_list)
+        # else:
+        #     tc = [self.tc(np.mean(win.x_file)) for win in win_list]
+        tc = [self.tc(np.mean(win.x_file)) for win in win_list]
         max_fluxes_windows['tc'] = tc
 
         tags = self.tr_list_by_tag.keys()

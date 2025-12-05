@@ -14,6 +14,7 @@ from numpy.random import normal
 from lmfit import Model, Parameters
 from lmfit.model import ModelResult
 from scipy import stats, signal
+from scipy.interpolate import interp1d
 from scipy.special import erf
 from scipy.stats import t
 import astropy.io.fits as fits
@@ -149,8 +150,8 @@ def generate_lte_model_func(config: dict):
                 intensity = ff * intensity_cpt
 
         intensity = intensity + intensity_before - utils.jnu(fmhz, tcmb)
-        if config.get('cont_free'):
-            intensity -= tc
+        # if config.get('cont_free'):
+        #     intensity -= tc
         intensity += normal(0., noise, len(intensity))  # add gaussian noise
         intensity *= tmb2ta  # convert to Ta
         intensity /= jypb2k  # convert to Jy/beam
@@ -724,10 +725,11 @@ class ModelSpectrum(object):
 
         wt = []
         for win in self.win_list_fit:
-            if self.model_config.cont_free:
-                tc = 0.
-            else:
-                tc = self.get_tc(win.x_fit)
+            # if self.model_config.cont_free:
+            #     tc = 0.
+            # else:
+            #     tc = self.get_tc(win.x_fit)
+            tc = self.get_tc(win.x_fit)
             wt.extend(utils.compute_weight(win.y_fit - tc, win.rms, win.cal))
         wt = np.array(wt)
 
@@ -1173,8 +1175,8 @@ class ModelSpectrum(object):
                     win.y_res = win.y_file - win.y_mod
                 else:
                     win.y_res = win.y_file - self.model.eval(fmhz=win.x_file, **plot_pars)
-                if not self.model_config.cont_free:
-                    win.y_res += self.get_tc(win.x_file)
+                # if not self.model_config.cont_free:
+                win.y_res += self.get_tc(win.x_file)
 
             if self.model_fit is not None:
                 if 'model_err' in kwargs and kwargs['model_err']:
@@ -1964,12 +1966,14 @@ class ModelSpectrum(object):
             lte_radex = {'lteRadexSelected': 'true', **lte_radex, 'overSampling': self.oversampling}
 
         # Define continuum
-        if isinstance(self.model_config.cont_info, (float, int)) or self.model_config.cont_free:
+        # if isinstance(self.model_config.cont_info, (float, int)) or self.model_config.cont_free:
+        if isinstance(self.model_config.cont_info, (float, int)):
             cont_type = 'CONSTANT'
-            if self.model_config.cont_free:
-                cont_size = 0.0
-            else:
-                cont_size = f'{self.model_config.cont_info}'
+            # if self.model_config.cont_free:
+            #     cont_size = 0.0
+            # else:
+            #     cont_size = f'{self.model_config.cont_info}'
+            cont_size = f'{self.model_config.cont_info}'
             cont = 'Continuum 0 [K]'  # default
         else:  # it is a file
             cont_type = 'FILE'
@@ -2672,6 +2676,10 @@ class ModelCube(object):
 
                 # update the observed values and name of pdf file
                 # ---------------------------------------------------------------
+                if self._model_configuration.cont_free:
+                    freq_arr, cont_arr = np.loadtxt(cont_name.rsplit('_', maxsplit=1)[0] + '.txt', unpack=True,
+                                                    comments='//')
+                    data += interp1d(freq_arr, cont_arr, kind='nearest')(config.x_file)
                 config.y_file = data
                 config.cont_info = tc
                 config.output_files = output_files
