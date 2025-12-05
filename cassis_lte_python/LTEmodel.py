@@ -1660,10 +1660,11 @@ class ModelSpectrum(object):
             with open(file_path, 'w') as f:
                 if spectrum_type != 'continuum':
                     header = [f'{cmt} title: ' + os.path.splitext(os.path.basename(file_path))[0] + '\n',
-                              '{} date: {}\n'.format(cmt, datetime.datetime.now().strftime("%c")),
-                              '{} database: {}\n'.format(cmt, SQLITE_FILE),
+                              '{} date: {}\n'.format(cmt, datetime.datetime.now().strftime("%c"))
                               # '#coordinate: world\n'
                              ]
+                    if spectrum_type == 'synthetic':
+                        header.append('{} database: {}\n'.format(cmt, SQLITE_FILE))
                     if len(self.model_config.tuning_info) > 1:
                         header.append(f'{cmt} telescopes:\n')
                         for i, row in self.model_config.tuning_info.iterrows():
@@ -1675,11 +1676,11 @@ class ModelSpectrum(object):
                     header.append(f'{cmt} vlsr [km/s]: {self.model_config.vlsr_file}\n')
                     # header.extend([f'{cmt} xLabel: frequency [MHz]\n',
                     #                f'{cmt} yLabel: intensity [{yunit}]\n'])
-                    columns = ['Frequency [MHz]', 'Intensity (K)']
+                    columns = ['Frequency [MHz]', 'Intensity [K]']
                     if spectrum_type == 'synthetic' and len(self.model_config.cpt_list) > 1:
                         for cpt in self.model_config.cpt_list:
                             columns.append('Intensity {} [K]'.format(cpt.name))
-                    header.append("\t".join(columns) + '\n')
+                    header.append("// " + "\t".join(columns) + '\n')
                     f.writelines(header)
 
                 for x, y in zip(x_values, y_values):
