@@ -77,11 +77,11 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
     if axes_labels:
-        xlabel = 'Velocity' if win.bottom_unit == 'km/s' else 'Frequency'
+        xlabel = 'Velocity' if win.bottom_unit == 'km/s' else 'Rest frequency'
         ax.set_xlabel(f'{xlabel} [{win.bottom_unit}]')
         ax.set_ylabel(f'Intensity [{lte_model.yunit}]')
         if win.bottom_unit != win.top_unit:
-            ax2.set_xlabel(f'Frequency [{win.top_unit}]')
+            ax2.set_xlabel(f'Rest frequency [{win.top_unit}]')
 
     # plot range used (or not) for chi2 calculation
     v_range = win.v_range_fit
@@ -417,7 +417,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
 
     if lte_model.model_config.bandwidth is None or lte_model.model_config.fit_full_range:
         win_per_sp = {'*': lte_model.win_list_file}
-        bottom_label = "Frequency [MHz]"
+        bottom_label = "Rest frequency [MHz]"
     else:
         win_per_sp = {sp: [win for win in lte_model.win_list_file if sp in win.name] for sp in lte_model.tag_list}
         bottom_label = "Velocity [km/s]"
@@ -504,7 +504,7 @@ def file_plot(lte_model, filename, dirname=None, verbose=True,
             nb_pages = int(np.ceil(nplots / (nrows * ncols)))
 
             # Common labels
-            fig.suptitle("Frequency [MHz]")
+            fig.suptitle("Rest Frequency [MHz]")
             fig.supxlabel(bottom_label)
             fig.supylabel(f'Intensity [{lte_model.yunit}]')
 
