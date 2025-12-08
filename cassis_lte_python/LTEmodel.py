@@ -325,7 +325,7 @@ class ModelSpectrum(object):
             with open(path, 'w') as f:
                 f.write(json_dump)
         except Exception as e:
-            message = ["Encountered the following error while writing the json config : ", e, "-> skipping this step."]
+            message = ["Encountered the following error while writing the json config : ", e.args[0], "-> skipping this step."]
             ModelSpectrum.LOGGER.warning("\n    ".join(message))
             # pass
 

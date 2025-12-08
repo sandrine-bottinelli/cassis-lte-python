@@ -32,7 +32,7 @@ NCOLS_DEF = SETTINGS.NCOLS_DEF
 
 class ModelConfiguration:
     LOGGER = CassisLogger.create('ModelConfiguration')
-    def __init__(self, configuration: (dict, str), verbose=True, **kwargs):
+    def __init__(self, configuration: dict | str, verbose=True, **kwargs):
         if isinstance(configuration, str):  # string : load the file
             configuration = self.load_json(configuration, **kwargs)
         self._configuration_dict = configuration
@@ -698,9 +698,10 @@ class ModelConfiguration:
             line_list_all = line_list_all[line_list_all.f_err_mhz <= self.f_err_mhz_max]
             ModelConfiguration.LOGGER.info(f"{len(line_list_all)} transitions found with f_err_mhz <= {self.f_err_mhz_max}.")
 
-        self.line_list_all = select_transitions(line_list_all, xrange=self.franges_mhz)
-        ModelConfiguration.LOGGER.info(f"{len(self.line_list_all)} transitions found (no thresholds) "
-              f"within tuning frequencies : {self.tuning_info['fmhz_range'].tolist()}.")
+        # self.line_list_all = select_transitions(line_list_all, xrange=self.franges_mhz)
+        # ModelConfiguration.LOGGER.info(f"{len(self.line_list_all)} transitions found (no thresholds) "
+        #       f"within tuning frequencies : {self.tuning_info['fmhz_range'].tolist()}.")
+        self.line_list_all = line_list_all
         self.tr_list_by_tag = {tag: list(self.line_list_all[self.line_list_all.tag == tag].transition)
                                for tag in self.tag_list}
 
