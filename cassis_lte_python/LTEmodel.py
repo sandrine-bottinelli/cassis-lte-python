@@ -1093,8 +1093,8 @@ class ModelSpectrum(object):
         # Define some useful quantities
         plot_pars = self.params
         # vlsr = self.cpt_list[0].vlsr if self.vlsr_file == 0. else self.vlsr_file
-        vlsr = self.vlsr_file
-        if len(self.cpt_list) > 1 and self.vlsr_file == 0.:
+        vlsr = self.vlsr_plot
+        if len(self.cpt_list) >= 1 and self.vlsr_plot == 0.:
             vlsr = self.cpt_list[0].vlsr
         try:
             fwhm = max([plot_pars[par].value for par in plot_pars if 'fwhm' in par])
