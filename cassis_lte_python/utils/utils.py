@@ -41,19 +41,22 @@ labels = {
     'Ntot': "$N_{tot}$",
     'Tex': "$T_{ex}$",
     'Vlsr': "$V_{LSR}$",
-    'FWHM': "FWHM"
+    'FWHM': "FWHM",
+    'size': "Source size"
 }
 units = {
     'Ntot': "[cm$^{-2}$]",
     'Tex': "[K]",
     'Vlsr': "[km s$^{-1}$]",
-    'FWHM': "[km s$^{-1}$]"
+    'FWHM': "[km s$^{-1}$]",
+    'size': "[$''$]"
 }
 color_maps = {
     'Ntot': 'inferno',
     'Tex': 'inferno',
     'Vlsr': 'RdYlBu_r', #'coolwarm',
-    'FWHM': 'viridis'
+    'FWHM': 'viridis',
+    'size': 'viridis'
 }
 
 fig_size_single = (5, 4.5)
@@ -1217,8 +1220,7 @@ def make_map_image(hdu, ntot_scaling='sqrt'):
                 comp = ""
                 LOGGER.warning("No component info found for {}".format(param))
 
-            try:
-                # Ntot
+            if 'Ntot' in param:
                 param, sp = param.split(maxsplit=1)
                 sp = list(sp)
                 char_groups = [sp[0]]
@@ -1247,8 +1249,8 @@ def make_map_image(hdu, ntot_scaling='sqrt'):
                     scaling = colors.LogNorm()
                 else:
                     LOGGER.warning("Unknown ntot_scaling option, assuming sqrt.")
-            except ValueError:
-                # All others
+            else:
+                param = param.split()[-1]  # update param so that "Source size" becomes "size"
                 title = labels[param] + " " + units[param]
                 scaling = colors.Normalize()
 
