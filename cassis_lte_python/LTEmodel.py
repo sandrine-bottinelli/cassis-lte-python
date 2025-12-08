@@ -1045,7 +1045,10 @@ class ModelSpectrum(object):
 
             # Create file for saving the lines if model only
             if not self.model_config.minimize:
-                with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+                output_dir = self.output_dir
+                if 'spectra' in output_dir:
+                    output_dir = os.path.split(self.output_dir)[0]
+                with open(os.path.join(output_dir, 'linelist.txt'), "w") as f:
                     title = f"{win.name} : list of modelled lines"
                     # if self.model_config.minimize:
                     #     if self.model_config.f_err_mhz_max is not None:
@@ -1277,7 +1280,10 @@ class ModelSpectrum(object):
                 ModelSpectrum.LOGGER.info(f"    Expected end time for {len(win_list)} windows: {t_win.strftime('%H:%M:%S')}")
 
             # Create file for saving the lines
-            with open(os.path.join(self.output_dir, 'linelist.txt'), "w") as f:
+            output_dir = self.output_dir
+            if 'spectra' in output_dir:
+                output_dir = os.path.split(self.output_dir)[0]
+            with open(os.path.join(output_dir, 'linelist.txt'), "w") as f:
                 f.write("List of plotted lines\n\n")
 
                 f.write(f"{win.name} : model species within thresholds (top lines)\n")
@@ -1450,7 +1456,8 @@ class ModelSpectrum(object):
 
         if plot_type == 'file':
             filename = self.file_kws['filename']
-            dirname = self.file_kws.get('dirname', None)
+            # dirname = self.file_kws.get('dirname', None)
+            dirname = self.model_config.output_dir
             verbose = self.file_kws.get('verbose', True)
             dpi = self.file_kws.get('dpi', DPI_DEF)
             nrows = self.file_kws.get('nrows', NROWS_DEF)
@@ -1464,17 +1471,25 @@ class ModelSpectrum(object):
                 ModelSpectrum.LOGGER.info("Execution time for saving plot : {}.".format(utils.format_time(t_stop - t_start)))
 
     def set_filepath(self, filename, dirname=None, ext=None):
-        sub_dir = self.output_dir
-        if '/' in filename:  # filename contains directory
-            dirs = os.path.split(filename)
-            sub_dir = os.path.join(*dirs[:-1])
-            filename = dirs[-1]
+        # sub_dir = self.output_dir
+        # if '/' in filename:  # filename contains directory
+        #     dirs = os.path.split(filename)
+        #     sub_dir = os.path.join(*dirs[:-1])
+        #     filename = dirs[-1]
+        #
+        # if dirname is not None:
+        #     if sub_dir is not None:
+        #         dirname = os.path.join(dirname, sub_dir)
+        # else:
+        #     dirname = sub_dir
+        # if not os.path.isdir(dirname):
+        #     os.makedirs(dirname)
 
-        if dirname is not None:
-            if sub_dir is not None:
-                dirname = os.path.join(dirname, sub_dir)
-        else:
-            dirname = sub_dir
+        if dirname is None:
+            dirname = self.output_dir
+        # in case filename contains a directory, first join then split again
+        dirname = os.path.join(dirname, filename)
+        dirname, filename = os.path.split(dirname)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
@@ -2153,6 +2168,11 @@ class ModelCube(object):
         configuration['data_type'] = 'cube'
 
         self.output_dir = configuration.get('output_dir', 'outputs')
+        self.output_dir_spectra = os.path.join(self.output_dir, 'config_spectra')
+        self.output_dir_images = os.path.join(self.output_dir, 'maps_images')
+        for dirname in [self.output_dir, self.output_dir_spectra, self.output_dir_images]:
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
         self.log_file_loop = os.path.join(self.output_dir, 'logfile_loop.txt')
 
         self._cubes = utils.get_cubes(self._data_file)
@@ -2332,6 +2352,7 @@ class ModelCube(object):
                 else:
                     raise KeyError("'loop_type' should be 'gradient', 'snake' or 'basic'.")
 
+        configuration['output_dir'] = self.output_dir_spectra
         self._model_configuration_user = copy.deepcopy(configuration)
         self._model_configuration = ModelConfiguration(configuration)  # "reference" model
 
@@ -2634,7 +2655,7 @@ class ModelCube(object):
                     'model': model_name
                 }
 
-                cont_name = os.path.join(self.output_dir, "continuum_{}_{}".format(i, j) + ".txt")
+                cont_name = os.path.join(self.output_dir_spectra, "continuum_{}_{}".format(i, j) + ".txt")
 
                 if len(self._cont_data) != 0:
                     cont_values = []
@@ -2898,6 +2919,8 @@ class ModelCube(object):
         self.hdr.set('DATE', datetime.datetime.now().isoformat())
         self.hdr.set('ORIGIN', 'CASSIS-LTE-PYTHON')
 
+        output_dir = self.output_dir_images
+
         for param in params:
             # Split the parameter name into a list of substrings
             if param.startswith('c'):  # we have a component
@@ -2921,15 +2944,15 @@ class ModelCube(object):
                     else:
                         hdu.header['TITLE'] = (title)
                     hdul = fits.HDUList([hdu])
-                    hdul.writeto(os.path.join(self.output_dir, param + ext), overwrite=True)
+                    hdul.writeto(os.path.join(output_dir, param + ext), overwrite=True)
                     if ext == '.fits' and png_all:
                         fig, ax = utils.make_map_image(hdu=hdu)
-                        fig.savefig(os.path.join(self.output_dir, param + '.png'))
+                        fig.savefig(os.path.join(output_dir, param + '.png'))
 
                 except (KeyError, TypeError):
                     pass  # do nothing
 
-        utils.save_all_map_images_one_file(self.output_dir, ntot_scaling=ntot_scaling)
+        utils.save_all_map_images_one_file(output_dir, ntot_scaling=ntot_scaling)
 
     # def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
     #     if size is None:
