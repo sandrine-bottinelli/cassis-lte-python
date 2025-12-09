@@ -929,6 +929,7 @@ class ModelConfiguration:
         return cpt_dict
 
     def read_comp_params(self, lines_from_file, cpt_dict=None):
+        lines_from_file = utils.remove_trailing_comments(lines_from_file)
         if cpt_dict is None:
             cpt_dict = {}
 
@@ -1077,6 +1078,7 @@ class ModelConfiguration:
         sp_names = []
         pars = ['ntot', 'fwhm']
         for block in blocks_from_file:
+            block = utils.remove_trailing_comments(block)
             block = [line.strip() for line in block]
             sp_name = block[1].split()[0]
             if sp_name not in sp_names:

@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Literal
+
+from typing import Literal, List
 
 from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.constants import C_LIGHT, K_B, H, UNITS
@@ -8,6 +9,7 @@ from cassis_lte_python.database.species import get_partition_function
 
 import numpy as np
 import os
+from io import StringIO
 import astropy.io.fits as fits
 from astropy import units as u
 import pandas as pd
@@ -461,6 +463,24 @@ def format_time(t_sec):
         return str(delta)
 
 
+def remove_trailing_comments(str_or_list_str: str | List[str]):
+    if isinstance(str_or_list_str, str):
+        str_or_list_str = [str_or_list_str]
+    result = []
+    for line in str_or_list_str:
+        elts = line.split("#", maxsplit=1)
+        if len(elts) > 0 and len(elts[0]) > 0:
+            result.append(elts[0])
+        else:
+            result.append(line)
+    return result if len(result) > 1 else result[0]
+
+
+def remove_comments(list_str: List[str]) -> List[str]:
+    list_str = [line for line in list_str if not line.startswith("#")]
+    return remove_trailing_comments(list_str)
+
+
 def select_from_ranges(x_values, ranges, y_values=None, oversampling=None):
     if type(ranges[0]) is not list:
         ranges = [ranges]
@@ -669,8 +689,18 @@ def read_noise_info(noise_file):
     return noise_info
 
 
-def read_species_info(sp_file, header='infer'):
-    df = pd.read_csv(sp_file, delimiter='\t', comment='#', index_col=0, dtype=str, header=header)
+def read_species_info(sp_file: str | StringIO, header='infer'):
+    if isinstance(sp_file, str):
+        with open(sp_file) as f:
+            lines = f.readlines()
+    elif isinstance(sp_file, StringIO):
+        lines = sp_file.readlines()
+    else:
+        lines = sp_file
+    lines = [line.rstrip() for line in lines]
+    lines = remove_trailing_comments(lines)
+    fh = StringIO("\n".join(lines))
+    df = pd.read_csv(fh, delimiter='\t', comment='#', index_col=0, dtype=str, header=header)
     # perform check on number of columns for components
     # ncols_cpt = [col for col in df.columns if col.startswith('c')]
     # if len(ncols_cpt) % 4 != 0:  # ncols_cpt must be a multiple of 4
