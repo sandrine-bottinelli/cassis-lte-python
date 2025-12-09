@@ -929,25 +929,10 @@ class ModelConfiguration:
         return cpt_dict
 
     def read_comp_params(self, lines_from_file, cpt_dict=None):
-        lines_from_file = utils.remove_trailing_comments(lines_from_file)
         if cpt_dict is None:
             cpt_dict = {}
 
-        # Component parameters (size, tex, vlsr, fwhm)
-        n_start_comps = 0
-        for j, line in enumerate(lines_from_file):
-            if line.startswith('name'):
-                n_start_comps = j
-                break
-        n_end_comps = n_start_comps + 1
-        for j, line in enumerate(lines_from_file[n_start_comps + 1:]):
-            if line.startswith('c'):
-                n_end_comps += 1
-                continue
-            break
-        rows_comps = lines_from_file[n_start_comps:n_end_comps]
-        rows_comps = [line.rstrip() for line in rows_comps]
-        fcomp = io.StringIO("\n".join(rows_comps))
+        fcomp = io.StringIO("\n".join(lines_from_file))
         try:
             cpt_df = pd.read_csv(fcomp, sep='\t', comment='#')
         except ValueError:
