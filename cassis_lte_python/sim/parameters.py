@@ -46,6 +46,11 @@ class Parameter:
         if factor and difference:
             raise KeyError("Can only have factor=True OR difference=True")
 
+        if max < value:
+            raise ValueError(f"Parameter {name}: max ({max}) is less than value ({value})")
+        if min > value:
+            raise ValueError(f"Parameter {name}: min ({min}) is greater than value ({value})")
+
         self._name = name
         self._value = value
         self._init_value = value
