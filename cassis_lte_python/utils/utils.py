@@ -307,7 +307,6 @@ class DataFile(File):
         if value != self._yunit:
             if ((self._yunit in UNITS['flux'] and value == 'K')
                     or (self._yunit == 'K' and value in UNITS['flux'])):
-                bmaj, bmin = None, None
                 if self._telescope is not None:
                     locations = [self._telescope, os.path.join(TELESCOPE_DIR, self._telescope)]
                     tel_info = None
@@ -321,7 +320,7 @@ class DataFile(File):
                                                 f"{', '.join([loc for loc in locations])}")
                     jypb2k = compute_jypb2k(self._xdata_mhz, [get_beam(f_i, tel_info) for f_i in self.xdata_mhz])
                 elif self.bmaj is not None and self.bmin is not None:
-                    jypb2k = compute_jypb2k(self._xdata_mhz, (bmaj, bmin))
+                    jypb2k = compute_jypb2k(self._xdata_mhz, np.sqrt(self.bmaj * self.bmin))
                 else:
                     raise ValueError("No beam information found - cannot perform conversion.")
                 # convert y-axis
@@ -873,8 +872,8 @@ def beam_function(tel_data: pd.DataFrame):
     if bmin is not None and bmaj is not None:  # explicit beam major and minor axes
         beam = lambda f: np.sqrt(bmin(f) * bmaj(f))
     else:  # beam size from telescope diameter
-        beam = lambda f: get_beam_size(f, interp1d(tel_data['Frequency (MHz)'],
-                                                   tel_data['Diameter (m)'])(f))
+        beam = lambda f: get_beam_size(f, np.interp(f, tel_data['Frequency (MHz)'].values,
+                                                    tel_data['Diameter (m)'].values))
     return beam
 
 
@@ -953,31 +952,39 @@ def dilution_factor(source_size: float | int, beam: int | float | tuple,
 
 
 def compute_jypb2k(freq_mhz: float | int | list | np.ndarray,
-                   beam_arcsec: tuple | list | np.ndarray) -> float | np.ndarray:
+                   beam_arcsec: float | int | list | np.ndarray) -> float | np.ndarray:
     """
     Compute the conversion factor from Jansky per beam to Kelvin.
     T = (conv_fact / nu^2) * I , with :
     conv_fact = c^2 / (2*k_B*omega) * 1.e-26 (to convert Jy to mks)
     omega = pi*bmaj*bmin/(4*ln2)
 
-    :param freq_mhz:
-    :param beam_arcsec:
-    :return:
+    :param freq_mhz: frequency in MHz ; float, integer, list or numpy array
+    :param beam_arcsec: 1D beam size in arcsec ; float, integer, list or numpy array
+    :return: the conversion factor from Jy/beam to Kelvin
     """
-    if isinstance(freq_mhz, list):
+    input_type = type(freq_mhz)
+
+    if not isinstance(freq_mhz, np.ndarray):
         freq_mhz = np.array(freq_mhz)
 
-    if isinstance(beam_arcsec, list):
+    if not isinstance(beam_arcsec, np.ndarray):
         beam_arcsec = np.array(beam_arcsec)
 
-    try:
-        bmaj_arcsec, bmin_arcsec = beam_arcsec[:, 0], beam_arcsec[:, 1]
-    except (IndexError, TypeError):
-        bmaj_arcsec, bmin_arcsec = beam_arcsec[0], beam_arcsec[1]
-    omega = (bmaj_arcsec * u.Unit('arcsec')).to('rad').value * (bmin_arcsec * u.Unit('arcsec')).to('rad').value
+    if len(freq_mhz) != len(beam_arcsec):
+        raise IndexError("Lengths of frequency and beam arcsec do not match.")
+
+    omega = (beam_arcsec * u.Unit('arcsec')).to('rad').value ** 2
+    # beam_rad = beam_arcsec / 3600 / 180 * np.pi
+    # omega = beam_rad ** 2
     omega *= np.pi / (4 * np.log(2))
     conv_fact = C_LIGHT ** 2 / (2 * K_B * omega) * 1.e-26
-    return conv_fact / (freq_mhz * 1.e6)**2
+    conv_fact /= (freq_mhz * 1.e6) ** 2
+    if input_type is list:
+        conv_fact = list(conv_fact)
+    if input_type is int or input_type is float:
+        conv_fact = conv_fact[0]
+    return conv_fact
 
 
 def get_cubes(file_list, check_spatial_shape=None):
