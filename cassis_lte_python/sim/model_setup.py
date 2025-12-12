@@ -381,7 +381,7 @@ class ModelConfiguration:
 
         kws_plot_only = ['other_species']
 
-        self.plot_gui = configuration.get('plot_gui', True)  # do gui plot by default
+        self.plot_gui = configuration.get('plot_gui', False)  # do gui plot by default
         self.gui_kws = self.plot_kws.copy()  # Default gui keywords = plot_kws
         gui_kws = self.user_plot_kws.get('gui_only', {})
         if 'gui_kws' in configuration:
@@ -629,6 +629,7 @@ class ModelConfiguration:
         self.tuning_info.sort_values(by='fmhz_min', inplace=True)
         self.franges_mhz = self.tuning_info['fmhz_range'].values
 
+        tel_info_user = pd.DataFrame()
         for tel, freq_user in self._configuration_dict['tuning_info'].items():
             # if isinstance(freq_user[0], list):
             #     freq_user = [el for li in freq_user for el in li]
@@ -639,9 +640,11 @@ class ModelConfiguration:
             for freq_range in freq_user:
                 if tel_info['Frequency (MHz)'].min() > max(freq_range) or tel_info['Frequency (MHz)'].max() < min(freq_range):
                     not_covered.append([float(f) for f in freq_range])
+                tel_info_range = tel_info[(tel_info['Frequency (MHz)'] >= min(freq_range)) & (tel_info['Frequency (MHz)'] <= max(freq_range))]
+                tel_info_user = pd.concat([tel_info_user, tel_info_range], axis=0)
             if len(not_covered) > 0:
                 raise IndexError(f"Telescope '{tel}' does not cover the following frequency range(s): {not_covered}.")
-            self._telescope_data[tel] = tel_info
+            self._telescope_data[tel] = tel_info_user
 
         # tuning_data = pd.DataFrame()
         #
