@@ -207,9 +207,12 @@ class ModelConfiguration:
             noise = 1.e-3 * configuration.get('noise_mk', 0.)
         if isinstance(noise, (float, int)):
             self.noise = lambda x: noise
-        elif isinstance(noise, list):  # TODO : check if this is used
-            yvals = np.array([[n, n] for n in noise])
-            self.noise = interp1d(np.concatenate(self.franges_mhz), np.concatenate(yvals), kind='nearest')
+        elif isinstance(noise, list):
+            if len(noise) == 1:
+                self.noise = lambda x: noise[0]
+            else:
+                yvals = np.array([[n, n] for n in noise])
+                self.noise = interp1d(np.concatenate(self.franges_mhz), np.concatenate(yvals), kind='nearest')
         else:
             raise TypeError('Noise format not supported. Should be a integer, a float or a list.')
 
