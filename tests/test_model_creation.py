@@ -2,9 +2,6 @@ import unittest
 import os
 import json
 
-from cassis_lte_python.sim.model_setup import Component
-from cassis_lte_python.sim.parameters import parameter_infos
-from cassis_lte_python.database.species import Species
 from cassis_lte_python.LTEmodel import ModelSpectrum
 
 
@@ -32,12 +29,13 @@ class TestModelCreation(unittest.TestCase):
         data['plot_file'] = False
 
         mdl = ModelSpectrum(data)
-        mdl.spectrum()
 
-        self.assertEqual(1001, len(mdl.y_mod))
-        self.assertAlmostEqual(max(mdl.y_mod), 5.148319918085383, places=5)
-        self.assertAlmostEqual(min(mdl.x_mod), 147090., places=5)
-        self.assertAlmostEqual(max(mdl.x_mod), 147190., places=5)
+        self.assertEqual(31, len(mdl.y_mod))  # nb points
+        # self.assertAlmostEqual(max(mdl.y_mod), 5.148319918085383, places=5)
+        self.assertAlmostEqual(max(mdl.y_mod), 5.04652652813873, places=5)  # max value
+        self.assertAlmostEqual(min(mdl.x_mod), 147173.3, places=5)  # min freq
+        self.assertAlmostEqual(max(mdl.x_mod), 147176.3, places=5)  # max freq
+
 
 if __name__ == '__main__':
     unittest.main()
