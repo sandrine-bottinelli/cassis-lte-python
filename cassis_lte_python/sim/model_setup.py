@@ -1428,7 +1428,7 @@ class ModelConfiguration:
                     win.x_file, win.y_file = x_win, y_win
                     win_list_tag.append(win)
                     fwhm_mhz = utils.delta_v_to_delta_f(self.fwhm_max, tr.f_trans_mhz)
-                    win_list_limits.append([min(f_range_plot) - 0.5 * fwhm_mhz, max(f_range_plot + 0.5 * fwhm_mhz)])
+                    win_list_limits.append([min(f_range_plot) - 0.5 * fwhm_mhz, max(f_range_plot) + 0.5 * fwhm_mhz])
 
                 nt = len(win_list_tag)
                 message = []
