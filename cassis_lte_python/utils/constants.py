@@ -6,9 +6,16 @@ A few useful constants
 """
 
 
-C_LIGHT = const.c.value  # speed of light [m/s]
-K_B = const.k_B.value  # Boltzman's constant [J/K]
-H = const.h.value
+# C_LIGHT = const.c.value  # speed of light [m/s]
+# K_B = const.k_B.value  # Boltzman's constant [J/K]
+# H = const.h.value
+H = 6.62070040e-34
+H_cgs = 6.62070040e-27
+C_LIGHT = 299792458
+C_LIGHT_km = 299792.458
+C_LIGHT_cgs = 2.997924580e10
+K_B = 1.38064852e-23
+K_B_cgs = 1.38064852e-16
 
 FWHM2SIGMA = 1. / (2. * np.sqrt(2. * np.log(2.)))  # to convert the FWHM of a Gaussian to sigma
 

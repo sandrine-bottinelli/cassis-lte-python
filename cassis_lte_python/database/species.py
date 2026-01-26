@@ -217,12 +217,17 @@ def get_partition_function_tex(tref, qlog, temp, tag=''):
     if temp > tref[-1]:
         raise ValueError(f'Tag {tag}: {temp} is above the highest temperature of the partition function ({tref[-1]})')
 
-    for i, t in enumerate(tref[:-1]):
-        if tref[i+1] >= temp >= t:
-            tmp = interp(log10(temp), log10(tref[i:i+2]), qlog[i:i+2])
-            qex = power(10., tmp)
-            # qex = np.interp(temp, tref, qlin)
-            return qex
+    tmp = interp(log10(temp), log10(tref), qlog)
+    qex = power(10., tmp)
+    # qlin = power(10, qlog)
+    # qex = interp(temp, tref, qlin)
+    return qex
+    # for i, t in enumerate(tref[:-1]):
+    #     if tref[i+1] >= temp >= t:
+    #         tmp = interp(log10(temp), log10(tref[i:i+2]), qlog[i:i+2])
+    #         qex = power(10., tmp)
+    #         qex = interp(temp, tref[i:i+2], qlin[i:i+2])
+    #         return qex
             # return np.power(10., qlog[find_nearest_id(np.array(tref),temp)])
 
 

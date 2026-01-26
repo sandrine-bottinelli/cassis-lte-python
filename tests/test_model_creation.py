@@ -32,7 +32,7 @@ class TestModelCreation(unittest.TestCase):
 
         self.assertEqual(31, len(mdl.y_mod))  # nb points
         # self.assertAlmostEqual(max(mdl.y_mod), 5.148319918085383, places=5)
-        self.assertAlmostEqual(max(mdl.y_mod), 5.04652652813873, places=5)  # max value
+        self.assertAlmostEqual(max(mdl.y_mod), 5.04686198153989, places=5)  # max value ; CASSIS : 5.0453
         self.assertAlmostEqual(min(mdl.x_mod), 147173.3, places=5)  # min freq
         self.assertAlmostEqual(max(mdl.x_mod), 147176.3, places=5)  # max freq
 
