@@ -20,6 +20,8 @@ docs/logs
 logs/
 **/*logs*
 tests/outputs/
+**/linelist.txt
+**/*results*
 
 # to ignore personal files and directories :
 # > git config --local core.excludesFile .mygitignore
