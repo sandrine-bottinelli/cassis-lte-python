@@ -1,0 +1,68 @@
+{
+  "minimize": true,
+  "max_iter": 5000,
+  "data_dir": "./tests/inputs/",
+  "data_file": "I16293_Synthetic_CO.lis",
+  "output_dir": "./tests/outputs/",
+  "tuning_info": {
+    "hifi": [480000, 2000000]
+  },
+  "bandwidth": 30.0,
+  "rms_cal": {
+    "[550800.0, 551000.0]": [0.08, 15.0],
+    "[576000.0, 577000.0]": [0.2, 15.0],
+    "[1101290.0, 1101500.0]": [0.09, 15.0],
+    "[1151900.0, 1153000.0]": [0.2, 15.0]
+  },
+  "v_range": {
+    "28503": {
+      "1, 2": [-2.0, 10.0]
+    }
+  },
+  "components": {
+    "name": "c1",
+    "vlsr": {
+      "min": 3.5,
+      "value": 4.0,
+      "max": 10.0,
+      "vary": true
+    },
+    "size": {
+      "min": 1.0,
+      "value": 30.0,
+      "max": 50.0,
+      "vary": false
+    },
+    "tex": {
+      "min": 10.0,
+      "value": 100.0,
+      "max": 300.0,
+      "vary": true
+    },
+    "fwhm": {
+      "min": 1.0,
+      "value": 3.0,
+      "max": 15.0,
+      "vary": true
+    },
+    "is_interacting": true,
+    "species": {
+      "tag": 28503,
+      "ntot": {
+        "min": 2e13,
+        "value": 2e16,
+        "max": 2e19,
+        "vary": true
+      }
+    }
+  },
+  "thresholds": {
+    "28503": {
+      "eup_max": 500
+    }
+  },
+  "tc": 0.0,
+  "exec_time": false,
+  "plot_gui": false,
+  "plot_file": false
+}

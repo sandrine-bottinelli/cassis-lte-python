@@ -16,6 +16,11 @@ docs/build
 docs/logs
 # NB: logs should not exist (turn off FILE_LOGGER for the generation of the documentation)
 
+# ignore all logs and outputs
+logs/
+**/*logs*
+tests/outputs/
+
 # to ignore personal files and directories :
 # > git config --local core.excludesFile .mygitignore
 # create and edit .mygitignore

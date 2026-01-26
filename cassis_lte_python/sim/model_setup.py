@@ -1468,9 +1468,12 @@ class ModelConfiguration:
                         win_num = win.plot_nb
 
                         if win_num in v_range:  # window has range to be fitted
-                            if self.parameters[f'{self.cpt_list[0].name}_vlsr'].user_data['moving_bounds']:
-                                win.delta_v_range_fit = np.array(v_range[win_num]) - win.v_ref_kms
-                            else:
+                            try:
+                                if self.parameters[f'{self.cpt_list[0].name}_vlsr'].user_data['moving_bounds']:
+                                    win.delta_v_range_fit = np.array(v_range[win_num]) - win.v_ref_kms
+                                else:
+                                    win.v_range_fit = np.array(v_range[win_num])
+                            except KeyError:
                                 win.v_range_fit = np.array(v_range[win_num])
                             win.compute_f_range_fit(self.vlsr_file)
                             # f_range = [utils.velocity_to_frequency(v, win.transition.f_trans_mhz,
