@@ -9,7 +9,8 @@ using the same philosophy as in [CASSIS](http://cassis.irap.omp.eu).
 
 ## Documentation
 
-Please follow [this link](https://sandrine.bottinelli.pages.in2p3.fr/cassis-lte-python/).
+Browse the [documentation](https://cassis-lte-python.readthedocs.io).
+<!--- Please follow [this link](https://sandrine.bottinelli.pages.in2p3.fr/cassis-lte-python/).--->
 
 <!--- Example scripts for model creation are provided,
 along with expected outputs : 
