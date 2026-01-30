@@ -23,7 +23,7 @@ source_encoding = 'utf-8-sig'
 project = 'CASSIS LTE Python'
 copyright = '2022-2025, CASSIS Team'
 author = 'CASSIS Team'
-release = '0.2'
+release = '0.3'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -53,12 +53,17 @@ html_last_updated_fmt = ""
 
 # html_theme = 'classic'
 # html_theme = 'pydata_sphinx_theme'
-html_theme = "sphinx_book_theme"
+html_theme = "sphinx_book_theme"  # https://sphinx-book-theme.readthedocs.io
 html_title = "CASSIS LTE Python"
 html_theme_options = {
     "home_page_in_toc": True,  # book theme
     "show_navbar_depth": 3,  # book theme
     "toc_title": "On this page",  # book theme
+    "repository_url": "https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python",  # book theme
+    "use_repository_button": True,  # book theme
+    # "use_source_button": True,  # book theme ; source button
+    # "repository_branch": "master",  # book theme ; source button
+    # "path_to_docs": "docs/source",  # book theme ; source button
     # "header_links_before_dropdown": 4,
     # "show_toc_level": 3,
     # # [left, content, right] For testing that the navbar items align properly
@@ -88,6 +93,13 @@ html_theme_options = {
 #         'searchbox.html'
 #     ],
 #     'collapse_navigation': True
+# }
+
+# html_context = {
+#     "github_user": "sandrine.bottinelli",  # Yes, it's called "github_user" but works for GitLab too
+#     "github_repo": "cassis-lte-python",
+#     "github_version": "main",
+#     "doc_path": "docs",  # Path to your docs in the repo
 # }
 
 # Add any paths that contain custom static files (such as style sheets) here,

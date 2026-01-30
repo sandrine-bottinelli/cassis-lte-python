@@ -1,9 +1,51 @@
-/*h1 {*/
+/* use !important to ensure your styles override the theme’s defaults.*/
+
+h1 {
+    color: #660066 !important;
+}
+
+:root {
+    --pst-color-h1: #660066 !important;
+    --pst-color-h2: #660066 !important;
+}
+
+/* Change the color of all links */
+/*a {*/
+/*    color: #ff5733 !important; !* Your desired color *!*/
+/*}*/
+
+/* Change the color of links in the table of contents */
+/*.bd-toc-nav a {*/
+/*    !*color: #182250 !important;*!*/
 /*    color: #660066 !important;*/
 /*}*/
 
-:root {
-    --pst-color-h1: #660066;
-    --pst-color-h2: #660066;
+/* Change the color of links in the main content */
+article a {
+    color: #BA55D3 !important;
 }
 
+/* Change the color of links on hover */
+a:hover {
+    color: #0076b9 !important; /* Your desired hover color */
+}
+
+/*LHS title*/
+.navbar-brand p {
+    color: #660066 !important;
+}
+
+.sidebar-primary-item a {
+    /*color: #7b477a !important;*/
+    color: #BA55D3 !important;
+}
+
+.bd-sidenav__home-link a {
+    color: #660066 !important;
+    box-shadow: inset max(3px,.1875rem,.12em) 0 0 #660066 !important;
+}
+
+/*RHS toc*/
+.page-toc .nav-link {
+    color: #7B68EE !important;
+}
