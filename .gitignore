@@ -12,6 +12,7 @@ cassis_lte_python/settings*.ini
 !cassis_lte_python/settings_defaults.ini
 
 # ignore the generated documentation (will be generated automatically on gitlab)
+**/generated
 docs/build
 docs/logs
 # NB: logs should not exist (turn off FILE_LOGGER for the generation of the documentation)
