@@ -13,7 +13,9 @@ import sphinx_toolbox
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 # Remove generated stubs
-shutil.rmtree(os.path.join(os.path.dirname(__file__), "api/generated"))
+gen_dir = os.path.join(os.path.dirname(__file__), "api/generated")
+if os.path.isdir(gen_dir):
+    shutil.rmtree(gen_dir)
 
 # Diagnostic output
 # print("\n" + "="*50)
