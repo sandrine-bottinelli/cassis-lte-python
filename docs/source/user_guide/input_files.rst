@@ -61,5 +61,5 @@ species given by the user via the keyword :confval:`inspect` or :confval:`compon
 Velocity ranges
 ---------------
 
-.. literalinclude:: ../../examples/data-fitting/inputs/velocityRanges.txt
+.. literalinclude:: ../../../examples/data-fitting/inputs/velocityRanges.txt
 

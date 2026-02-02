@@ -3,6 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+:html_theme.sidebar_secondary.remove:
+
 Welcome to CASSIS LTE Python's documentation!
 =============================================
 
@@ -14,30 +16,13 @@ Contents
 ========
 
 .. toctree::
-   :caption: Getting started
 
-   installation/index
-   settings
+   user_guide/index
 
 .. toctree::
-   :caption: Usage (TBC)
+   :maxdepth: 0
+   :titlesonly:
 
-   usecases/overview.rst
-   usecases/usecase_la.rst
-   usecases/usecase_minimize.rst
-   usecases/usecase_minimize_cube.rst
-   usecases/usecase_model_only.rst
-
-.. toctree::
-   :caption: Examples
-
-   examples/overview.rst
-
-.. toctree::
-   :caption: Reference
-
-   config_keys
-   input_files
    api/index
 
 

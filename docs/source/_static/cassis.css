@@ -1,5 +1,9 @@
 /* use !important to ensure your styles override the theme’s defaults.*/
 
+.footer-items__start, .footer-items__end {
+  flex-direction: row;
+}
+
 h1 {
     color: #660066 !important;
 }

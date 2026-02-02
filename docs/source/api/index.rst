@@ -3,16 +3,9 @@ API reference
 #############
 
 .. toctree::
+   :titlesonly:
 
-    model_setup
-    parameters
-    utils
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   model_setup
+   parameters
+   utils
 

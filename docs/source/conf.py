@@ -141,21 +141,23 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 html_last_updated_fmt = ""
 
 # html_theme = 'classic'
-# html_theme = 'pydata_sphinx_theme'
-html_theme = "sphinx_book_theme"  # https://sphinx-book-theme.readthedocs.io
+html_theme = 'pydata_sphinx_theme'
+# html_theme = "sphinx_book_theme"  # https://sphinx-book-theme.readthedocs.io
 html_title = "CASSIS LTE Python"
-html_theme_options = {
-    "home_page_in_toc": True,  # book theme
-    "show_navbar_depth": 2,  # book theme
-    "toc_title": "On this page",  # book theme
-    "repository_url": "https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python",  # book theme
-    "use_repository_button": True,  # book theme
+
+# options, book theme
+# html_theme_options = {
+    # "home_page_in_toc": True,  # book theme
+    # "show_navbar_depth": 2,  # book theme
+    # "toc_title": "On this page",  # book theme
+    # "repository_url": "https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python",  # book theme
+    # "use_repository_button": True,  # book theme
     # "use_source_button": True,  # book theme ; source button
     # "repository_branch": "master",  # book theme ; source button
     # "path_to_docs": "docs/source",  # book theme ; source button
     # "header_links_before_dropdown": 4,
-    "show_toc_level": 3,  # Show subsections in TOC (RHS)
-    "navigation_depth": 4,
+    # "show_toc_level": 3,  # Show subsections in TOC (RHS)
+    # "navigation_depth": 4,
     # "collapse_navigation": False,  # Keep nav expanded by default
     # # [left, content, right] For testing that the navbar items align properly
     # "navbar_align": "left",
@@ -164,6 +166,46 @@ html_theme_options = {
     #     "**/*": ["page-toc", "edit-this-page", "sourcelink"],
     #     "examples/no-sidebar": [],
     # },
+# }
+
+# options, pydata theme
+html_theme_options = {
+    "show_nav_level": 2,
+    "show_toc_level": 3,  # Show subsections in TOC (RHS)
+    "navigation_depth": 4,
+    "navbar_start": ["navbar-logo"],
+    "navbar_center": ["navbar-nav"],
+    # "navbar_persistent": ["search-button"],
+    # "navbar_end": ["navbar-icon-links", "theme-switcher"],
+    "navbar_end": ["theme-switcher", "navbar-icon-links"],  # search-field
+    # "search_bar_text": "Search",
+    "navbar_align": "content",  # content or left or right
+    # "secondary_sidebar_items": ["page-toc", "edit-this-page", "sourcelink"],
+    "secondary_sidebar_items": ["page-toc", "sourcelink"],
+    "footer_start": ["copyright"],  # , "last-updated"
+    "footer_center": ["sphinx-version"],
+    "footer_end": ["theme-version"],
+    "icon_links": [
+        {
+            # Label for this link
+            "name": "GitLab",
+            # URL where the link will redirect
+            "url": "https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python",  # required
+            # Icon class (if "type": "fontawesome"), or path to local image (if "type": "local")
+            "icon": "fa-brands fa-square-gitlab",
+            # The type of image to be used (see below for details)
+            "type": "fontawesome",
+        },
+        {
+            "name": "CASSIS",
+            "url": "https://cassis.irap.omp.eu",
+            "icon": "_static/logoCassis.gif",
+            "type": "local",
+        },
+
+    ],
+    "back_to_top_button": True,
+    "content_footer_items": ["last-updated"],
 }
 
 # html_theme_options = {
