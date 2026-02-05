@@ -245,6 +245,13 @@ class Parameter:
 
 
 class Parameters(dict):
+    """
+    Parameters dictionary for simulation configuration.
+
+    Extends the built-in dict class with additional functionality
+    for handling simulation parameters.
+    """
+
     def __init__(self, mapping=None, /, **kwargs):
         super().__init__(mapping)
 
@@ -266,6 +273,7 @@ class Parameters(dict):
         :param value: The value to set.
         :return:
         """
+
         for parname, par in self.items():
             setattr(par, attribute, value)
             # par.set(attribute=value)

@@ -10,7 +10,8 @@ import shutil
 from pathlib import Path
 import sphinx_toolbox
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+package_dir = str(Path(__file__).resolve().parents[2])
+sys.path.insert(0, package_dir)
 
 # Remove generated stubs
 gen_dir = os.path.join(os.path.dirname(__file__), "api/generated")
@@ -100,31 +101,34 @@ extensions = [
     # 'sphinx.ext.duration',
     # 'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
+    # 'sphinx.ext.autosummary',
+    'autoapi.extension',
+    'sphinx_design',  # For cards and grids
     # 'sphinx_rtd_theme',
     # 'sphinx.ext.napoleon',  # if you use Google/NumPy style docstrings
 ]
 
-# Enable autosummary to generate stub pages
-autosummary_generate = True
-autosummary_generate_overwrite = True  # Regenerate on each build
-autosummary_imported_members = False  # Don't include imported items
-# Prevent autosummary from prepending the module name incorrectly
-autosummary_mock_imports = []
-# Remove module names from display
-add_module_names = False
-autosummary_ignore_module_all = False
+autoapi_dirs = [os.path.join(package_dir, "cassis_lte_python")]
+autoapi_options = [
+    'members',
+    'undoc-members',
+    'show-inheritance',
+    'show-module-summary',
+    # 'imported-members',  # Remove this line to avoid documenting imports
+]
 
-autodoc_default_options = {
-#     'members': True,
-#     'member-order': 'bysource',     # or 'alphabetical' or 'groupwise'
-    'member-order': 'alphabetical',
-#     'undoc-members': True,
-#     'private-members': False,  # Exclude _private functions
-#     'special-members': False,  # Hide __special__ methods
-#     'inherited-members': False,
-#     'show-inheritance': True,
-}
+autoapi_ignore = [
+    '*/database/constantsdb.py',
+    '*/gui/basic_units.py',
+    '*/utils/logger.py',
+    '*/utils/observer.py',
+    '*/utils/settings*'
+]
+suppress_warnings = ["autoapi.python_import_resolution"]
+
+# Keep AutoAPI generated files for debugging
+# autoapi_keep_files = True
+
 
 templates_path = ['_templates']
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]

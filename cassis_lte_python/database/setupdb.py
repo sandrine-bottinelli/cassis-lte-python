@@ -1,3 +1,5 @@
+__all__ = ['SQLITE_FILE']
+
 import os
 import sqlite3
 from cassis_lte_python.utils.settings import SETTINGS

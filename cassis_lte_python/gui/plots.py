@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__all__ = ["plot_window", "plot_line_position", "gui_plot", "file_plot", "file_fig_size"]
+
 from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.constants import COLOR_RESIDUAL
 from cassis_lte_python.utils.settings import SETTINGS

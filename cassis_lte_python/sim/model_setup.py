@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__all__ = ["ModelConfiguration", "Component", "Window"]
+
 import io
 import sys
 from urllib.parse import uses_params
@@ -400,13 +402,16 @@ class ModelConfiguration:
         self.file_kws = self.plot_kws.copy()  # Default file keywords = plot_kws
         self.file_kws.update({'nrows': NROWS_DEF, 'ncols': NCOLS_DEF})
         file_kws = self.user_plot_kws.get('file_only', {})
+
         if 'file_kws' in configuration:
             file_kws = configuration.get('file_kws')
             new_plot_kws['file_only'] = file_kws
+
         if 'plot_filename' in configuration:
             file_kws['filename'] = configuration['plot_filename']
         # if self.plot_file and 'filename' not in file_kws:
         #     raise NameError("Please provide a name for the output pdf file.")
+
         for k in kws_plot_only:
             if k in file_kws.keys():
                 # print(f'N.B. : {k} in file keywords is not used.')
@@ -442,9 +447,11 @@ class ModelConfiguration:
         if len(self.x_file) > 0:
             self.get_linelist()
             self.get_windows()
+
         if self._v_range_user is not None:
             self.win_nb_fit = {}
             self.get_velocity_ranges()
+
         if self.minimize or self.modeling:
             self.make_params()
             self.get_data_to_fit(init=True)
@@ -679,8 +686,11 @@ class ModelConfiguration:
         """
         Retrieving lists of transitions.
 
-        :param verbose: if True, print number of transitions w/i thresholds
-                        if 2, print infos for each transition
+        :param verbose: True (default) or 2.
+
+            - if True, print number of transitions w/i thresholds
+            - if 2, print infos for each transition
+
         :return: None
 
         line_list_all (dataframe): the list of all transitions (no thresholds, except f_err_mhz_max)
@@ -1129,62 +1139,69 @@ class ModelConfiguration:
     def get_components(self, cpt_info):
         """
         Creates the components.
+
         :param cpt_info: dictionary with the components' information ; can contain an item providing a config file
         :return: None
+
         Possible formats for the config file :
+
         1. (componentConfig.txt)
+
            Whether a component is interacting and infos (min, value, max, vary) on size, tex, vlsr, fwhm
            e.g.:
-            c1_interacting	True
-            [...]
-            # Add at least 3 lines per component (size, tex, vlsr) ; can add a 4th line with fwhm info
-            name	min	value	max	vary # do not change this line
-            c1_size	1	2	3	True
-            c1_tex	100	200	300	True
-            c1_vlsr	0	3	5	True
-            c1_fwhm	2.0	5.0	12.0	True
+           c1_interacting	True
+           [...]
+           # Add at least 3 lines per component (size, tex, vlsr) ; can add a 4th line with fwhm info
+           name	min	value	max	vary # do not change this line
+           c1_size	1	2	3	True
+           c1_tex	100	200	300	True
+           c1_vlsr	0	3	5	True
+           c1_fwhm	2.0	5.0	12.0	True
 
         2. (infosComponentSpecies.txt)
+
            List of species (or key) per component
            Whether component is interacting
            Infos (min, value, max, vary) on size, tex, vlsr, fwhm
            Table with thresholds and column density info
            e.g.:
-            c1_species	CH3OHs
-            [...]
-            c1_interacting	True
-            [...]
-            name	min	value	max	vary # do not change this line
-            c1_size	1	1	3	False
-            c1_tex	100	350	1000	True
-            c1_vlsr	5	6.7	8	True
-            c1_fwhm	1.5	3.5	6.5	False
-            c2_size	1	1	50	False
-            c2_tex	5	160	450	True
-            c2_vlsr	5	7	8	True
-            c2_fwhm	0.9	1.8	4.4	False
-            [...]
-            tag	    eup_min	eup_max	aij_min	aij_max	err_max	c1_ntot	c1_ntot_min_fact	c1_ntot_max_fact
-            28503	0.0	    300.0	1.0e-6	*	    3	    6.0e17	1e-3                1e3
+           c1_species	CH3OHs
+           [...]
+           c1_interacting	True
+           [...]
+           name	min	value	max	vary # do not change this line
+           c1_size	1	1	3	False
+           c1_tex	100	350	1000	True
+           c1_vlsr	5	6.7	8	True
+           c1_fwhm	1.5	3.5	6.5	False
+           c2_size	1	1	50	False
+           c2_tex	5	160	450	True
+           c2_vlsr	5	7	8	True
+           c2_fwhm	0.9	1.8	4.4	False
+           [...]
+           tag	    eup_min	eup_max	aij_min	aij_max	err_max	c1_ntot	c1_ntot_min_fact	c1_ntot_max_fact
+           28503	0.0	    300.0	1.0e-6	*	    3	    6.0e17	1e-3                1e3
 
         3. (infosComponentSpecies.txt)
+
            Infos (min, value, max, vary) on size, tex, vlsr, fwhm plus
            one block per species with thresholds and column density
            (species and interacting are in the user's script)
            e.g.:
-            name	min	value	max	vary # do not change this line
-            c1_size	1	6	10	False
-            c1_tex	50	100	150	False
-            c1_vlsr	2	4	6	True
-            c1_fwhm	2.0	4.5	12.0	False
-            [...]
-            tag	eup_min	eup_max	aij_min	aij_max	err_max
-            44501	0.0	600.0	1.0e-6	*	3
-            name	min	    value	max	vary # do not change this line
-            c1_ntot	1e-3	1.0e15	1e3	True
-            c2_ntot	1e-3	1.0e14	1e3	True
-            c3_ntot	1e-3	1.0e14	1e3	True
+           name	min	value	max	vary # do not change this line
+           c1_size	1	6	10	False
+           c1_tex	50	100	150	False
+           c1_vlsr	2	4	6	True
+           c1_fwhm	2.0	4.5	12.0	False
+           [...]
+           tag	eup_min	eup_max	aij_min	aij_max	err_max
+           44501	0.0	600.0	1.0e-6	*	3
+           name	min	    value	max	vary # do not change this line
+           c1_ntot	1e-3	1.0e15	1e3	True
+           c2_ntot	1e-3	1.0e14	1e3	True
+           c3_ntot	1e-3	1.0e14	1e3	True
         """
+
         if self.comp_config_file is None and self.species_infos is None and self.thresholds is None:
             raise ValueError("Missing components configuration file.")
 

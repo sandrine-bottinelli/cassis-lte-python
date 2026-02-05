@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+__all__ = [
+    "Species", "get_species_info", "get_species_thresholds", "get_partition_function", "get_partition_function_tex"
+]
+
 from numpy import interp, power, log10, genfromtxt
 import os
 import pandas as pd
@@ -112,10 +116,13 @@ def get_species_thresholds(sp_threshold_infos: list | dict | str | os.PathLike,
                            return_list_sp=False):
     """
     Determine thresholds for the species to be modeled or plotted.
+
     :param sp_threshold_infos: can either be :
-        a list : thresholds will be the default ones
-        a dictionary : the list of species is extracted and the thresholds completed with default values if needed
-        a path : the list of species and their thresholds are read from a file
+
+        - a list : thresholds will be the default ones
+        - a dictionary : the list of species is extracted and the thresholds completed with default values if needed
+        - a path : the list of species and their thresholds are read from a file
+
     :param select_species: a subset of species for which the thresholds are wanted
     :param return_list_sp: return the list of species as well as the thresholds
     :return:
@@ -206,6 +213,7 @@ def get_partition_function_tex(tref, qlog, temp, tag=''):
     """
     Interpolate the partition function at the desired temp, if temp is w/i the min/max of the database values.
     Interpolation is done on a log-log scale.
+
     :param tref: database values for the temperature
     :param qlog: log10 of the partition function for the values in tref
     :param temp: temperature at which the partition function is desired

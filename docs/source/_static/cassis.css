@@ -4,6 +4,45 @@
   flex-direction: row;
 }
 
+html[data-theme="light"] {
+  /*****************************************************************************
+  * main colors
+  */
+  --pst-color-primary: #8b5cf6 !important;
+  --pst-color-secondary: #7c3aed !important;
+}
+
+/* Custom styling */
+.sd-card {
+    border: 1px solid var(--pst-color-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
+}
+
+.sd-card:hover {
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+/* Custom icon colors */
+.icon-purple {
+    color: #8b5cf6 !important;
+}
+
+/* Custom button colors */
+.btn-purple {
+    background-color: #8b5cf6 !important;
+    border-color: #8b5cf6 !important;
+    color: white !important;
+}
+
+.btn-purple:hover {
+    background-color: #7c3aed !important;
+    border-color: #7c3aed !important;
+}
+
+
 h1 {
     color: #660066 !important;
 }
@@ -26,12 +65,13 @@ h1 {
 
 /* Change the color of links in the main content */
 article a {
-    color: #BA55D3 !important;
+    color: #8b5cf6 !important;
 }
 
 /* Change the color of links on hover */
 a:hover {
-    color: #0076b9 !important; /* Your desired hover color */
+    /*color: #0076b9 !important; !* Your desired hover color *!*/
+    color: #7474c1 !important; /* Your desired hover color */
 }
 
 /*LHS title*/
@@ -41,7 +81,7 @@ a:hover {
 
 .sidebar-primary-item a {
     /*color: #7b477a !important;*/
-    color: #BA55D3 !important;
+    color: #8b5cf6 !important;
 }
 
 .bd-sidenav__home-link a {

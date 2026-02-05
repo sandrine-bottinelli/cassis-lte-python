@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__all__ = ["generate_lte_model_func", "ModelSpectrum", "ModelCube"]
+
 from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils import utils
 from cassis_lte_python.gui.plots import file_plot, gui_plot
@@ -47,16 +49,21 @@ def generate_lte_model_func(config: dict):
     The generated function depends on the frequency in MHz and on a set of lmfit parameters.
 
     :param config: a dictionary containing :
+
         - the following frequency-dependent functions:
+
             - tc : continuum values ; no default
             - beam_sizes : 1-D equivalent beam size ; no default
             - tmb2ta : conversion factor from Tmb to Ta* scale ; default to 1
             - jypb2k : conversion factor from Jy/beam to K ; default to 1
             - noise : rms noise values ; default to 0
+
         - line_list : list of transitions to be modeled
         - cpt_list : list of components
+
     :return: The model function to be minimized.
     """
+
     line_list = config['line_list']
     try:
         tr_list_by_tag = {tag: list(line_list.loc[line_list['tag'] == tag].transition)
@@ -694,6 +701,7 @@ class ModelSpectrum(object):
     def fit_model(self, max_nfev=None, fit_kws=None):
         """
         Computes weights and perform the fit.
+
         :param max_nfev: maximum number of iterations (default value depends on the algorithm)
         :param fit_kws: keywords for the fit function
         :return:
@@ -751,10 +759,10 @@ class ModelSpectrum(object):
         if self.print_report and method != "emcee":
             cb = fit_callback
 
-        """NB: nan_policy:
-        'raise': Raise a ValueError (default)
-        'propagate': Do not check for NaNs or missing values. The fit will try to ignore them.
-        'omit': Remove NaNs or missing observations in data."""
+        # NB: nan_policy:
+        # 'raise': Raise a ValueError (default)
+        # 'propagate': Do not check for NaNs or missing values. The fit will try to ignore them.
+        # 'omit': Remove NaNs or missing observations in data.
         try:
             self.model_fit = self.model.fit(self.y_fit, params=self.model_config.params, fmhz=self.x_fit, log=self.log,
                                             # tc=self.tc(self.x_fit), beam_sizes=self.beam(self.x_fit),
@@ -971,6 +979,7 @@ class ModelSpectrum(object):
     def compute_model(self, params=None, x_values=None, line_list=None, line_center_only=False):
         """
         For backward compatibility.
+
         :param params:
         :param x_values:
         :param line_list:
@@ -1012,6 +1021,7 @@ class ModelSpectrum(object):
     def setup_plot_fus(self):  # TODO: rename/refactor, most instructions are for model only
         """
         Plot in full spectrum mode (self.bandwidth is None)
+
         :return:
         """
         # info to be saved in line list file
@@ -1084,6 +1094,7 @@ class ModelSpectrum(object):
     def setup_plot_la(self, win_list: list, verbose=True, other_species_dict: dict | None = None, **kwargs):
         """
         Prepare all data to do the plots in line analysis mode
+
         :param win_list: the list of windows
         :param verbose:
         :param other_species_dict: a dictionary of other species and their thresholds
@@ -1311,6 +1322,7 @@ class ModelSpectrum(object):
     def select_windows(self, **kwargs):
         """
         Determine windows to plot
+
         :param tag: tag selection if do not want all the tags
         :param display_all: if False, only display windows with fitted data
         :param windows: a dictionary of the windows to be plotted (keys=tags, vals=window numbers)
@@ -1353,6 +1365,7 @@ class ModelSpectrum(object):
     def select_windows_other_lines(self, other_species_win_selection: str):
         """
         Select windows with other lines from this tag
+
         :param other_species_win_selection: desired tag
         :return:
         """
@@ -1370,17 +1383,20 @@ class ModelSpectrum(object):
         """
         Prepare all data to do the plot(s), using provided keywords.
         Possible keywords are :
-         tag: tag selection if do not want all the tags
-         basic: do not plot other species
-         other_species: list or dictionary or file with other species ;
-            dictionary and file can contain their thresholds
-         other_species_plot: list of other species to plot ; if None, other_species is used ;
-            if other_species is provided, only these species are kept
-         other_species_win_selection: select only windows with other lines from this tag.
-         display_all: if False, only display windows with fitted data
+
+            - tag: tag selection if do not want all the tags
+            - basic: do not plot other species
+            - other_species: list or dictionary or file with other species ;
+              dictionary and file can contain their thresholds
+            - other_species_plot: list of other species to plot ; if None, other_species is used ;
+              if other_species is provided, only these species are kept
+            - other_species_win_selection: select only windows with other lines from this tag.
+            - display_all: if False, only display windows with fitted data
+
         :return:
 
         Notes :
+
             - other_species_selection is deprecated, use other_species_win_selection
         """
 
@@ -1447,6 +1463,7 @@ class ModelSpectrum(object):
     def make_plot(self, plot_type):
         """
         Do the plot(s).
+
         :param plot_type: gui or file
         :return:
         """
@@ -1507,11 +1524,12 @@ class ModelSpectrum(object):
     def save_model(self, filename, dirname=None, ext='txt', full_spectrum=True):
         """
         Save the model spectrum from self.model.
+
         :param filename: the name of the file
         :param dirname: the directory where to save the file
         :param ext: extension of the file : txt (default) or fits
         :param full_spectrum: save the model for the entire observed spectrum ;
-        if false, only save the model spectrum for the windows in self.win_list
+            if false, only save the model spectrum for the windows in self.win_list
         :return: None
         """
         params = self.params
@@ -1591,7 +1609,7 @@ class ModelSpectrum(object):
         :param dirname:
         :param ext:
         :param spec: tuple of x and y values to be written ;
-                     if not provided and continuum is false, stored model is written
+            if not provided and continuum is false, stored model is written
         :param spectrum_type: 'continuum', 'observed', 'synthetic' or empty string '' (default)
         :param vlsr:
         :param yunit:
@@ -1737,6 +1755,7 @@ class ModelSpectrum(object):
     def save_line_list_cassis(self, filename, dirname=None, snr_threshold=None):
         """
         Writes the list of lines for display in CASSIS. To be used when fitting the entire spectrum.
+
         :param filename:
         :param dirname:
         :return:
@@ -2134,6 +2153,7 @@ class ModelSpectrum(object):
     def write_ltm(self, filename, dirname=None):
         """
         Writes a LTE model configuration file for CASSIS
+
         :param filename: the name of the file
         :param dirname: the directory where to save the file
         :return: None
@@ -2143,6 +2163,7 @@ class ModelSpectrum(object):
     def write_lam(self, filename, dirname=None):
         """
         Writes a line analysis configuration file for CASSIS
+
         :param filename: the name of the file
         :param dirname: the directory where to save the file
         :return: None
