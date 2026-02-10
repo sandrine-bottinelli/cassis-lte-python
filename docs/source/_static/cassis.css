@@ -93,3 +93,15 @@ a:hover {
 .page-toc .nav-link {
     color: #7B68EE !important;
 }
+
+span.summarylabel {
+    background-color: var(--pst-color-secondary);
+    color: var(--pst-color-primary);
+    font-size: 70%;
+    padding-left: 2px;
+    padding-right: 2px;
+    border-radius: 3px;
+    vertical-align: 15%;
+    padding-bottom: 2px;
+    filter: opacity(40%);
+}

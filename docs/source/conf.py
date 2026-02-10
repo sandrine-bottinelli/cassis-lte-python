@@ -13,10 +13,10 @@ import sphinx_toolbox
 package_dir = str(Path(__file__).resolve().parents[2])
 sys.path.insert(0, package_dir)
 
-# Remove generated stubs
-gen_dir = os.path.join(os.path.dirname(__file__), "api/generated")
-if os.path.isdir(gen_dir):
-    shutil.rmtree(gen_dir)
+# Remove generated stubs with autosummary
+# gen_dir = os.path.join(os.path.dirname(__file__), "api/generated")
+# if os.path.isdir(gen_dir):
+#     shutil.rmtree(gen_dir)
 
 # Diagnostic output
 # print("\n" + "="*50)
@@ -89,7 +89,7 @@ source_encoding = 'utf-8-sig'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'CASSIS LTE Python'
-copyright = '2022-2025, CASSIS Team'
+copyright = '2022-2026, CASSIS Team'
 author = 'CASSIS Team'
 release = '0.3'
 
@@ -108,7 +108,20 @@ extensions = [
     # 'sphinx.ext.napoleon',  # if you use Google/NumPy style docstrings
 ]
 
+# autoapi settings
+
+# def skip_member(app, what, name, obj, skip, options):
+#     # skip submodules
+#     if what == "module":
+#         skip = True
+#     return skip
+#
+# def setup(sphinx):
+#     sphinx.connect("autoapi-skip-member", skip_member)
+
 autoapi_dirs = [os.path.join(package_dir, "cassis_lte_python")]
+autoapi_type = "python"
+autoapi_template_dir = "_templates/autoapi"
 autoapi_options = [
     'members',
     'undoc-members',
@@ -116,7 +129,7 @@ autoapi_options = [
     'show-module-summary',
     # 'imported-members',  # Remove this line to avoid documenting imports
 ]
-
+autodoc_typehints = "signature"
 autoapi_ignore = [
     '*/database/constantsdb.py',
     '*/gui/basic_units.py',
@@ -125,6 +138,10 @@ autoapi_ignore = [
     '*/utils/settings*'
 ]
 suppress_warnings = ["autoapi.python_import_resolution"]
+
+rst_prolog = """
+.. role:: summarylabel
+"""
 
 # Keep AutoAPI generated files for debugging
 # autoapi_keep_files = True
