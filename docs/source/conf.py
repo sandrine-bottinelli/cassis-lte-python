@@ -213,10 +213,12 @@ html_theme_options = {
             # URL where the link will redirect
             "url": "https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python",  # required
             # Icon class (if "type": "fontawesome"), or path to local image (if "type": "local")
-            "icon": "fa-brands fa-square-gitlab",
+            # "icon": "fa-brands fa-square-gitlab",
             # The type of image to be used (see below for details)
-            "type": "fontawesome",
-        },
+            # "type": "fontawesome",
+            "icon": "_static/gitlab-logo-500-rgb.jpg",
+            "type": "local",
+},
         {
             "name": "Software Heritage",
             "url": "https://archive.softwareheritage.org/browse/origin/?origin_url=https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python.git",
