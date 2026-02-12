@@ -218,6 +218,12 @@ html_theme_options = {
             "type": "fontawesome",
         },
         {
+            "name": "Software Heritage",
+            "url": "https://archive.softwareheritage.org/browse/origin/?origin_url=https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python.git",
+            "icon": "_static/software-heritage-logo.300px.png",
+            "type": "local",
+        },
+        {
             "name": "CASSIS",
             "url": "https://cassis.irap.omp.eu",
             "icon": "_static/logoCassis.gif",

@@ -5,11 +5,6 @@
 
 :html_theme.sidebar_secondary.remove: true
 
-.. image:: https://archive.softwareheritage.org/badge/origin/https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python.git/
-   :target: https://archive.softwareheritage.org/browse/origin/?origin_url=https://gitlab.in2p3.fr/sandrine.bottinelli/cassis-lte-python.git
-.. image:: https://archive.softwareheritage.org/badge/swh:1:dir:f76e0fface07d7f351aba1af97611ba223823161/
-   :target: https://archive.softwareheritage.org/swh:1:dir:f76e0fface07d7f351aba1af97611ba223823161
-
 |
 
 #############################################
