@@ -91,7 +91,7 @@ source_encoding = 'utf-8-sig'
 project = 'CASSIS LTE Python'
 copyright = '2022-2026, CASSIS Team'
 author = 'CASSIS Team'
-release = '0.3'
+release = '0.4.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
