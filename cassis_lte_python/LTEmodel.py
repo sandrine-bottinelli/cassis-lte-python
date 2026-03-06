@@ -4,7 +4,7 @@ __all__ = ["generate_lte_model_func", "ModelSpectrum", "ModelCube"]
 
 from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils import utils
-from cassis_lte_python.gui.plots import file_plot, gui_plot
+from cassis_lte_python.gui.plots import file_plot, GuiPlot
 from cassis_lte_python.sim.model_setup import ModelConfiguration, Component
 from cassis_lte_python.utils.settings import SETTINGS
 from cassis_lte_python.utils.constants import PLOT_COLORS, CPT_COLORS, UNITS
@@ -1469,7 +1469,7 @@ class ModelSpectrum(object):
         """
 
         if plot_type == 'gui':
-            gui_plot(self)
+            GuiPlot(self)
 
         if plot_type == 'file':
             filename = self.file_kws['filename']

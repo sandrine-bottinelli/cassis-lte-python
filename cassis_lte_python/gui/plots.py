@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["plot_window", "plot_line_position", "gui_plot", "file_plot", "file_fig_size"]
+__all__ = ["plot_window", "plot_line_position", "GuiPlot", "file_plot", "file_fig_size"]
 
 from cassis_lte_python.utils.logger import CassisLogger
 from cassis_lte_python.utils.constants import COLOR_RESIDUAL
@@ -8,13 +8,9 @@ from cassis_lte_python.utils.settings import SETTINGS
 # from cassis_lte_python.gui.basic_units import mhz, BasicUnit
 import numpy as np
 import matplotlib.pyplot as plt
-import tkinter
-# from tkinter import ttk
-from matplotlib.backends.backend_tkagg import (
-    FigureCanvasTkAgg, NavigationToolbar2Tk)
-# Implement the default Matplotlib key bindings.
-# from matplotlib.backend_bases import key_press_handler
-# from matplotlib.figure import Figure
+import matplotlib.gridspec as gridspec
+from matplotlib.patches import FancyBboxPatch
+from matplotlib.widgets import Button
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import ticker
 import matplotlib
@@ -25,6 +21,7 @@ DPI_DEF = SETTINGS.DPI_DEF
 NCOLS_DEF = SETTINGS.NCOLS_DEF
 NROWS_DEF = SETTINGS.NROWS_DEF
 FONT_DEF = SETTINGS.FONT_DEF
+FONT_GUI = 12
 
 # Matplotlib global parameters
 matplotlib.rcParams['xtick.direction'] = 'in'  # Ticks inside
@@ -54,8 +51,20 @@ PLOT_WIDTH = 2.0  # inches
 
 LOGGER = CassisLogger.create('plots')
 
+#  Colors
 
-def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, axes_labels=True):
+BG       = "#1C1C2E"
+PANEL_BG = "#25253A"
+PLOT_BG  = "#131320"
+BORDER   = "#3A3A5C"
+TEXT     = "#E8E8F0"
+MUTED    = "#888aaa"
+ACCENT   = "#4C9BE8"
+SEL_BG   = "#3A3A5C"
+BTN_BG   = "#2E2E48"
+
+
+def plot_window(lte_model, win, ax, number=True, auto=True, lw=1.0, axes_labels=True):
     """
     Plots a given window : overall model, individual components, line positions.
     :param lte_model: an object of class ModelSpectrum
@@ -78,11 +87,16 @@ def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, ax
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
+    ax2 = None
+
     if axes_labels:
         xlabel = 'Velocity' if win.bottom_unit == 'km/s' else 'Rest frequency'
         ax.set_xlabel(f'{xlabel} [{win.bottom_unit}]')
         ax.set_ylabel(f'Intensity [{lte_model.yunit}]')
         if win.bottom_unit != win.top_unit:
+            ax2 = ax.twiny()
+            # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
+            ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
             ax2.set_xlabel(f'Rest frequency [{win.top_unit}]')
 
     # plot range used (or not) for chi2 calculation
@@ -261,146 +275,230 @@ def plot_line_position(x_axis, x_pos, y_range, x_pos_err, err_color=None, **kwar
                 color=err_color, linewidth=0.75)
 
 
-def gui_plot(lte_model):
-    if len(lte_model.cpt_list) > 1:
-        color_message = []
-        for i in range(len(lte_model.cpt_list)):
-            color_message.append(f"{lte_model.cpt_list[i].name} - {lte_model.cpt_cols[i]}")
-        LOGGER.info(f"Component colors are : {' ; '.join(color_message)}")
+class GuiPlot:
+    VISIBLE = 10  # max rows shown at once
+    ROW_H = 0.1  # < 1.0 makes rows closer together
+    PAD = 0.01
 
-    fontsize = 16
-    plt.rc('font', size=fontsize)
-    plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
-    plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
+    def __init__(self, lte_model):
+        self.lte_model = lte_model
+        self.plots = self.lte_model.win_list_gui
+        self.nplots = len(lte_model.win_list_gui)
+        self.win_names = [lte_model.win_list_gui[0].name[:-4]]
+        if self.nplots > 1:
+            self.win_names = [win.name for win in lte_model.win_list_gui]
 
-    nplots = len(lte_model.win_list_gui)
+        self.selected = 0
+        self.scroll_top = 0   # index of first visible item
 
-    root = tkinter.Tk()
-    title = "LTEmodel"
-    if lte_model.model_config.minimize:
-        title += " - Results"
-    root.wm_title(title)
-    root.geometry("1000x700")
-    # root.columnconfigure(0, weight=1)
-    # root.columnconfigure(1, weight=3)
-    # root.rowconfigure(0, weight=3)
-    # root.rowconfigure(1, weight=1)
+        title = "LTEmodel"
+        if self.lte_model.model_config.minimize:
+            title += " - Results"
 
-    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+        self.fig = plt.figure(figsize=(12, 7))
+        self.fig.canvas.manager.set_window_title(title)
 
-    ax2 = ax.twiny()
-    # ax2.xaxis.set_major_locator(plt.MaxNLocator(4))
-    ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+        if len(lte_model.cpt_list) > 1:
+            color_message = []
+            for i in range(len(lte_model.cpt_list)):
+                color_message.append(f"{lte_model.cpt_list[i].name} - {lte_model.cpt_cols[i]}")
+            LOGGER.info(f"Component colors are : {' ; '.join(color_message)}")
 
-    plot_window(lte_model, lte_model.win_list_gui[0], ax, ax2=ax2)
-    canvas = FigureCanvasTkAgg(fig, master=root)  # A tk.DrawingArea.
-    canvas.draw()
+        fontsize = 16
+        plt.rc('font', size=fontsize)
+        plt.rc('axes', labelsize=fontsize)  # fontsize of the x and y labels
+        plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
+        plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
-    # pack_toolbar=False will make it easier to use a layout manager later on.
-    toolbar = NavigationToolbar2Tk(canvas, root, pack_toolbar=False)
-    # navigation toolbar
-    # toolbarFrame = tkinter.Frame(master=root)
-    # toolbarFrame.grid(row=1, column=1)
-    # toolbar = NavigationToolbar2Tk(canvas, toolbarFrame)
+        self.gs = gridspec.GridSpec(
+            1, 2, figure=self.fig,
+            width_ratios=[1, 4], wspace=0.0,
+            left=0.01, right=0.97, top=0.95, bottom=0.06,
+        )
 
-    toolbar.update()
-    # toolbar.grid(row=1, column=1, sticky='ew')
+        self.ax_list = self.fig.add_subplot(self.gs[0])
+        self.ax_list.set_facecolor(PANEL_BG)
+        for sp in self.ax_list.spines.values():
+            sp.set_edgecolor(BORDER)
+        self.ax_list.tick_params(left=False, bottom=False,
+                                 labelleft=False, labelbottom=False)
 
-    # canvas.mpl_connect(
-    #     "key_press_event", lambda event: print(f"you pressed {event.key}"))
-    # canvas.mpl_connect("key_press_event", key_press_handler)
+        # ▲ / ▼ button axes
+        btn_h = 0.05
+        btn_w = 0.04
+        ax_up   = self.fig.add_axes((0.015, 0.01, btn_w, btn_h))
+        ax_down = self.fig.add_axes((self._get_divider_x() - btn_w - self.PAD, 0.01, btn_w, btn_h))
+        # ax_up   = self.fig.add_axes((0.015, 0.02, btn_w, btn_h))
+        # ax_down = self.fig.add_axes((0.13, 0.02, btn_w, btn_h))
 
-    # Create a frame for the listbox+scrollbar, attached to the root window
-    win_frame = tkinter.Frame(root)
-    win_names = [win.name
-                 for win in lte_model.win_list_gui] if nplots > 1 else [lte_model.win_list_gui[0].name[:-4]]
-    len_max = 0
-    for name in win_names:
-        if len(name) > len_max:
-            len_max = len(name)
-    # Create a Listbox and attaching it to its frame
-    var = tkinter.StringVar(root)
-    var.set(win_names)
-    win_list = tkinter.Listbox(win_frame, width=len_max, selectmode='single', activestyle='none',
-                               listvariable=var)
-    win_list.select_set(0)
-    win_list.activate(0)
-    win_list.focus_set()
+        btn_style = dict(color=BTN_BG, hovercolor="#3A3A5C")
+        self.btn_up   = Button(ax_up,   "▲",   **btn_style)
+        self.btn_down = Button(ax_down, "▼", **btn_style)
 
-    # Insert elements into the listbox
-    # for values in range(100):
-    #     win_list.insert(tkinter.END, values)
+        for btn in (self.btn_up, self.btn_down):
+            btn.label.set_color(TEXT)
+            btn.label.set_fontfamily("monospace")
+            btn.label.set_fontsize(10)
 
-    # handle event
-    def win_selected(event):
-        """
-        Handle item selected event for the windows' listbox
-        """
-        # get selected indices
-        iwin = event.widget.curselection()[0]
-        # clear axis
-        ax.clear()
-        plot_window(lte_model, lte_model.win_list_gui[iwin], ax, ax2=ax2)
-        canvas.draw_idle()
-        # canvas.flush_events()
-        toolbar.update()
+        self.btn_up.on_clicked(lambda e: self._scroll(-1))
+        self.btn_down.on_clicked(lambda e: self._scroll(+1))
 
-    def OnEntryUpDown(event):
-        selection = event.widget.curselection()[0]
+        # plot axes placeholder
+        self.ax_plot = self.fig.add_subplot(self.gs[1])
 
-        if event.keysym == 'Up':
-            selection = selection - 1 if selection > 0 else (event.widget.size() - 1)
+        self.divider_line = self.fig.add_artist(
+            plt.Line2D([self._get_divider_x()] * 2, [0.0, 1.0],
+                       transform=self.fig.transFigure,
+                       color=BORDER, linewidth=1, zorder=10)
+        )
+        self._draw_list()
+        self._draw_plot()
 
-        if event.keysym == 'Down':
-            selection = selection + 1 if selection < (event.widget.size() - 1) else 0
+        self.fig.canvas.mpl_connect("button_press_event", self._on_click)
+        self.fig.canvas.mpl_connect("key_press_event", self._on_key)
+        self.fig.canvas.mpl_connect("resize_event", self._on_resize)
+        plt.show()
 
-        event.widget.selection_clear(0, tkinter.END)
-        event.widget.select_set(selection)
-        event.widget.activate(selection)
-        event.widget.selection_anchor(selection)
-        event.widget.see(selection)
-        win_selected(event)
+    # Helpers
 
-    win_list.bind('<<ListboxSelect>>', win_selected)
-    win_list.bind("<Down>", OnEntryUpDown)
-    win_list.bind("<Up>", OnEntryUpDown)
+    def _get_divider_x(self):
+        # GridSpec gives us the SubplotSpec positions in figure coordinates
+        left_col = self.gs[0].get_position(self.fig)
+        return left_col.x1
 
-    # Create a Scrollbar attached to the listbox's frame
-    win_scroll = tkinter.Scrollbar(win_frame, orient='vertical')
-    # setting scrollbar command parameter to have a vertical view
-    win_scroll.config(command=win_list.yview)
-    # Attaching Listbox to Scrollbar
-    # Since we need to have a vertical scroll we use yscrollcommand
-    win_list.config(yscrollcommand=win_scroll.set)
+    def _clamp_scroll(self):
+        max_top = max(0, self.nplots - self.VISIBLE)
+        self.scroll_top = max(0, min(self.scroll_top, max_top))
 
-    # button_quit = tkinter.Button(master=root, text="Quit", command=root.quit)
-    # Packing order is important. Widgets are processed sequentially and if there
-    # is no space left, because the window is too small, they are not displayed.
-    # The canvas is rather flexible in its size, so we pack it last which makes
-    # sure the UI controls are displayed as long as possible.
+    def _scroll(self, delta):
+        self.scroll_top += delta
+        self._clamp_scroll()
+        self._draw_list()
 
-    # Add Listbox to the left side of its frame
-    win_list.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
-    # Add Scrollbar to the right side
-    win_scroll.pack(side=tkinter.RIGHT, fill='y')
-    # Add list frame to root
-    win_frame.pack(side="left", fill='y')
-    # win_frame.grid(rowspan=2, column=0, sticky='ns')
+    # List panel
 
-    # button_quit.pack(side=tkinter.BOTTOM)
-    toolbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-    canvas.get_tk_widget().pack(side=tkinter.RIGHT, fill=tkinter.BOTH, expand=1)
-    # canvas.get_tk_widget().grid(row=0, column=1)
+    def _draw_list(self):
+        ax = self.ax_list
+        ax.cla()
+        ax.set_facecolor(PANEL_BG)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, self.VISIBLE * self.ROW_H)
+        ax.axis("off")
 
-    tkinter.mainloop()
+        visible = self.plots[self.scroll_top: self.scroll_top + self.VISIBLE]
+
+        for row, win in enumerate(visible):
+            name = win.name
+            global_idx = self.scroll_top + row
+            y = (self.VISIBLE - 1 - row) * self.ROW_H  # top → bottom
+            is_sel = (global_idx == self.selected)
+
+            if is_sel:
+                rect = FancyBboxPatch(
+                    # (0.03, y + 0.08), 0.94, 0.82,
+                    (0.03, y + self.PAD * self.ROW_H), 0.94, (1.0 - 2 * self.PAD) * self.ROW_H,
+                    boxstyle="round,pad=0.0",
+                    facecolor=SEL_BG, edgecolor=ACCENT,
+                    linewidth=1.2, zorder=2,
+                )
+                ax.add_patch(rect)
+
+            # ax.text(0.10, y + 0.5, "▸" if is_sel else "·",
+            #         va="center", ha="center", fontsize=9,
+            #         color=ACCENT if is_sel else MUTED,
+            #         fontfamily="monospace", zorder=3)
+            ax.text(0.10, y + self.ROW_H / 2, name,
+                    va="center", ha="left",
+                    fontsize=FONT_GUI,
+                    color=TEXT if is_sel else MUTED,
+                    fontweight="bold" if is_sel else "normal",
+                    fontfamily="monospace", zorder=3)
+
+        # scroll indicator  e.g. "5 – 12 / 13"
+        total = self.nplots
+        lo = self.scroll_top + 1
+        hi = min(self.scroll_top + self.VISIBLE, total)
+        ax.text(0.5, -0.025, f"{lo}–{hi} / {total}",
+                va="center", ha="center",
+                fontsize=FONT_GUI,
+                color=MUTED, fontfamily="monospace", transform=ax.transData)
+
+        self.fig.canvas.draw_idle()
+
+    def _draw_plot(self):
+        # Remove ALL axes except the list panel and button axes
+        protected = {self.ax_list, self.btn_up.ax, self.btn_down.ax}
+        for ax in self.fig.axes[:]:
+            if ax not in protected:
+                ax.remove()
+
+        # self.ax_plot = self.fig.add_subplot(self.gs[1])
+        # Use add_axes instead of add_subplot ; control position : [left, bottom, width, height] in figure coordinates (0–1)
+        self.ax_plot = self.fig.add_axes((self._get_divider_x() + 0.075, 0.10, 0.7, 0.8))
+
+        ax = self.ax_plot
+        # ax.set_facecolor(PLOT_BG)
+        # ax.tick_params(colors=MUTED, labelsize=9)
+        # for sp in ax.spines.values():
+        #     sp.set_edgecolor(BORDER)
+        # ax.xaxis.label.set_color(MUTED)
+        # ax.yaxis.label.set_color(MUTED)
+        # ax.title.set_color(TEXT)
+        # if not is_polar:
+        #     ax.grid(True, color=BORDER, linewidth=0.5, alpha=0.6)
+
+        plot_window(self.lte_model, self.lte_model.win_list_gui[self.selected], ax)
+        self.fig.canvas.draw_idle()
+
+    # Events
+
+    def _on_scroll(self, event):
+        """Mouse wheel over either panel scrolls the list."""
+        if event.inaxes in (self.ax_list, self.ax_plot) or event.inaxes is None:
+            delta = -1 if event.button == "up" else +1
+            self._scroll(delta)
+
+    def _on_click(self, event):
+        if event.inaxes is not self.ax_list:
+            return
+        if event.ydata is None:
+            return
+        row = self.VISIBLE - 1 - int(event.ydata)
+        idx = self.scroll_top + row
+        if 0 <= idx < self.nplots and idx != self.selected:
+            self.selected = idx
+            self._draw_list()
+            self._draw_plot()
+
+    def _on_key(self, event):
+        if event.key == "up":
+            new_idx = max(0, self.selected - 1)
+        elif event.key == "down":
+            new_idx = min(self.nplots - 1, self.selected + 1)
+        else:
+            return
+
+        if new_idx != self.selected:
+            self.selected = new_idx
+            # auto-scroll the list to keep selection visible
+            if self.selected < self.scroll_top:
+                self.scroll_top = self.selected
+            elif self.selected >= self.scroll_top + self.VISIBLE:
+                self.scroll_top = self.selected - self.VISIBLE + 1
+            self._draw_list()
+            self._draw_plot()
+
+    def _on_resize(self, event):
+        x = self._get_divider_x()
+        self.divider_line.set_xdata([x, x])
+        self.fig.canvas.draw_idle()
 
 
 def file_plot(lte_model, filename, dirname=None, verbose=True,
               dpi=DPI_DEF, nrows=NROWS_DEF, ncols=NCOLS_DEF):
     """
     Produces a plot of the fit results. If several species, change page when plotting the next species.
-    :param lte_model: an abject of class ModelSpectrum
+    :param lte_model: an object of class ModelSpectrum
     :param filename: name of output file.
     :param dirname: path to an output directory.
     :param verbose: if True, prints some information in the terminal, such as png file location
