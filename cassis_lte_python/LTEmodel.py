@@ -208,6 +208,9 @@ class ModelSpectrum(object):
         self.cpt_cols = None
         self.thresholds_other = None
 
+        if self.model_config.line_analysis:
+            self.do_plots()
+
         if self.model_config.fit_kws is not None:
             if 'log' in self.model_config.fit_kws:
                 self.log = self.model_config.fit_kws['log']

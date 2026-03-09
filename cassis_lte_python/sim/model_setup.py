@@ -1427,7 +1427,9 @@ class ModelConfiguration:
 
         else:  # fit_freq_except is None : fitting by velocity range
             self.get_v_range_info()
-
+            v_ref = self.vlsr_file
+            if len(self.cpt_list) > 0:
+                v_ref = self.cpt_list[0].vlsr
             win_list_limits = []
             for tag, tr_list in self.tr_list_by_tag.items():
                 win_list_tag = []  # first find all windows with enough data
@@ -1441,7 +1443,7 @@ class ModelConfiguration:
                         x_win, y_win = utils.select_from_ranges(self.x_file, f_range_plot, y_values=self.y_file)
                         if len(x_win) <= 5 or len(set(y_win)) == 1:
                             continue
-                    win = Window(tr, len(win_list_tag) + 1, bl_corr=self.bl_corr, v_ref_kms=self.cpt_list[0].vlsr)
+                    win = Window(tr, len(win_list_tag) + 1, bl_corr=self.bl_corr, v_ref_kms=v_ref)
                     win.x_file, win.y_file = x_win, y_win
                     win_list_tag.append(win)
                     fwhm_mhz = utils.delta_v_to_delta_f(self.fwhm_max, tr.f_trans_mhz)
