@@ -510,7 +510,7 @@ class GuiPlot:
 
     def _on_click(self, event):
         # Use figure coordinates to check if click is in the list panel
-        if event.x is None or event.y is None or event.inaxes != self.ax_plot:
+        if event.x is None or event.y is None or event.inaxes != self.ax_list:
             return
 
         x_ax, y_ax = event.xdata, event.ydata
