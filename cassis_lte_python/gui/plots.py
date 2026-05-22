@@ -276,9 +276,25 @@ def plot_line_position(x_axis, x_pos, y_range, x_pos_err, err_color=None, **kwar
 
 
 class GuiPlot:
-    VISIBLE = 10  # max rows shown at once
-    ROW_H = 0.1  # < 1.0 makes rows closer together
+    TOP = 0.97
+    BOTTOM = 0.01
+    LEFT = 0.01
+    RIGHT = 0.97
+    LIST_W = 0.15
+    DIV_POS = LEFT + LIST_W
+    PLOT_PAD = 0.1  # to leave space for titles
+    BTN_H = 0.03
+    BTN_W = 0.02
+
+    ROW_H = 0.05
     PAD = 0.01
+    VISIBLE = int(TOP / (ROW_H + PAD))  # max rows shown at once
+
+    # Layouts — (left, bottom, width, height) in figure coordinates
+    LIST_POS = (LEFT, BOTTOM, LIST_W, TOP - BOTTOM)
+    PLOT_POS = (DIV_POS + PLOT_PAD, BOTTOM + PLOT_PAD, RIGHT - DIV_POS - PLOT_PAD, TOP - BOTTOM - 2 * PLOT_PAD)
+    BTN_UP_POS = (LEFT, BOTTOM, BTN_W, BTN_H)
+    BTN_DOWN_POS = (DIV_POS - BTN_W - PAD, BOTTOM, BTN_W, BTN_H)
 
     def __init__(self, lte_model):
         self.lte_model = lte_model
@@ -310,13 +326,8 @@ class GuiPlot:
         plt.rc('xtick', labelsize=fontsize)  # fontsize of the x tick labels
         plt.rc('ytick', labelsize=fontsize)  # fontsize of the y tick labels
 
-        self.gs = gridspec.GridSpec(
-            1, 2, figure=self.fig,
-            width_ratios=[1, 4], wspace=0.0,
-            left=0.01, right=0.97, top=0.95, bottom=0.06,
-        )
+        self.ax_list = self.fig.add_axes(self.LIST_POS)
 
-        self.ax_list = self.fig.add_subplot(self.gs[0])
         self.ax_list.set_facecolor(PANEL_BG)
         for sp in self.ax_list.spines.values():
             sp.set_edgecolor(BORDER)
@@ -324,12 +335,8 @@ class GuiPlot:
                                  labelleft=False, labelbottom=False)
 
         # ▲ / ▼ button axes
-        btn_h = 0.05
-        btn_w = 0.04
-        ax_up   = self.fig.add_axes((0.015, 0.01, btn_w, btn_h))
-        ax_down = self.fig.add_axes((self._get_divider_x() - btn_w - self.PAD, 0.01, btn_w, btn_h))
-        # ax_up   = self.fig.add_axes((0.015, 0.02, btn_w, btn_h))
-        # ax_down = self.fig.add_axes((0.13, 0.02, btn_w, btn_h))
+        ax_up   = self.fig.add_axes(self.BTN_UP_POS)
+        ax_down = self.fig.add_axes(self.BTN_DOWN_POS)
 
         btn_style = dict(color=BTN_BG, hovercolor="#3A3A5C")
         self.btn_up   = Button(ax_up,   "▲",   **btn_style)
@@ -344,10 +351,10 @@ class GuiPlot:
         self.btn_down.on_clicked(lambda e: self._scroll(+1))
 
         # plot axes placeholder
-        self.ax_plot = self.fig.add_subplot(self.gs[1])
+        self.ax_plot = self.fig.add_axes(self.PLOT_POS)
 
         self.divider_line = self.fig.add_artist(
-            plt.Line2D([self._get_divider_x()] * 2, [0.0, 1.0],
+            plt.Line2D([self.DIV_POS] * 2, [0.0, 1.0],
                        transform=self.fig.transFigure,
                        color=BORDER, linewidth=1, zorder=10)
         )
@@ -360,11 +367,6 @@ class GuiPlot:
         plt.show()
 
     # Helpers
-
-    def _get_divider_x(self):
-        # GridSpec gives us the SubplotSpec positions in figure coordinates
-        left_col = self.gs[0].get_position(self.fig)
-        return left_col.x1
 
     def _clamp_scroll(self):
         max_top = max(0, self.nplots - self.VISIBLE)
@@ -381,8 +383,6 @@ class GuiPlot:
         ax = self.ax_list
         ax.cla()
         ax.set_facecolor(PANEL_BG)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, self.VISIBLE * self.ROW_H)
         ax.axis("off")
 
         visible = self.plots[self.scroll_top: self.scroll_top + self.VISIBLE]
@@ -390,13 +390,13 @@ class GuiPlot:
         for row, win in enumerate(visible):
             name = win.name
             global_idx = self.scroll_top + row
-            y = (self.VISIBLE - 1 - row) * self.ROW_H  # top → bottom
+            # text's position from top to bottom
+            y = 1 - row * (self.ROW_H + self.PAD) - self.ROW_H / 2
             is_sel = (global_idx == self.selected)
 
             if is_sel:
-                rect = FancyBboxPatch(
-                    # (0.03, y + 0.08), 0.94, 0.82,
-                    (0.03, y + self.PAD * self.ROW_H), 0.94, (1.0 - 2 * self.PAD) * self.ROW_H,
+                rect = FancyBboxPatch(  # lower left corner, width, height
+                    (0.03, y - self.ROW_H / 2), 0.9, self.ROW_H,
                     boxstyle="round,pad=0.0",
                     facecolor=SEL_BG, edgecolor=ACCENT,
                     linewidth=1.2, zorder=2,
@@ -407,7 +407,7 @@ class GuiPlot:
             #         va="center", ha="center", fontsize=9,
             #         color=ACCENT if is_sel else MUTED,
             #         fontfamily="monospace", zorder=3)
-            ax.text(0.10, y + self.ROW_H / 2, name,
+            ax.text(0.10, y, name,
                     va="center", ha="left",
                     fontsize=FONT_GUI,
                     color=TEXT if is_sel else MUTED,
@@ -418,7 +418,7 @@ class GuiPlot:
         total = self.nplots
         lo = self.scroll_top + 1
         hi = min(self.scroll_top + self.VISIBLE, total)
-        ax.text(0.5, -0.025, f"{lo}–{hi} / {total}",
+        ax.text(0.5, self.LIST_POS[1], f"{lo}–{hi} / {total}",
                 va="center", ha="center",
                 fontsize=FONT_GUI,
                 color=MUTED, fontfamily="monospace", transform=ax.transData)
@@ -433,8 +433,8 @@ class GuiPlot:
                 ax.remove()
 
         # self.ax_plot = self.fig.add_subplot(self.gs[1])
-        # Use add_axes instead of add_subplot ; control position : [left, bottom, width, height] in figure coordinates (0–1)
-        self.ax_plot = self.fig.add_axes((self._get_divider_x() + 0.075, 0.10, 0.7, 0.8))
+        # Use add_axes instead of add_subplot
+        self.ax_plot = self.fig.add_axes(self.PLOT_POS)
 
         ax = self.ax_plot
         # ax.set_facecolor(PLOT_BG)
@@ -459,11 +459,16 @@ class GuiPlot:
             self._scroll(delta)
 
     def _on_click(self, event):
-        if event.inaxes is not self.ax_list:
+        # Use figure coordinates to check if click is in the list panel
+        if event.x is None or event.y is None:
             return
-        if event.ydata is None:
+
+        x_ax, y_ax = event.xdata, event.ydata
+
+        if not (0 <= x_ax <= 1 and 0 <= y_ax <= 1):
             return
-        row = self.VISIBLE - 1 - int(event.ydata)
+
+        row = int(round((1 - y_ax - self.ROW_H / 2) / (self.ROW_H + self.PAD)))
         idx = self.scroll_top + row
         if 0 <= idx < self.nplots and idx != self.selected:
             self.selected = idx
@@ -489,7 +494,8 @@ class GuiPlot:
             self._draw_plot()
 
     def _on_resize(self, event):
-        x = self._get_divider_x()
+        # x = self._get_divider_x()
+        x = self.DIV_POS
         self.divider_line.set_xdata([x, x])
         self.fig.canvas.draw_idle()
 
