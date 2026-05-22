@@ -65,7 +65,7 @@ SEL_BG   = "#3A3A5C"
 BTN_BG   = "#2E2E48"
 
 
-def plot_window(lte_model, win, ax, number=True, auto=True, lw=1.0, axes_labels=True):
+def plot_window(lte_model, win, ax, ax2=None, number=True, auto=True, lw=1.0, axes_labels=True):
     """
     Plots a given window : overall model, individual components, line positions.
     :param lte_model: an object of class ModelSpectrum
@@ -88,7 +88,7 @@ def plot_window(lte_model, win, ax, number=True, auto=True, lw=1.0, axes_labels=
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
-    ax2 = None
+    # ax2 = None
 
     if axes_labels:
         xlabel = 'Velocity' if win.bottom_unit == 'km/s' else 'Rest frequency'

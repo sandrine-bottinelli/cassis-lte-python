@@ -686,14 +686,15 @@ class ModelSpectrum(object):
                         else:
                             self.setup_plot_la(win_list, **self.file_kws)
                     # Compute errors if necessary
-                    if self.model_fit is not None and self.model_fit.covar is not None:
-                        for win in self.model_config.win_list_file:
-                            if win.y_mod_err is None and self.file_kws['model_err']:
-                                win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
-                            if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
-                                win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
-                    else:
-                        ModelSpectrum.LOGGER.warning("Could not compute model errors.")
+                    if self.model_config.file_kws['model_err']:
+                        if self.model_fit is not None and self.model_fit.covar is not None:
+                            for win in self.model_config.win_list_file:
+                                if win.y_mod_err is None and self.file_kws['model_err']:
+                                    win.y_mod_err = self.model_fit.eval_uncertainty(fmhz=win.x_mod)
+                                if len(win.y_mod_err_cpt) == 0 and self.file_kws['component_err']:
+                                    win.y_mod_err_cpt = self.eval_uncertainties_components(fmhz=win.x_mod)
+                        else:
+                            ModelSpectrum.LOGGER.warning("Could not compute model errors.")
 
                     if self.exec_time:
                         ModelSpectrum.LOGGER.info(f"Execution time for preparing file plot : "
