@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.widgets import Button
+from matplotlib.text import Text
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import ticker
 import matplotlib
@@ -280,21 +281,29 @@ class GuiPlot:
     BOTTOM = 0.01
     LEFT = 0.01
     RIGHT = 0.97
+
     LIST_W = 0.15
     DIV_POS = LEFT + LIST_W
     PLOT_PAD = 0.1  # to leave space for titles
     BTN_H = 0.03
     BTN_W = 0.02
+    BOTTOM_L = BOTTOM + BTN_H
 
     ROW_H = 0.05
     PAD = 0.01
     VISIBLE = int(TOP / (ROW_H + PAD))  # max rows shown at once
 
     # Layouts — (left, bottom, width, height) in figure coordinates
-    LIST_POS = (LEFT, BOTTOM, LIST_W, TOP - BOTTOM)
+    LIST_POS = (LEFT, BOTTOM_L, LIST_W, TOP - BOTTOM_L)
     PLOT_POS = (DIV_POS + PLOT_PAD, BOTTOM + PLOT_PAD, RIGHT - DIV_POS - PLOT_PAD, TOP - BOTTOM - 2 * PLOT_PAD)
-    BTN_UP_POS = (LEFT, BOTTOM, BTN_W, BTN_H)
-    BTN_DOWN_POS = (DIV_POS - BTN_W - PAD, BOTTOM, BTN_W, BTN_H)
+
+    PAD_BTN = 0.005
+    BTN_FIRST_POS = (LEFT - PAD_BTN, BOTTOM, BTN_W + PAD_BTN, BTN_H)  # left
+    BTN_LAST_POS = (DIV_POS - BTN_W - PAD_BTN, BOTTOM, BTN_W, BTN_H)  # right
+    BTN_PAGE_UP_POS = (BTN_FIRST_POS[0] + BTN_FIRST_POS[2] + PAD_BTN, BOTTOM, BTN_W, BTN_H)  # second from left
+    BTN_PAGE_DOWN_POS = (DIV_POS - 2 * (BTN_W + PAD_BTN), BOTTOM, BTN_W, BTN_H)  # second from right
+    BTN_UP_POS = (BTN_PAGE_UP_POS[0] + BTN_PAGE_UP_POS[2] + PAD_BTN, BOTTOM, BTN_W, BTN_H)  # third from left
+    BTN_DOWN_POS = (DIV_POS - 3 * (BTN_W + PAD_BTN), BOTTOM, BTN_W, BTN_H)  # third from right
 
     def __init__(self, lte_model):
         self.lte_model = lte_model
@@ -334,21 +343,40 @@ class GuiPlot:
         self.ax_list.tick_params(left=False, bottom=False,
                                  labelleft=False, labelbottom=False)
 
-        # ▲ / ▼ button axes
-        ax_up   = self.fig.add_axes(self.BTN_UP_POS)
+        # Button axes
+        ax_up = self.fig.add_axes(self.BTN_UP_POS)
         ax_down = self.fig.add_axes(self.BTN_DOWN_POS)
+        ax_page_up = self.fig.add_axes(self.BTN_PAGE_UP_POS)
+        ax_page_down = self.fig.add_axes(self.BTN_PAGE_DOWN_POS)
+        ax_first = self.fig.add_axes(self.BTN_FIRST_POS)
+        ax_last = self.fig.add_axes(self.BTN_LAST_POS)
 
         btn_style = dict(color=BTN_BG, hovercolor="#3A3A5C")
-        self.btn_up   = Button(ax_up,   "▲",   **btn_style)
+        self.btn_up = Button(ax_up, "▲",   **btn_style)
         self.btn_down = Button(ax_down, "▼", **btn_style)
+        self.btn_page_up = Button(ax_page_up, "▲\n▲", **btn_style)
+        self.btn_page_down = Button(ax_page_down, "▼\n▼", **btn_style)
+        self.btn_first = Button(ax_first, "First", **btn_style)
+        self.btn_last = Button(ax_last, "Last", **btn_style)
 
-        for btn in (self.btn_up, self.btn_down):
+        for btn in (self.btn_up, self.btn_down, self.btn_page_up, self.btn_page_down, self.btn_first, self.btn_last):
             btn.label.set_color(TEXT)
             btn.label.set_fontfamily("monospace")
             btn.label.set_fontsize(10)
 
+        for btn in (self.btn_page_up, self.btn_page_down):
+            btn.label.set_linespacing(0.3)  # < 1.0 pulls lines together
+
+        for btn in (self.btn_first, self.btn_last):
+            btn.label.set_fontsize(7)
+            btn.label.set_fontweight("bold")
+
         self.btn_up.on_clicked(lambda e: self._scroll(-1))
         self.btn_down.on_clicked(lambda e: self._scroll(+1))
+        self.btn_page_up.on_clicked(lambda e: self._scroll(- self.VISIBLE))
+        self.btn_page_down.on_clicked(lambda e: self._scroll(+ self.VISIBLE))
+        self.btn_first.on_clicked(lambda e: self._scroll(- self.nplots))
+        self.btn_last.on_clicked(lambda e: self._scroll(self.nplots - self.VISIBLE))
 
         # plot axes placeholder
         self.ax_plot = self.fig.add_axes(self.PLOT_POS)
@@ -364,6 +392,9 @@ class GuiPlot:
         self.fig.canvas.mpl_connect("button_press_event", self._on_click)
         self.fig.canvas.mpl_connect("key_press_event", self._on_key)
         self.fig.canvas.mpl_connect("resize_event", self._on_resize)
+        self.fig.canvas.mpl_connect("scroll_event", self._on_scroll)
+        self.fig.canvas.mpl_connect("motion_notify_event", self._on_hover)
+
         plt.show()
 
     # Helpers
@@ -375,7 +406,24 @@ class GuiPlot:
     def _scroll(self, delta):
         self.scroll_top += delta
         self._clamp_scroll()
+        self.selected = self.scroll_top
         self._draw_list()
+        self._draw_plot()
+
+    def _on_hover(self, event):
+        tooltips = {
+            self.btn_up.ax: "Scroll up",
+            self.btn_down.ax: "Scroll down",
+            self.btn_page_up.ax: "Page up",
+            self.btn_page_down.ax: "Page down",
+            self.btn_first.ax: "First page",
+            self.btn_last.ax: "Last page",
+        }
+        msg = tooltips.get(event.inaxes, "")
+        # if matplotlib.get_backend() == 'Qt':
+        #     self.fig.canvas.manager.statusbar.showMessage(msg)  # Qt backend
+        # else:
+        self.fig.canvas.toolbar.set_message(msg)
 
     # List panel
 
@@ -418,8 +466,8 @@ class GuiPlot:
         total = self.nplots
         lo = self.scroll_top + 1
         hi = min(self.scroll_top + self.VISIBLE, total)
-        ax.text(0.5, self.LIST_POS[1], f"{lo}–{hi} / {total}",
-                va="center", ha="center",
+        ax.text(0.5, 0.01, f"{lo}–{hi} / {total}",
+                va="bottom", ha="center",
                 fontsize=FONT_GUI,
                 color=MUTED, fontfamily="monospace", transform=ax.transData)
 
@@ -427,7 +475,9 @@ class GuiPlot:
 
     def _draw_plot(self):
         # Remove ALL axes except the list panel and button axes
-        protected = {self.ax_list, self.btn_up.ax, self.btn_down.ax}
+        protected = {self.ax_list, self.btn_up.ax, self.btn_down.ax,
+                     self.btn_page_up.ax, self.btn_page_down.ax,
+                     self.btn_first.ax, self.btn_last.ax}
         for ax in self.fig.axes[:]:
             if ax not in protected:
                 ax.remove()
@@ -454,13 +504,13 @@ class GuiPlot:
 
     def _on_scroll(self, event):
         """Mouse wheel over either panel scrolls the list."""
-        if event.inaxes in (self.ax_list, self.ax_plot) or event.inaxes is None:
+        if event.inaxes == self.ax_list:
             delta = -1 if event.button == "up" else +1
             self._scroll(delta)
 
     def _on_click(self, event):
         # Use figure coordinates to check if click is in the list panel
-        if event.x is None or event.y is None:
+        if event.x is None or event.y is None or event.inaxes != self.ax_plot:
             return
 
         x_ax, y_ax = event.xdata, event.ydata
