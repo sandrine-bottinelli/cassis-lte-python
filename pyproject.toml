@@ -138,6 +138,8 @@ dependencies = [
     "snowballstemmer==2.2.0",
     "soupsieve==2.6",
     "spectral-cube==0.6.5",
+    "sphinx-autoapi==3.8.0",
+    "sphinx-design==0.7.0",
     "stack-data==0.6.3",
     "standard-imghdr==3.10.14",
     "tabulate==0.9.0",
@@ -181,3 +183,6 @@ dev = [
 where = ["./"]
 include = ["cassis_lte_python"]
 exclude = ["docs", "logs", "sb", "tests"]
+
+[tool.setuptools.package-data]
+cassis_lte_python = ["settings_defaults.ini"]

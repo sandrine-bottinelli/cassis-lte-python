@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import datetime
 import configparser
-from pathlib import Path
+from importlib.resources import files
 
 # NB: do not import Cassis Logger in this module to avoid loop import
 
@@ -12,23 +12,22 @@ class Settings:
     def __init__(self):
         LOG_PATH_DEFAULT = 'logs'
 
-        # Determine whether to enable file logger upon import
-        module_dir = str(Path(__file__).resolve().parents[1])
-        self.USER_CONFIG = os.path.join(module_dir, 'settings.ini')
-        self.DEFAULT_CONFIG = os.path.join(module_dir, 'settings_defaults.ini')
-        CONFIG = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation(),
-                                           inline_comment_prefixes=('#',))
+        self.DEFAULT_CONFIG = files("cassis_lte_python").joinpath("settings_defaults.ini")
+        self.USER_CONFIG = os.getenv("CASSIS_LTE_PYTHON_SETTINGS")
 
         self.CONFIG_FILE = self.USER_CONFIG
-        if not os.path.isfile(self.CONFIG_FILE):
+        if self.CONFIG_FILE is None or not os.path.isfile(self.CONFIG_FILE):
             if os.path.isfile(self.DEFAULT_CONFIG):
                 # print(f'{user_config} not found, using {default_config}\n')
                 self.CONFIG_FILE = self.DEFAULT_CONFIG
             else:
-                raise FileNotFoundError(f'No settings file found in {module_dir}.')
+                raise FileNotFoundError(f'No settings file found.')
 
+        CONFIG = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation(),
+                                           inline_comment_prefixes=('#',))
         CONFIG.read(self.CONFIG_FILE)
 
+        # Determine whether to enable file logger upon import
 
         # else:
         #     ENABLE_FILE_LOGGER = CONFIG.getboolean('LOGGER', 'ENABLE_FILE_LOGGER', fallback=True)

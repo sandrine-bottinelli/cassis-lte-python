@@ -104,9 +104,12 @@ extensions = [
     # 'sphinx.ext.autosummary',
     'autoapi.extension',
     'sphinx_design',  # For cards and grids
+    'sphinx_tabs.tabs',
     # 'sphinx_rtd_theme',
     # 'sphinx.ext.napoleon',  # if you use Google/NumPy style docstrings
 ]
+
+sphinx_tabs_disable_tab_closing = True
 
 # autoapi settings
 
