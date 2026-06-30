@@ -91,7 +91,7 @@ source_encoding = 'utf-8-sig'
 project = 'CASSIS LTE Python'
 copyright = '2022-2026, CASSIS Team'
 author = 'CASSIS Team'
-release = '0.4.0'
+release = '0.4.0-dev'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -105,6 +105,7 @@ extensions = [
     'autoapi.extension',
     'sphinx_design',  # For cards and grids
     'sphinx_tabs.tabs',
+    'sphinx_copybutton',
     # 'sphinx_rtd_theme',
     # 'sphinx.ext.napoleon',  # if you use Google/NumPy style docstrings
 ]
