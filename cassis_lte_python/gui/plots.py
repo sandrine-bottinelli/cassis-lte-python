@@ -18,7 +18,8 @@ import matplotlib
 # matplotlib.use('Agg')
 plt.ioff()
 
-DPI_DEF = SETTINGS.DPI_DEF
+DPI_FILE_DEF = SETTINGS.DPI_FILE_DEF
+DPI_GUI_DEF = SETTINGS.DPI_GUI_DEF
 NCOLS_DEF = SETTINGS.NCOLS_DEF
 NROWS_DEF = SETTINGS.NROWS_DEF
 FONT_DEF = SETTINGS.FONT_DEF
@@ -305,7 +306,7 @@ class GuiPlot:
     BTN_UP_POS = (BTN_PAGE_UP_POS[0] + BTN_PAGE_UP_POS[2] + PAD_BTN, BOTTOM, BTN_W, BTN_H)  # third from left
     BTN_DOWN_POS = (DIV_POS - 3 * (BTN_W + PAD_BTN), BOTTOM, BTN_W, BTN_H)  # third from right
 
-    def __init__(self, lte_model):
+    def __init__(self, lte_model, fig_size=(12, 7), dpi=DPI_GUI_DEF, width_px=None):
         self.lte_model = lte_model
         self.plots = self.lte_model.win_list_gui
         self.nplots = len(lte_model.win_list_gui)
@@ -320,7 +321,9 @@ class GuiPlot:
         if self.lte_model.model_config.minimize:
             title += " - Results"
 
-        self.fig = plt.figure(figsize=(12, 7))
+        if width_px is not None:
+            dpi = round(width_px / fig_size[0])
+        self.fig = plt.figure(figsize=fig_size, dpi=dpi)
         self.fig.canvas.manager.set_window_title(title)
 
         if len(lte_model.cpt_list) > 1:
@@ -389,13 +392,14 @@ class GuiPlot:
         self._draw_list()
         self._draw_plot()
 
-        self.fig.canvas.mpl_connect("button_press_event", self._on_click)
-        self.fig.canvas.mpl_connect("key_press_event", self._on_key)
-        self.fig.canvas.mpl_connect("resize_event", self._on_resize)
-        self.fig.canvas.mpl_connect("scroll_event", self._on_scroll)
-        self.fig.canvas.mpl_connect("motion_notify_event", self._on_hover)
+        # store connection IDs to prevent garbage collection
+        self.cid_click = self.fig.canvas.mpl_connect("button_press_event", self._on_click)
+        self.cid_key = self.fig.canvas.mpl_connect("key_press_event", self._on_key)
+        self.cid_resize = self.fig.canvas.mpl_connect("resize_event", self._on_resize)
+        self.cid_scroll = self.fig.canvas.mpl_connect("scroll_event", self._on_scroll)
+        self.cid_hover = self.fig.canvas.mpl_connect("motion_notify_event", self._on_hover)
 
-        plt.show()
+        # plt.show()
 
     # Helpers
 
@@ -500,6 +504,9 @@ class GuiPlot:
         plot_window(self.lte_model, self.lte_model.win_list_gui[self.selected], ax)
         self.fig.canvas.draw_idle()
 
+    def show(self):
+        return self.fig
+
     # Events
 
     def _on_scroll(self, event):
@@ -551,7 +558,7 @@ class GuiPlot:
 
 
 def file_plot(lte_model, filename, dirname=None, verbose=True,
-              dpi=DPI_DEF, nrows=NROWS_DEF, ncols=NCOLS_DEF):
+              dpi=DPI_FILE_DEF, nrows=NROWS_DEF, ncols=NCOLS_DEF):
     """
     Produces a plot of the fit results. If several species, change page when plotting the next species.
     :param lte_model: an object of class ModelSpectrum

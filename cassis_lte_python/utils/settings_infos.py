@@ -21,17 +21,19 @@ if 'defaults' in CONFIG_FILE:
 #     LOGGER.info(f"Using {CONFIG_FILE}.")
 
 
-def print_settings_all():
-    message = ["Settings are :"]
-    for section in CONFIG.sections():
-        for key, val in dict(CONFIG.items(section)).items():
-            unit = ""
-            if "size" in key:
-                unit = "arcsec"
-            elif "vlsr" in key or "fwhm" in key:
-                unit = "km/s"
-            message.append(f"{key.upper()} = {val} {unit}")
-    LOGGER.info("\n    ".join(message))
+def print_settings_file(print_all=False):
+    LOGGER.info(f'Printing settings file: {CONFIG_FILE}')
+    if print_all:
+        message = ["Settings are :"]
+        for section in CONFIG.sections():
+            for key, val in dict(CONFIG.items(section)).items():
+                unit = ""
+                if "size" in key:
+                    unit = "arcsec"
+                elif "vlsr" in key or "fwhm" in key:
+                    unit = "km/s"
+                message.append(f"{key.upper()} = {val} {unit}")
+        LOGGER.info("\n    ".join(message))
 
 
 def print_settings_database():

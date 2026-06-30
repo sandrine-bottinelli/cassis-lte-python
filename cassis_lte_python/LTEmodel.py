@@ -30,16 +30,18 @@ from astropy.wcs import WCS
 from time import process_time
 from warnings import warn
 from typing_extensions import Literal
-import math
+import matplotlib.pyplot as plt
 import copy
 from cassis_lte_python.utils import settings_infos
 
 
 NCOLS_DEF = SETTINGS.NCOLS_DEF
 NROWS_DEF = SETTINGS.NROWS_DEF
-DPI_DEF = SETTINGS.DPI_DEF
+DPI_FILE_DEF = SETTINGS.DPI_FILE_DEF
+DPI_GUI_DEF = SETTINGS.DPI_GUI_DEF
 NB_DECIMALS = SETTINGS.NB_DECIMALS
 SQLITE_FILE = SETTINGS.SQLITE_FILE
+settings_infos.print_settings_file()
 settings_infos.print_settings_database()
 
 
@@ -208,7 +210,7 @@ class ModelSpectrum(object):
         self.cpt_cols = None
         self.thresholds_other = None
 
-        if self.model_config.line_analysis:
+        if self.model_config.line_analysis and (self.model_config.plot_gui or self.model_config.plot_file):
             self.do_plots()
 
         if self.model_config.fit_kws is not None:
@@ -651,11 +653,11 @@ class ModelSpectrum(object):
             if 'config' in self.model_config.output_files:
                 self.save_config(self.model_config.output_files['config'])
 
-    def do_plots(self):
+    def do_plots(self, plot_type=None, width_px=None):
         # if self.plot_gui or self.plot_file:
             ModelSpectrum.LOGGER.info('Finding windows for gui and file plots.')
-            self.setup_plot()
-            if self.plot_gui and len(self.model_config.win_list_gui) > 0:
+            self.setup_plot(plot_type)
+            if (self.plot_gui or plot_type == 'gui') and len(self.model_config.win_list_gui) > 0:
                 t_start = process_time()
                 ModelSpectrum.LOGGER.info("Preparing windows for GUI plot...")
                 if self.bandwidth is None or self.model_config.fit_full_range:
@@ -665,9 +667,9 @@ class ModelSpectrum(object):
                 if self.exec_time:
                     ModelSpectrum.LOGGER.info(f"Execution time for preparing GUI plot : {utils.format_time(process_time() - t_start)}.")
 
-                self.make_plot('gui')
+                self.make_plot('gui', width_px=width_px)
 
-            if self.plot_file and len(self.model_config.win_list_file) > 0:
+            if (self.plot_file or plot_type == 'file') and len(self.model_config.win_list_file) > 0:
                 if ((self.model_config.win_list_file != self.model_config.win_list_gui) or
                         (self.file_kws['model_err'] and not self.gui_kws['model_err']) or
                         (self.file_kws['component_err'] and not self.gui_kws['component_err'])):
@@ -1383,7 +1385,7 @@ class ModelSpectrum(object):
         else:
             self.win_list_plot = sub_list
 
-    def setup_plot(self):
+    def setup_plot(self, plot_type=None):
         """
         Prepare all data to do the plot(s), using provided keywords.
         Possible keywords are :
@@ -1441,12 +1443,12 @@ class ModelSpectrum(object):
                 self.model_config.win_list_file = self.model_config.win_list_plot
 
         else:
-            if self.model_config.plot_gui:
+            if self.model_config.plot_gui or plot_type == 'gui':
                 self.model_config.win_list_gui = self.select_windows(**self.gui_kws)
                 if len(self.model_config.win_list_gui) == 0:
                     ModelSpectrum.LOGGER.error("Nothing to plot in GUI, check your selection.")
 
-            if self.model_config.plot_file:
+            if self.model_config.plot_file or plot_type == 'file':
                 if ((self.file_kws['display_all'] == self.gui_kws['display_all']) and
                         (self.file_kws['windows'] == self.gui_kws['windows']) and self.model_config.plot_gui):
                     # gui and file have the same info, nothing to do
@@ -1464,7 +1466,7 @@ class ModelSpectrum(object):
             #         other_species_win_selection = str(other_species_win_selection)
             #     self.select_windows_other_lines(other_species_win_selection)
 
-    def make_plot(self, plot_type):
+    def make_plot(self, plot_type, dpi=None, width_px=None):
         """
         Do the plot(s).
 
@@ -1473,14 +1475,16 @@ class ModelSpectrum(object):
         """
 
         if plot_type == 'gui':
-            GuiPlot(self)
+            self.figure = GuiPlot(self, width_px=width_px)
+            self.figure.show()
+            # plt.show()
 
         if plot_type == 'file':
             filename = self.file_kws['filename']
             # dirname = self.file_kws.get('dirname', None)
             dirname = self.model_config.output_dir
             verbose = self.file_kws.get('verbose', True)
-            dpi = self.file_kws.get('dpi', DPI_DEF)
+            dpi = self.file_kws.get('dpi', DPI_FILE_DEF)
             nrows = self.file_kws.get('nrows', NROWS_DEF)
             ncols = self.file_kws.get('ncols', NCOLS_DEF)
 
