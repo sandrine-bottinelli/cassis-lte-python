@@ -1,6 +1,27 @@
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".venv",
+    "dist",
+    ".git",
+    "docs/build",
+    "sb"
+]
+
+[tool.uv-dynamic-versioning]
+enable = true
+style = "pep440"        # also "semver" or "pvp"
+pattern = "default"     # "default" requires a "v" prefix; "default-unprefixed" drops it
+
 [project]
 name = "cassis-lte-python"
-version = "0.4.0-dev"
+dynamic = ["version"]  # Remove any static version = "..." line
 description = "A python version of the CASSIS LTE modeling tool."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -181,6 +202,7 @@ dev = [
     "sphinxcontrib-jsmath==1.0.1",
     "sphinxcontrib-qthelp==2.0.0",
     "sphinxcontrib-serializinghtml==2.0.0",
+    "uv-dynamic-versioning>=0.14.0",
 ]
 
 [tool.setuptools.packages.find]

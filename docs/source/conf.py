@@ -9,6 +9,7 @@ import os
 import shutil
 from pathlib import Path
 import sphinx_toolbox
+from importlib.metadata import version as get_version
 
 package_dir = str(Path(__file__).resolve().parents[2])
 sys.path.insert(0, package_dir)
@@ -91,7 +92,9 @@ source_encoding = 'utf-8-sig'
 project = 'CASSIS LTE Python'
 copyright = '2022-2026, CASSIS Team'
 author = 'CASSIS Team'
-release = '0.4.0-dev'
+# release = '0.4.0-dev'
+release = get_version("cassis-lte-python")
+version = ".".join(release.split(".")[:2])
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
