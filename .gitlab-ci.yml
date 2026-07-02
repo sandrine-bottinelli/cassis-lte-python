@@ -1,19 +1,86 @@
 image: python:3.13
 
 stages:
-  - deploy
+  - build
+  - release
 
-pages:
-#  tags:
-#    - sphinx
-  stage: deploy
+build-wheel:
+  stage: build
+  before_script:
+    - pip install uv
   script:
-    - python3 -m pip install -r requirements.txt -r requirements-sphinx.txt
-    - (export BUILDING_DOC="True" ; sphinx-build -M html docs/source/ build/)
-    - mv build/html public
+    - git fetch --unshallow || true
+    - uv build --wheel
   artifacts:
     paths:
-      - public
+      - dist/*.whl
+    expire_in: 1 hour
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v.*/
+
+release-github:
+  stage: release
+  needs:
+    - job: build-wheel
+      artifacts: true
+  before_script:
+    - pip install requests
+  script:
+    - |
+      python3 << 'EOF'
+      import os, glob, requests
+
+      tag = os.environ["CI_COMMIT_TAG"]
+      repo = "sandrine-bottinelli/cassis-lte-python"
+      token = os.environ["GITHUB_TOKEN"]
+      headers = {
+          "Authorization": f"Bearer {token}",
+          "Accept": "application/vnd.github+json"
+      }
+
+      resp = requests.post(
+          f"https://api.github.com/repos/{repo}/releases",
+          headers=headers,
+          json={
+              "tag_name": tag,
+              "name": f"Release {tag}",
+              "body": f"Release {tag}",
+              "prerelease": any(x in tag for x in ["dev", "a", "b", "rc"])
+          }
+      )
+      resp.raise_for_status()
+      upload_url = resp.json()["upload_url"].split("{")[0]
+
+      wheel = glob.glob("dist/*.whl")[0]
+      wheel_name = os.path.basename(wheel)
+      with open(wheel, "rb") as f:
+          requests.post(
+              f"{upload_url}?name={wheel_name}",
+              headers={**headers, "Content-Type": "application/octet-stream"},
+              data=f
+          ).raise_for_status()
+
+      print(f"Released {wheel_name} to GitHub as {tag}")
+      EOF
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v.*/
+
+#image: python:3.13
+#
+#stages:
+#  - deploy
+#
+#pages:
+##  tags:
+##    - sphinx
+#  stage: deploy
+#  script:
+#    - python3 -m pip install -r requirements.txt -r requirements-sphinx.txt
+#    - (export BUILDING_DOC="True" ; sphinx-build -M html docs/source/ build/)
+#    - mv build/html public
+#  artifacts:
+#    paths:
+#      - public
 #    only:
 #      - master
 #      - dev
