@@ -8,7 +8,7 @@ We recommend you create a dedicated virtual environment in which you can install
 
 cassis_lte_python requires a python version >= 3.11 ; to check your python version, do: ::
 
-   which python3
+   python3 --version
 
 If you have an older version, we recommend using
 `uv <https://docs.astral.sh/uv/>`_
@@ -41,20 +41,6 @@ Activate it, depending on your shell:
 
        source env_name/bin/activate.csh
 
-
-Download and install the cassis_lte_python package:
-
-.. tabs::
-
-   .. code-tab:: bash with uv
-
-       uv pip install cassis_lte_python-0.3.0-py3-none-any.whl
-
-   .. code-tab:: bash without uv
-
-       python3 -m pip install cassis_lte_python-0.3.0-py3-none-any.whl
-
-(if the whl file is in the current directory, otherwise use the appropriate path to this file)
 
 IDE (e.g., spyder, VScode)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

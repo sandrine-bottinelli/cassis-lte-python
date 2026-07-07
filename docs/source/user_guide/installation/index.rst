@@ -4,5 +4,5 @@ Installation
 
 .. toctree::
 
-    get_package
     virtual_env
+    get_package
