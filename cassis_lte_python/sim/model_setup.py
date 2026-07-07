@@ -650,7 +650,10 @@ class ModelConfiguration:
             for freq_range in freq_user:
                 if tel_info['Frequency (MHz)'].min() > max(freq_range) or tel_info['Frequency (MHz)'].max() < min(freq_range):
                     not_covered.append([float(f) for f in freq_range])
-                tel_info_range = tel_info[(tel_info['Frequency (MHz)'] >= min(freq_range)) & (tel_info['Frequency (MHz)'] <= max(freq_range))]
+                    continue
+                i_min = np.searchsorted(tel_info['Frequency (MHz)'].values, min(freq_range), side='right') - 1
+                i_max = np.searchsorted(tel_info['Frequency (MHz)'].values, min(freq_range), side='left')
+                tel_info_range = tel_info.iloc[i_min:i_max+1]
                 tel_info_user = pd.concat([tel_info_user, tel_info_range], axis=0)
             if len(not_covered) > 0:
                 raise IndexError(f"Telescope '{tel}' does not cover the following frequency range(s): {not_covered}.")
