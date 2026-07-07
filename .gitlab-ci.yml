@@ -38,6 +38,7 @@ release-github:
           "Accept": "application/vnd.github+json"
       }
 
+      # Create the release
       resp = requests.post(
           f"https://api.github.com/repos/{repo}/releases",
           headers=headers,
@@ -48,6 +49,14 @@ release-github:
               "prerelease": any(x in tag for x in ["dev", "a", "b", "rc"])
           }
       )
+      
+      # If release already exists, fetch it instead
+      if resp.status_code == 422:
+          resp = requests.get(
+              f"https://api.github.com/repos/{repo}/releases/tags/{tag}",
+              headers=headers
+          )
+      
       resp.raise_for_status()
       upload_url = resp.json()["upload_url"].split("{")[0]
 
