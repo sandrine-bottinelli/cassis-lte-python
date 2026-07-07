@@ -2981,7 +2981,7 @@ class ModelCube(object):
                 except (KeyError, TypeError):
                     pass  # do nothing
 
-        utils.save_all_map_images_one_file(output_dir, ntot_scaling=ntot_scaling)
+        utils.all_map_images_one_figure(output_dir, ntot_scaling=ntot_scaling)
 
     # def do_minimization_old(self, pix_nb=None, single_pix=True, size=None):
     #     if size is None:

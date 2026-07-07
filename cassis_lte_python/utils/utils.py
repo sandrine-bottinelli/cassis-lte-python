@@ -51,7 +51,7 @@ __all__ = [
     "remove_trailing_comments",
     "retrieve_unit",
     "save_all_map_images",
-    "save_all_map_images_one_file",
+    "all_map_images_one_figure",
     "search_telescope_file",
     "select_from_ranges",
     "unflatten_dic",
@@ -1402,11 +1402,10 @@ def save_all_map_images(map_dir, ntot_scaling='sqrt'):
         fig.savefig(os.path.join(map_dir, f'{os.path.splitext(map_file)[0]}.png'))
 
 
-def save_all_map_images_one_file(map_dir, ntot_scaling='sqrt'):
+def all_map_images_one_figure(map_dir, ntot_scaling='sqrt', save=True):
     plt.close('all')
     map_dir = os.path.abspath(map_dir)
     map_files = [f for f in os.listdir(map_dir) if f.endswith('fits') and 'err' not in f]
-    output_dir = map_dir
 
     components = [os.path.split(map_file)[-1].split('_')[0] for map_file in map_files]
     components = list(set(components))
@@ -1423,5 +1422,9 @@ def save_all_map_images_one_file(map_dir, ntot_scaling='sqrt'):
 
     fig, axes = make_map_image(map_hdus_by_cpt, ntot_scaling=ntot_scaling)
 
-    fig.savefig(os.path.join(output_dir, f'c_maps_{os.path.normpath(output_dir).split(os.path.sep)[-1]}.png'))
-    # fig.savefig(os.path.join(output_dir, f'c_maps_{"_".join(species)}.png'))
+    if save:
+        output_dir = map_dir
+        fig.savefig(os.path.join(output_dir, f'c_maps_{os.path.normpath(output_dir).split(os.path.sep)[-1]}.png'))
+        # fig.savefig(os.path.join(output_dir, f'c_maps_{"_".join(species)}.png'))
+
+    return fig, axes
