@@ -1358,6 +1358,26 @@ def make_map_image(hdu, ntot_scaling='sqrt'):
             fig.colorbar(pcm, cax=cax)
 
             ax.set_title(title)
+            # Set axis limits to ignore NaN-only edges, keeping a square region
+            valid = np.where(~np.isnan(map_hdu.data))
+            ymin, ymax = valid[0].min(), valid[0].max()
+            xmin, xmax = valid[1].min(), valid[1].max()
+
+            pad = 1
+            x_range = (xmax - xmin) + 2 * pad
+            y_range = (ymax - ymin) + 2 * pad
+            half_side = max(x_range, y_range) / 2.0  # use the LARGER dimension
+
+            x_center = (xmin + xmax) / 2.0
+            y_center = (ymin + ymax) / 2.0
+
+            ax.set_xlim(x_center - half_side, x_center + half_side)
+            ax.set_ylim(y_center - half_side, y_center + half_side)
+
+            # optional padding (in pixels) around the valid region
+            # pad = 1
+            # ax.set_xlim(xmin - pad, xmax + pad)
+            # ax.set_ylim(ymin - pad, ymax + pad)
 
             if i == nrows - 1:
                 ax.set_xlabel("Right Ascension")
