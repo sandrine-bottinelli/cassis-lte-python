@@ -33,7 +33,7 @@ release-github:
     - |
       python3 << 'EOF'
       import os, glob, requests
-
+      
       tag = os.environ["CI_COMMIT_TAG"]
       repo = "sandrine-bottinelli/cassis-lte-python"
       token = os.environ["GITHUB_TOKEN"]
@@ -41,7 +41,7 @@ release-github:
           "Authorization": f"Bearer {token}",
           "Accept": "application/vnd.github+json"
       }
-
+      
       # Create the release
       resp = requests.post(
           f"https://api.github.com/repos/{repo}/releases",
@@ -62,17 +62,29 @@ release-github:
           )
       
       resp.raise_for_status()
-      upload_url = resp.json()["upload_url"].split("{")[0]
-
+      release_data = resp.json()
+      upload_url = release_data["upload_url"].split("{")[0]
+      
       wheel = glob.glob("dist/*.whl")[0]
       wheel_name = os.path.basename(wheel)
+      
+      # Check if this asset already exists on the release, and delete it if so
+      for asset in release_data.get("assets", []):
+          if asset["name"] == wheel_name:
+              del_resp = requests.delete(
+                  f"https://api.github.com/repos/{repo}/releases/assets/{asset['id']}",
+                  headers=headers
+              )
+              del_resp.raise_for_status()
+              print(f"Deleted existing asset {wheel_name}")
+      
       with open(wheel, "rb") as f:
           requests.post(
               f"{upload_url}?name={wheel_name}",
               headers={**headers, "Content-Type": "application/octet-stream"},
               data=f
           ).raise_for_status()
-
+      
       print(f"Released {wheel_name} to GitHub as {tag}")
       EOF
   rules:
